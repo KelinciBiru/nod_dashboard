@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body class="flex h-screen font-sans text-gray-800">
+
+    <aside class="w-70 border-r border-gray-200 p-6 flex flex-col">
+        <div class="mb-2">
+            <img src="https://lh3.googleusercontent.com/d/1sy4WhFoKJnGlgFw9j_tnMcNWCxWSA48N" alt="Logo JumpStart" class="h-20 w-auto">
+            <p class="text-gray-700 font-medium">Warehouse Pulogadung</p>
+        </div>
+<nav class="space-y-6">
+            <div class="border-b border-gray-500 px-1"></div>
+    <button onclick="location.reload()" class="flex items-center gap-3 text-gray-700 hover:text-amber-500 font-bold">
+        Dashboard
+    </button>
+
+    <div class="space-y-1">
+        <button onclick="toggleSubMenu('inventory-sub', 'arrow-inventory')" class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
+            <span>Inventory Machine</span>
+            <span id="arrow-inventory" class="text-xs">▼</span>
+        </button>
+        <div id="inventory-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
+            <button onclick="showInventory('Stock Master')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Stock Master</button>
+            <button onclick="showInventory('Report Inventory')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report</button>
+        </div>
+    </div>
+
+    <div class="space-y-1">
+        <button onclick="toggleSubMenu('plan-task-sub', 'arrow-plan')" class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
+            <span>Plan Task</span>
+            <span id="arrow-plan" class="text-xs">▼</span>
+        </button>
+        <div id="plan-task-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
+            <button onclick="showInventory('Plan Task')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Plan Task</button>
+            <button onclick="showInventory('Report KPI')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report KPI</button>
+        </div>
+    </div>
+
+    <div class="space-y-1">
+        <button onclick="toggleSubMenu('maintenance-sub', 'arrow-maintenance')" class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
+            <span>Maintenance</span>
+            <span id="arrow-maintenance" class="text-xs">▼</span>
+        </button>
+        <div id="maintenance-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
+            <button onclick="showInventory('Report Maintenance')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report Maintenance</button>
+        </div>
+    </div>
+</nav>
+    </aside>
+
+    <main id="content-area" class="flex-1 p-8 bg-gray-50">
+        <h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>
+    
+    <div class="mt-8">
+        <img src="https://lh3.googleusercontent.com/d/19epa7IlpjqaS0f7F_WEgDZSwhriLpikp" alt="Deskripsi Gambar" class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">
+    </div>
+</main>
+
+<script>
+    function toggleSubMenu(menuId, arrowId) {
+        const subMenu = document.getElementById(menuId);
+        const arrow = document.getElementById(arrowId);
+        
+        subMenu.classList.toggle('hidden');
+        arrow.textContent = subMenu.classList.contains('hidden') ? '▼' : '▲';
+    }
+    function shareToWhatsApp() {
+        const captureArea = document.getElementById("captureArea");
+        const btn = document.getElementById("shareBtn");
+        btn.style.display = "none";
+    btn.innerText = "Memproses...";
+
+        html2canvas(captureArea, { 
+        scale: 2, 
+        useCORS: true,
+        backgroundColor: "#ffffff" 
+    }).then(canvas => {
+        canvas.toBlob(blob => {
+            const file = new File([blob], "PlanTask.png", { type: "image/png" });
+            
+            // Tampilkan kembali tombol setelah selesai
+            btn.style.display = "inline-block";
+            btn.innerText = "Share to WhatsApp";
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file] });
+            } else {
+                const link = document.createElement('a');
+                link.download = 'PlanTask.png';
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+            }
+        });
+    });
+}
+
+    async function showInventory(menuName) {
+        const contentArea = document.getElementById('content-area');
+        contentArea.innerHTML = `<p class="text-gray-500">Memuat data...</p>`;
+        
+        try {
+            // --- LOGIKA STOCK MASTER ---
+            if (menuName === 'Stock Master') {
+                const response = await fetch('https://script.google.com/macros/s/AKfycbw_dT47dMFwtwM0qTmyOQemxzmrUYccmCwglqhFI8haRTGRmNJc98b_t1fBXxaylrUn/exec');
+                const data = await response.json();
+                
+                const machineData = data.slice(3); 
+
+                let htmlTable = `
+                    <h1 class="text-3xl font-semibold text-gray-700 mb-4">Stock Master</h1>
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden max-w-2xl">
+                        <table class="w-full border-collapse text-[15px]">
+                            <thead>
+                                <tr class="bg-gray-100 border-b border-gray-300 text-gray-700">
+                                    <th class="p-2 text-center w-1/4">Machine Detail</th>
+                                    <th class="p-2 text-center w-1/4">Stock Available</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-600 divide-y divide-gray-200">`;
+
+                for (let i = 0; i < machineData.length; i++) {
+                    const row = machineData[i];
+                    const machineName = String(row[1] || "");
+                    const stock = String(row[2] || "");
+
+                    const itemsToHide = ["Descaling Kit", "Sleeve Box"];
+                    if (itemsToHide.some(keyword => machineName.includes(keyword)) || machineName === "") continue;
+
+                    htmlTable += `
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-2 font-medium text-center">${machineName}</td>
+                            <td class="p-2 font-medium text-center">${stock}</td>
+                        </tr>`;
+                }
+                htmlTable += `</tbody></table></div>`;
+                contentArea.innerHTML = htmlTable;
+
+            // --- LOGIKA REPORT ---
+            } else if (menuName === 'Report Inventory') {
+                // Ganti URL di bawah dengan URL Deployment untuk Sheet Report Anda
+                const response = await fetch('https://script.google.com/macros/s/AKfycbyrXKkSEcXq01x5RVnS0Ys9d5pIYELsfM8VbUOOCj1qPO4WpqIpHuowq0xZOZ2lUOkyrQ/exec');
+                const data = await response.json();
+                
+                // 1. Logika untuk TABEL 1: Report Reserve vs Outbound (Mingguan)
+    // Asumsi data mingguan ada di baris 0 sampai 12
+    let tableMingguan = `
+        <h2 class="text-lg font-bold text-gray-800 mb-2">Report per-Minggu</h2>
+        <div class="overflow-x-auto border border-gray-400 mb-8">
+            <table class="w-full text-[10px] text-center border-collapse">
+                <thead>
+                    <tr class="bg-gray-200 border-b border-gray-400">
+                        <th class="p-2 border-r" rowspan="2">Machine Detail</th>
+                        <th class="p-1 border-b border-r" colspan="2">W1</th>
+                        <th class="p-1 border-b border-r" colspan="2">W2</th>
+                        <th class="p-1 border-b border-r" colspan="2">W3</th>
+                        <th class="p-1 border-b border-r" colspan="2">W4</th>
+                        <th class="p-2" rowspan="2">Total Outbound</th>
+                    </tr>
+                    <tr class="bg-gray-100 border-b border-gray-400">
+                        ${"<th>Res</th><th>Out</th>".repeat(4)}
+                    </tr>
+                </thead>
+                <tbody class="text-gray-900 font-bold">`;
+    
+    for (let i = 6; i <= 15; i++) {
+    const row = data[i];
+    if (!row || row.length === 0) continue;
+    const validRow = row.slice(0, 10); 
+    const isRowEmpty = validRow.every(cell => cell === "" || cell === "-" || cell === null);
+    if (isRowEmpty) continue;
+
+    // --- LOGIKA BARU: Deteksi berdasarkan teks "Total" ---
+    // Kita cek apakah kolom pertama (index 0) berisi teks "Total"
+    const isTotalRow = String(validRow[0]).trim().toLowerCase() === "total";
+
+    tableMingguan += `<tr class="border-b border-gray-300 ${isTotalRow ? 'bg-gray-200' : 'hover:bg-blue-50'}">`;
+    
+    validRow.forEach(cell => {
+        tableMingguan += `<td class="p-2 border-r border-gray-300">${cell || "-"}</td>`;
+    });
+    tableMingguan += `</tr>`;
+}
+    tableMingguan += `</tbody></table></div>`;
+                
+    // 2. Logika untuk TABEL 2: Report Outbound per-Bulan
+    // Asumsi data bulanan ada di baris 17 sampai akhir
+    let tableBulanan = `
+        <h2 class="text-lg font-bold text-gray-800 mb-2">Report Outbound per-Bulan</h2>
+        <div class="overflow-x-auto border border-gray-400">
+            <table class="w-full text-[10px] text-center border-collapse">
+                <thead>
+                    <tr class="bg-gray-200 border-b border-gray-400">
+                        <th class="p-2 border-r">Machine Detail</th>
+                        ${["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des", "Total"].map(m => `<th class="p-1 border-r">${m}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody class="text-gray-900 font-bold">`;
+    
+    for (let i = 22; i < data.length; i++) {
+        const row = data[i];
+    if (!row) continue;
+
+    // 1. Ambil nilai kolom pertama dan bersihkan spasi di awal/akhir
+    const rawName = String(row[0] || "");
+    const machineName = rawName.trim().toLowerCase();
+
+    // 2. Cek apakah baris ini berisi data yang valid
+    // Kita lewati baris yang sama sekali kosong
+    if (machineName === "") continue;
+
+    // 3. Render baris ke tabel
+    tableBulanan += `<tr class="border-b border-gray-300">`;
+    row.forEach(cell => {
+        tableBulanan += `<td class="p-2 border-r border-gray-300">${cell || "-"}</td>`;
+    });
+    tableBulanan += `</tr>`;
+
+    // 4. BERHENTI jika baris ini mengandung kata kunci "stainless steel"
+    // Ini lebih aman daripada mencocokkan satu kalimat utuh
+    if (machineName.includes("stainless steel cup")) {
+        break;
+    }
+}
+    tableBulanan += `</tbody></table></div>`;
+                contentArea.innerHTML = tableMingguan + tableBulanan;
+} else if (menuName === 'Plan Task') {
+                // Ganti URL ini dengan URL Deployment yang Anda copy tadi
+                const response = await fetch('https://script.google.com/macros/s/AKfycbzbCPzwQoMmnp0uKlVIYRdozphCJC7Yrb01SJNebZoOZmKkCvofBw8D3vndo9T1iB3rOg/exec');
+                const data = await response.json();
+
+                // 1. Filter data: ambil baris yang bukan header dan bukan "Tidak ada tugas aktif"
+    const taskData = data.slice(1).filter(row => 
+        row[0] && 
+        !row[0].toString().includes("Tidak ada tugas aktif") && 
+        row[0] !== ""
+    );
+
+    // 2. Cek apakah ada data setelah difilter
+    if (taskData.length === 0) {
+        contentArea.innerHTML = `
+            <h1 class="text-3xl font-semibold text-gray-700 mb-6">Plan Task</h1>
+            <div class="flex flex-col items-center justify-center h-64 bg-white rounded-lg border border-gray-300 shadow-sm">
+                <p class="text-4xl mb-4">✅</p>
+                <p class="text-xl font-bold text-gray-600">Task Clear</p>
+                <p class="text-gray-400">Tidak ada tugas yang perlu dikerjakan saat ini.</p>
+            </div>`;
+    } else {
+        // 1. Tombol diletakkan di luar agar tidak ikut ter-capture
+        let htmlButton = `
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-semibold text-gray-700">Task</h1>
+            <button id="shareBtn" onclick="shareToWhatsApp()" class="bg-gray-700 text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-800 shadow-md text-sm">
+                Share to WhatsApp
+            </button>
+        </div>`;
+
+        // 2. Bungkus SEMUA (Logo + Judul + Tabel) dalam ID captureArea
+        let htmlContent = `
+        <div id="captureArea" class="bg-white p-8 border border-gray-200">
+            <div class="flex items-center gap-4 mb-6">
+                <h1 class="text-3xl font-semibold text-gray-700">Plan Task</h1>
+                </div>
+
+            <div class="rounded-lg shadow-sm border border-gray-300 overflow-hidden">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100 border-b border-gray-300 text-gray-700 text-xs">
+                            ${data[0].map(h => `<th class="p-3 text-center border-r">${h}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-600 divide-y divide-gray-200">`;
+
+taskData.forEach(row => {
+    htmlContent += `<tr class="hover:bg-gray-50 text-xs">`; 
+    
+    row.forEach((cell, index) => {
+    let displayValue = String(cell || "-").trim(); // Bersihkan spasi di awal/akhir
+
+    // 1. Kolom "Task" (Index 0)
+    if (index === 0) {
+        displayValue = displayValue.split('\n')
+            .map(t => t.replace(/^- /, '').trim())
+            .filter(t => t !== "")
+            .join('<br>');
+    } 
+    
+    // 2. Kolom "Deadline" (Index 1) - PASTIKAN BERSIH
+    else if (index === 1) {
+        // Jika sel di Sheet berisi 30-Mei-2026, kita ambil persis seperti itu
+        // Kita tidak akan memprosesnya sebagai objek Date
+        displayValue = String(cell).trim();
+        
+        // Tambahan: Jika string masih mengandung format ISO "T...", 
+        // kita bersihkan agar hanya tersisa teks tanggalnya saja
+        if (displayValue.includes("T")) {
+            // Ini akan mengambil bagian tanggal saja dari string ISO 
+            // lalu mengonversinya kembali ke format yang Anda inginkan
+            const datePart = displayValue.split('T')[0]; // Hasil: 2026-05-29
+            const parts = datePart.split('-'); // Hasil: ['2026', '05', '29']
+            
+            // Karena ini tanggal 29 hasil konversi, kita tambahkan 1 hari secara manual 
+            // agar kembali ke tanggal yang benar (30)
+            const date = new Date(datePart);
+            date.setDate(date.getDate() + 1);
+            
+            const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+            displayValue = `${("0" + date.getDate()).slice(-2)}-${months[date.getMonth()]}-${date.getFullYear()}`;
+        }
+    }
+    
+    // 3. Kolom "Schedule Time" (Index 2)
+    else if (index === 2) {
+        displayValue = displayValue.split('\n')
+            .map(time => time.replace(/^- /, '').trim())
+            .filter(time => time !== "")
+            .join('<br>');
+    } 
+    
+    // 4. Kolom "Status" (Index 4)
+    else if (index === 4) {
+        let statuses = displayValue.split('\n')
+            .map(s => s.replace(/^- /, '').trim())
+            .filter(s => s !== "" && s !== "-");
+        displayValue = [...new Set(statuses)].join('<br>');
+    }
+
+    // Tambahkan class 'whitespace-nowrap' pada kolom Deadline agar tidak terpotong ke bawah
+    const extraClass = (index === 1) ? 'whitespace-nowrap' : '';
+    
+    htmlContent += `<td class="p-3 border-r border-gray-200 text-center">${displayValue}</td>`;
+            });
+            htmlContent += `</tr>`;
+        });
+
+        htmlContent += `</tbody></table></div></div>`;
+        
+        contentArea.innerHTML = htmlButton + htmlContent;
+    }
+} else {
+                contentArea.innerHTML = `<h1 class="text-3xl font-semibold text-gray-700">${menuName}</h1><p class="mt-4 text-gray-600">Halaman ini sedang dalam pengembangan.</p>`;
+            }
+            
+        } catch (error) {
+            contentArea.innerHTML = `<p class="text-red-500">Gagal memuat data. Periksa koneksi atau URL Deployment.</p>`;
+        }
+    }
+</script>
+
+</body>
+</html>
