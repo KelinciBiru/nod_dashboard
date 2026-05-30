@@ -534,7 +534,13 @@ else if (menuName === 'Report Maintenance') {
             data.slice(29, 40) 
         );
 
-        contentArea.innerHTML = `<h1 class="text-2xl font-bold text-gray-700 mb-4">Report Maintenance</h1>` + tableRepair + tableExRepair + tableSparepart;
+        const tableTypeUnit = createTableHTML(
+            "Report Type Unit yang sering di-Repair", 
+            data[42], 
+            data.slice(44, 51) 
+        );
+
+        contentArea.innerHTML = `<h1 class="text-2xl font-bold text-gray-700 mb-4">Report Maintenance</h1>` + tableRepair + tableExRepair + tableSparepart + tableTypeUnit;
 
     } catch (e) {
         contentArea.innerHTML = `<p class="text-red-500 p-4">Error: ${e.message}</p>`;
