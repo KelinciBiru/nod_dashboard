@@ -9,7 +9,7 @@
 <body class="flex flex-col md:flex-row h-screen font-sans text-gray-800 bg-gray-50">
 
     <header class="md:hidden bg-white p-4 flex items-center justify-between border-b border-gray-200 z-50">
-        <span class="font-bold text-gray-700">Warehouse App</span>
+        <span class="font-bold text-gray-700">Dashboard</span>
         <button id="menu-btn" class="p-2 bg-amber-500 text-white rounded">☰ Menu</button>
     </header>
 
@@ -54,6 +54,18 @@
                     <button onclick="showInventory('Report Maintenance')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report Maintenance</button>
                 </div>
             </div>
+            
+            <div class="space-y-1">
+            <button onclick="toggleSubMenu('po-sub', 'arrow-po')" class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
+                <span>Purchase Order</span>
+                <span id="arrow-po" class="text-xs">▼</span>
+              </button>
+              <div id="po-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
+                 <button onclick="showInventory('Purchase Order')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Form PO</button>
+                 <button onclick="showInventory('Purchase Order')" class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report Status</button>
+                </div>
+            </div>
+            
         </nav>
     </aside>
 
@@ -124,8 +136,7 @@
                     <h1 class="text-3xl font-semibold text-gray-700 mb-4">Stock Master</h1>
                     <div class="overflow-x-auto w-full bg-white rounded-lg shadow-sm border border-gray-300 overflow-hidden max-w-2xl">
                         <table class="w-full border-collapse text-[10px]">
-                            <table>
-                    </div>';
+                    </div>
                             <thead>
                                 <tr class="bg-gray-100 border-b border-gray-300 text-gray-700">
                                     <th class="p-2 text-center w-1/4">Machine Detail</th>
@@ -545,11 +556,64 @@ else if (menuName === 'Report Maintenance') {
     } catch (e) {
         contentArea.innerHTML = `<p class="text-red-500 p-4">Error: ${e.message}</p>`;
     }
-} else {
+} 
+else if (menuName === 'Purchase Order') {
+    // Di sini kita cek apakah sub-menu yang diklik adalah Form atau Report
+    // Atau Anda bisa memisahkan menjadi 'Form PO' dan 'Report Status' di Sidebar
+    // Berikut implementasi untuk 'Report Status':
+    
+    const response = await fetch('https://script.google.com/macros/s/AKfycbw3rdOM0IIZXJdr7KuCD1-rgjB_p85ANN0xEu2S71dDgWpXGonW2KZmEoop01f_cuQ2/exec');
+    const data = await response.json();
+    
+    let htmlTable = `
+        <h1 class="text-2xl font-bold mb-4">Form Purchase Order</h1>
+        <table class="w-full text-xs border-collapse">
+            <thead><tr class="bg-gray-800 text-white">${data[0].map(h => `<th class="p-2">${h}</th>`).join('')}<th>Action</th></tr></thead>
+            <tbody>
+                ${data.slice(1).map(row => `
+                    <tr>
+                        ${row.map((cell, i) => `<td class="p-2 border">${cell || "-"}</td>`).join('')}
+                        <td class="p-2 border">
+                            ${row[4] === "Open" ? `<button onclick="updateStatus('${row[1]}')" class="bg-green-500 text-white px-2 py-1 rounded">Close</button>` : "Closed"}
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>`;
+    contentArea.innerHTML = htmlTable;
+}
+else {
     contentArea.innerHTML = `<h1 class="text-3xl font-semibold text-gray-700">${menuName}</h1><p class="mt-4 text-gray-600">Halaman ini sedang dalam pengembangan.</p>`;
 }
     } catch (error) {
         contentArea.innerHTML = `<p class="text-red-500 p-4">Error: ${error.message}</p>`;
+    }
+} 
+function submitPO() {
+    const btn = document.getElementById('submitBtn');
+    const fileInput = document.getElementById('pdfFile');
+    if (fileInput.files.length === 0) return alert("Pilih file PDF!");
+    
+    btn.innerText = "Mengirim..."; btn.disabled = true;
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        const data = e.target.result.split(',')[1];
+        const formData = {
+            nama: document.getElementById('nama').value,
+            category: document.getElementById('category').value
+        };
+        google.script.run
+            .withSuccessHandler(msg => { alert(msg); showInventory('Form PO'); })
+            .processForm(formData, data, file.name, file.type);
+    };
+    reader.readAsDataURL(file);
+}
+
+function updateStatus(poNumber) {
+    if(confirm("Tutup PO #" + poNumber + "?")) {
+        google.script.run.withSuccessHandler(msg => { alert(msg); showInventory('Report Status'); }).closePO(poNumber);
     }
 }
 </script>
