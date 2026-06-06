@@ -123,14 +123,21 @@
     // KONFIGURASI URL API (Google Apps Script)
     // Ganti URL di sini jika endpoint berubah, tanpa perlu mencari ke dalam fungsi.
     // =========================================================================
+    // =========================================================================
+    // KONFIGURASI URL API
+    // purchaseOrder & reportStatus menggunakan 1 GAS yang sama.
+    // Ganti GANTI_URL_GAS_PO_ANDA dengan URL deployment GAS terbaru Anda.
+    // =========================================================================
+    const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyQHyCGhXLOHGGVJbWh_boZrijju4WYR3MflQQTTlaVVRl_Q0qIVaeh7Fao3JVcRD_n/exec'; // ← paste URL GAS baru di sini
+
     const API_URLS = {
         stockMaster:      'https://script.google.com/macros/s/AKfycbw_dT47dMFwtwM0qTmyOQemxzmrUYccmCwglqhFI8haRTGRmNJc98b_t1fBXxaylrUn/exec',
         reportInventory:  'https://script.google.com/macros/s/AKfycbyrXKkSEcXq01x5RVnS0Ys9d5pIYELsfM8VbUOOCj1qPO4WpqIpHuowq0xZOZ2lUOkyrQ/exec',
         planTask:         'https://script.google.com/macros/s/AKfycbzbCPzwQoMmnp0uKlVIYRdozphCJC7Yrb01SJNebZoOZmKkCvofBw8D3vndo9T1iB3rOg/exec',
         reportKPI:        'https://script.google.com/macros/s/AKfycbwrKz5dFywZ1WzfWyA6JmF_dh1GfKiZQWT6p1aUQDGAftrkNrTCMwV0hpZQczYHpeD1DA/exec',
         reportMaintenance:'https://script.google.com/macros/s/AKfycbzlEFCiljPTTBlnpzhu26s9WK03JLScJKcLaJkMWYqSGhVeW0GBI9WeW0-t1Wov46WT/exec',
-        purchaseOrder:    'https://script.google.com/macros/s/AKfycby5OXRqk3I3e6SLz3CZEEeIASYR6Dv_3LBvw5leE7mT-DuRGJzH-PdGRszMeW4EN193/exec',
-        reportStatus:     'https://script.google.com/macros/s/AKfycbx8M7jL8ajWtNfZOE9bFQJLjyiKjPDz5Me_VMMOf4qfuZOqYKyBfRtKS_9oTs-Hhvne/exec',
+        purchaseOrder:    PO_GAS_URL, // getNames (GET) + submitPO (POST)
+        reportStatus:     'https://script.google.com/macros/s/AKfycby4VxU3vN27tvm3iVjBjf0MC7BkqFSF2wXPaTdCnpDImXIuxb6gXl0Dsb2EYjdtTJSH/exec', // getPOData (GET) + closePO (POST)
     };
 
     // =========================================================================
@@ -181,7 +188,7 @@
             case 'Plan Task':        await showPlanTask();       break;
             case 'Report KPI':       await showReportKPI();      break;
             case 'Report Maintenance': await showReportMaintenance(); break;
-            case 'Purchase Order':   showFormPO();              break;
+            case 'Purchase Order':   await showFormPO();         break;
             case 'Report Status':    await showReportStatus();  break;
             // [TAMBAH CASE BARU DI SINI]
             default:
@@ -621,34 +628,92 @@
     // =========================================================================
     // HALAMAN: FORM PURCHASE ORDER
     // =========================================================================
-    function showFormPO() {
-        document.getElementById('content-area').innerHTML = `
+
+    /**
+     * Peta kategori → kode prefix No. PO
+     * Tambahkan entri baru di sini jika ada kategori baru.
+     */
+    const CATEGORY_CODE = {
+        'Outlet':      'OT',
+        'Event':       'EV',
+        'KOL':         'KOL',
+        'B2C':         'B2C',
+        'B2B':         'B2B',
+        'Selling':     'SEL',
+        'Switch Unit': 'SU',
+    };
+
+    /** Memformat Date ke string "DDMMYYYY" untuk No. PO */
+    function formatDateForPO(date) {
+        const dd   = String(date.getDate()).padStart(2, '0');
+        const mm   = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        return `${dd}${mm}${yyyy}`;
+    }
+
+    async function showFormPO() {
+        setLoading('Memuat form...');
+        const contentArea = document.getElementById('content-area');
+
+        // Ambil daftar nama dari sheet Source (kolom B2 ke bawah) via API
+        let namaOptions = '<option value="">-- Pilih Nama --</option>';
+        try {
+            const res   = await fetch(API_URLS.purchaseOrder + '?action=getNames');
+            const names = await res.json();
+            // API mengembalikan array nama (string), filter yang kosong
+            names.filter(n => n && String(n).trim() !== '').forEach(name => {
+                namaOptions += `<option value="${name}">${name}</option>`;
+            });
+        } catch (e) {
+            // Jika gagal fetch, biarkan dropdown kosong dengan pesan
+            namaOptions += '<option disabled>Gagal memuat nama</option>';
+        }
+
+        // Buat opsi kategori dari CATEGORY_CODE
+        const categoryOptions = Object.keys(CATEGORY_CODE)
+            .map(k => `<option value="${k}">${k}</option>`)
+            .join('');
+
+        contentArea.innerHTML = `
             <div class="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200">
                 <h1 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">Form Purchase Order</h1>
                 <div class="space-y-4">
+
+                    <!-- No. PO (preview otomatis) -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">No. PO (otomatis)</label>
+                        <div id="po-preview"
+                            class="w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 text-sm font-mono tracking-wide">
+                            Pilih kategori untuk melihat preview No. PO
+                        </div>
+                    </div>
+
+                    <!-- Nama Pemohon (dropdown dari sheet Source) -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Pemohon</label>
-                        <input type="text" id="nama" placeholder="Masukkan nama Anda"
+                        <select id="nama"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Kategori</label>
-                        <select id="category"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                            <option value="Outlet">Outlet</option>
-                            <option value="Event">Event</option>
-                            <option value="KOL">KOL</option>
-                            <option value="B2C">B2C</option>
-                            <option value="B2B">B2B</option>
-                            <option value="Selling">Selling</option>
-                            <option value="Switch Unit">Switch Unit</option>
+                            ${namaOptions}
                         </select>
                     </div>
+
+                    <!-- Kategori -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Kategori</label>
+                        <select id="category" onchange="updatePOPreview()"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            <option value="">-- Pilih Kategori --</option>
+                            ${categoryOptions}
+                        </select>
+                    </div>
+
+                    <!-- Upload PDF -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Upload File PDF</label>
                         <input type="file" id="pdfFile" accept="application/pdf"
                             class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm">
                     </div>
+
                     <button id="submitBtn" onclick="submitPO()"
                         class="w-full bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md mt-4">
                         Kirim PO
@@ -657,25 +722,55 @@
             </div>`;
     }
 
+    /**
+     * Memperbarui preview No. PO setiap kali kategori dipilih.
+     * Format: {KODE}-{DDMMYYYY}-{urutan}
+     * Urutan dihitung dari sisi Google Apps Script saat submit;
+     * di preview kita tampilkan "?" sebagai placeholder urutan.
+     */
+    function updatePOPreview() {
+        const category = document.getElementById('category').value;
+        const preview  = document.getElementById('po-preview');
+        if (!category || !CATEGORY_CODE[category]) {
+            preview.textContent = 'Pilih kategori untuk melihat preview No. PO';
+            preview.classList.add('text-gray-500');
+            preview.classList.remove('text-amber-700', 'font-bold');
+            return;
+        }
+        const code    = CATEGORY_CODE[category];
+        const dateStr = formatDateForPO(new Date());
+        preview.textContent = `${code}-${dateStr}-?`;
+        preview.classList.remove('text-gray-500');
+        preview.classList.add('text-amber-700', 'font-bold');
+    }
+
     /** Mengirim data Form PO ke Google Apps Script */
     async function submitPO() {
-        const fileInput = document.getElementById('pdfFile');
-        const file      = fileInput.files[0];
-        const btn       = document.getElementById('submitBtn');
+        const namaEl     = document.getElementById('nama');
+        const categoryEl = document.getElementById('category');
+        const fileInput  = document.getElementById('pdfFile');
+        const btn        = document.getElementById('submitBtn');
 
-        if (!file) { alert('Pilih file PDF terlebih dahulu.'); return; }
+        // Validasi input
+        if (!namaEl.value)     { alert('Pilih nama pemohon terlebih dahulu.'); return; }
+        if (!categoryEl.value) { alert('Pilih kategori terlebih dahulu.'); return; }
+        const file = fileInput.files[0];
+        if (!file)             { alert('Pilih file PDF terlebih dahulu.'); return; }
 
-        btn.innerText  = 'Mengirim...';
-        btn.disabled   = true;
+        btn.innerText = 'Mengirim...';
+        btn.disabled  = true;
 
         const reader = new FileReader();
         reader.onload = async function (e) {
             const payload = {
-                nama:     document.getElementById('nama').value,
-                category: document.getElementById('category').value,
-                fileData: e.target.result.split(',')[1],
-                fileName: file.name,
-                fileType: file.type,
+                action:       'submitPO',                        // aksi di GAS
+                nama:         namaEl.value,
+                category:     categoryEl.value,
+                categoryCode: CATEGORY_CODE[categoryEl.value],  // kode prefix No. PO
+                tanggal:      formatDateForPO(new Date()),       // DDMMYYYY untuk No. PO
+                fileData:     e.target.result.split(',')[1],
+                fileName:     file.name,
+                fileType:     file.type,
             };
 
             try {
@@ -684,12 +779,13 @@
                     body:   JSON.stringify(payload),
                 });
                 const result = await response.json();
-                alert('Berhasil! ' + result.po);
+                alert('Berhasil! No. PO: ' + result.po);
 
                 // Reset form
-                document.getElementById('nama').value       = '';
-                document.getElementById('pdfFile').value    = '';
-                document.getElementById('category').selectedIndex = 0;
+                namaEl.selectedIndex     = 0;
+                categoryEl.selectedIndex = 0;
+                fileInput.value          = '';
+                updatePOPreview(); // reset preview No. PO
             } catch (err) {
                 alert('Gagal kirim: ' + err.message);
             } finally {
@@ -708,9 +804,16 @@
         const contentArea = document.getElementById('content-area');
 
         try {
-            const response   = await fetch(API_URLS.reportStatus);
-            const data       = await response.json();
-            const activeData = data.slice(1).filter(row => row[4] !== 'Closed' && row[1] !== '');
+            const response = await fetch(API_URLS.reportStatus + '?action=getPOData');
+            const raw      = await response.json();
+
+            // GAS kadang return object {error:...} jika action tidak dikenal — tangani di sini
+            const data = Array.isArray(raw) ? raw : [];
+
+            // Filter di sisi JS: buang header, baris kosong, dan yang sudah Closed
+            const activeData = data.slice(1).filter(row =>
+                row[1] !== '' && row[1] != null && String(row[1]).trim() !== '' && row[4] !== 'Closed'
+            );
 
             if (activeData.length === 0) {
                 contentArea.innerHTML = `
@@ -723,20 +826,40 @@
 
             let rows_html = '';
             activeData.forEach(row => {
-                const linkCell = (row[5] && row[5] !== '')
-                    ? `<a href="${row[5]}" target="_blank" class="text-blue-600 underline">Link</a>`
+                const noPO    = row[1] || '-';
+                const nama    = row[2] || '-';
+                const kat     = row[3] || '-';
+                const status  = row[4];              // kosong = Open, "Closed" = Closed
+                const link    = row[5];
+
+                // Kolom Status: kosong → badge "Open" hijau
+                const statusBadge = (!status || status.toString().trim() === '')
+                    ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Open</span>`
+                    : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Closed</span>`;
+
+                // Tampilkan URL lengkap jika pendek, atau teks "Buka" jika terlalu panjang
+                const linkCell = (link && link !== '')
+                    ? `<a href="${link}" target="_blank"
+                          class="inline-block max-w-[160px] truncate align-middle text-blue-600 underline hover:text-blue-800"
+                          title="${link}">
+                          ${link}
+                       </a>`
                     : '-';
 
                 rows_html += `
-                    <tr>
-                        <td class="p-3 border-b">${row[1] || '-'}</td>
-                        <td class="p-3 border-b">${row[2] || '-'}</td>
-                        <td class="p-3 border-b">${row[3] || '-'}</td>
-                        <td class="p-3 border-b">${row[4] || '-'}</td>
+                    <tr id="row-${noPO}">
+                        <td class="p-3 border-b">${noPO}</td>
+                        <td class="p-3 border-b">${nama}</td>
+                        <td class="p-3 border-b">${kat}</td>
+                        <td class="p-3 border-b" id="status-${noPO}">${statusBadge}</td>
                         <td class="p-3 border-b">${linkCell}</td>
                         <td class="p-3 border-b">
-                            <button onclick="closePO('${row[1]}')"
-                                class="bg-blue-500 text-white px-2 py-1 rounded">Closed</button>
+                            <button
+                                id="btn-${noPO}"
+                                onclick="closePO('${noPO}')"
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold transition">
+                                Closed
+                            </button>
                         </td>
                     </tr>`;
             });
@@ -763,12 +886,41 @@
         }
     }
 
-    /** Menutup PO dan me-refresh halaman Report Status */
-    function closePO(poNumber) {
-        if (confirm('Tutup PO #' + poNumber + '?')) {
-            google.script.run
-                .withSuccessHandler(msg => { alert(msg); showPage('Report Status'); })
-                .closePO(poNumber);
+    /**
+     * Menutup PO: kirim POST ke GAS untuk update kolom E → "Closed",
+     * lalu update tampilan baris secara langsung tanpa reload halaman.
+     */
+    async function closePO(poNumber) {
+        if (!confirm(`Tutup PO ${poNumber}?`)) return;
+
+        const btn        = document.getElementById(`btn-${poNumber}`);
+        const statusCell = document.getElementById(`status-${poNumber}`);
+
+        btn.disabled  = true;
+        btn.innerText = 'Menyimpan...';
+
+        try {
+            const response = await fetch(API_URLS.reportStatus, {
+                method: 'POST',
+                body:   JSON.stringify({ action: 'closePO', poNumber }),
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                // Update badge status → Closed (merah) tanpa reload halaman
+                statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Closed</span>`;
+                btn.disabled         = true;
+                btn.innerText        = '✓ Closed';
+                btn.className        = 'bg-gray-300 text-gray-500 px-3 py-1 rounded text-xs font-semibold cursor-not-allowed';
+            } else {
+                alert('Gagal menutup PO: ' + (result.message || 'Terjadi kesalahan.'));
+                btn.disabled  = false;
+                btn.innerText = 'Closed';
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+            btn.disabled  = false;
+            btn.innerText = 'Closed';
         }
     }
 
