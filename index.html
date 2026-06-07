@@ -9,159 +9,428 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 
-<body class="flex flex-col md:flex-row h-screen font-sans text-gray-800 bg-gray-50">
+<body class="font-sans text-gray-800 bg-gray-50">
 
     <!-- =====================================================================
-         HEADER (Mobile Only)
+         MODAL ALERT (mengganti browser alert)
     ====================================================================== -->
-    <header class="md:hidden bg-white p-4 flex items-center justify-between border-b border-gray-200 z-50">
-        <span class="font-bold text-gray-700">Dashboard</span>
-        <button id="menu-btn" class="p-2 bg-amber-500 text-white rounded">☰ Menu</button>
-    </header>
-
-    <!-- =====================================================================
-         SIDEBAR NAVIGASI
-         Untuk menambah menu baru: duplikat salah satu blok <div class="space-y-1">
-         dan sesuaikan id, label, serta nama fungsi showPage() yang dipanggil.
-    ====================================================================== -->
-    <aside id="sidebar"
-        class="hidden md:block w-full md:w-64 bg-white border-r border-gray-200 p-6 flex-col fixed md:relative h-full z-40 overflow-y-auto">
-
-        <!-- Logo & Nama Warehouse -->
-        <div class="mb-6">
-            <img src="https://lh3.googleusercontent.com/d/1sy4WhFoKJnGlgFw9j_tnMcNWCxWSA48N" alt="Logo"
-                class="h-20 w-auto">
-            <p class="text-gray-700 font-medium">Warehouse Pulogadung</p>
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/40 z-[99999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center transform transition-all">
+            <div id="modal-icon" class="text-5xl mb-3"></div>
+            <h3 id="modal-title" class="text-lg font-bold text-gray-800 mb-1"></h3>
+            <p id="modal-message" class="text-sm text-gray-500 mb-5"></p>
+            <button onclick="closeModal()"
+                class="w-full py-2 rounded-xl font-bold text-white transition"
+                id="modal-btn">OK</button>
         </div>
+    </div>
 
-        <nav class="space-y-6">
-            <div class="border-b border-gray-500 px-1"></div>
+    <!-- =====================================================================
+         MODAL KONFIRMASI (mengganti browser confirm)
+    ====================================================================== -->
+    <div id="confirm-overlay" class="hidden fixed inset-0 bg-black/40 z-[99999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <div class="text-5xl mb-3">⚠️</div>
+            <h3 id="confirm-title" class="text-lg font-bold text-gray-800 mb-1"></h3>
+            <p id="confirm-message" class="text-sm text-gray-500 mb-5"></p>
+            <div class="flex gap-3">
+                <button onclick="confirmResolve(false)"
+                    class="flex-1 py-2 rounded-xl font-bold border border-gray-300 text-gray-600 hover:bg-gray-50 transition">
+                    Batal
+                </button>
+                <button onclick="confirmResolve(true)"
+                    class="flex-1 py-2 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600 transition">
+                    Ya, Lanjutkan
+                </button>
+            </div>
+        </div>
+    </div>
 
-            <!-- Tombol Dashboard -->
-            <button onclick="showPage('Dashboard')"
-                class="flex items-center gap-3 text-gray-700 hover:text-amber-500 font-bold">
-                Dashboard
+    <!-- =====================================================================
+         HALAMAN LOGIN
+    ====================================================================== -->
+    <div id="login-page" class="fixed inset-0 flex items-center justify-center bg-gray-100 z-[9999]">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-80 text-center border border-gray-100">
+            <div class="flex flex-col items-center mb-4">
+                <img src="https://lh3.googleusercontent.com/d/1sy4WhFoKJnGlgFw9j_tnMcNWCxWSA48N" alt="Logo"
+                    class="h-20 w-auto mb-2">
+            </div>
+            <h2 class="text-xl font-bold mb-4 text-gray-700">Login</h2>
+            <input type="password" id="passwordInput"
+                onkeydown="if(event.key==='Enter') checkLogin()"
+                class="w-full p-2 border border-gray-300 rounded mb-4 focus:ring-2 focus:ring-amber-500 outline-none"
+                placeholder="Masukkan Password">
+            <button onclick="checkLogin()" style="background-color: #14141e;"
+                class="w-full text-white py-2 rounded-full font-bold hover:opacity-90 transition">
+                Masuk
             </button>
-
-            <!-- Menu: Inventory Machine -->
-            <div class="space-y-1">
-                <button onclick="toggleSubMenu('inventory-sub', 'arrow-inventory')"
-                    class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
-                    <span>Inventory Machine</span>
-                    <span id="arrow-inventory" class="text-xs">▼</span>
-                </button>
-                <div id="inventory-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
-                    <button onclick="showPage('Stock Master')"
-                        class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Stock Master</button>
-                    <button onclick="showPage('Report Inventory')"
-                        class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report</button>
-                </div>
-            </div>
-
-            <!-- Menu: Plan Task -->
-            <div class="space-y-1">
-                <button onclick="toggleSubMenu('plan-task-sub', 'arrow-plan')"
-                    class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
-                    <span>Plan Task</span>
-                    <span id="arrow-plan" class="text-xs">▼</span>
-                </button>
-                <div id="plan-task-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
-                    <button onclick="showPage('Plan Task')"
-                        class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Plan Task</button>
-                    <button onclick="showPage('Report KPI')"
-                        class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report KPI</button>
-                </div>
-            </div>
-
-            <!-- Menu: Maintenance -->
-            <div class="space-y-1">
-                <button onclick="toggleSubMenu('maintenance-sub', 'arrow-maintenance')"
-                    class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
-                    <span>Maintenance</span>
-                    <span id="arrow-maintenance" class="text-xs">▼</span>
-                </button>
-                <div id="maintenance-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
-                    <button onclick="showPage('Report Maintenance')"
-                        class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report Maintenance</button>
-                </div>
-            </div>
-
-            <!-- Menu: Purchase Order -->
-            <div class="space-y-1">
-                <button onclick="toggleSubMenu('po-sub', 'arrow-po')"
-                    class="flex w-full items-center justify-between p-2 text-gray-700 hover:bg-amber-50 hover:text-amber-600 rounded font-semibold">
-                    <span>Purchase Order</span>
-                    <span id="arrow-po" class="text-xs">▼</span>
-                </button>
-                <div id="po-sub" class="hidden pl-6 space-y-1 border-l-2 border-amber-200 ml-3">
-                    <button onclick="showPage('Purchase Order')"
-                        class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Form PO</button>
-                    <button onclick="showPage('Report Status')"
-                        class="block w-full text-left p-1 text-sm text-gray-600 hover:text-amber-600">Report Status</button>
-                </div>
-            </div>
-
-            <!-- [TAMBAH MENU BARU DI SINI] -->
-
-        </nav>
-    </aside>
+            <p id="loginError" class="text-red-500 text-sm mt-2 hidden">Password Salah!</p>
+        </div>
+    </div>
 
     <!-- =====================================================================
-         AREA KONTEN UTAMA
+         APP CONTAINER
     ====================================================================== -->
-    <main id="content-area" class="flex-1 p-4 md:p-8 overflow-y-auto">
-        <!-- Konten default: Dashboard -->
-        <h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>
-        <div class="mt-8">
-            <img src="https://lh3.googleusercontent.com/d/19epa7IlpjqaS0f7F_WEgDZSwhriLpikp" alt="Dashboard Image"
-                class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">
+    <div id="app-container" class="hidden h-screen flex-col overflow-hidden">
+
+        <!-- TOPBAR (selalu tampil di atas) -->
+        <header class="flex-shrink-0 bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between z-30 shadow-sm">
+            <!-- Kiri: tombol toggle sidebar + nama halaman -->
+            <div class="flex items-center gap-3">
+                <button id="sidebar-toggle"
+                    onclick="toggleSidebar()"
+                    class="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <span class="font-bold text-gray-700 text-sm md:text-base" id="page-title">Dashboard</span>
+            </div>
+            <!-- Kanan: role badge + logout -->
+            <div class="flex items-center gap-3">
+                <span id="user-role-badge"
+                    class="hidden md:inline-block text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700">
+                </span>
+                <button onclick="logout()"
+                    class="flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"/>
+                    </svg>
+                    <span class="hidden sm:inline">Logout</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- BODY: sidebar + konten -->
+        <div class="flex flex-1 overflow-hidden relative">
+
+            <!-- OVERLAY (klik untuk tutup sidebar di mobile) -->
+            <div id="sidebar-overlay"
+                onclick="toggleSidebar()"
+                class="hidden fixed inset-0 bg-black/30 z-20 md:hidden">
+            </div>
+
+            <!-- SIDEBAR (slide in/out) -->
+            <aside id="sidebar"
+                class="absolute md:relative z-30 flex flex-col h-full bg-white border-r border-gray-100 shadow-xl md:shadow-none
+                       transition-all duration-300 ease-in-out
+                       -translate-x-full md:translate-x-0 w-64 flex-shrink-0">
+
+                <!-- Logo -->
+                <div class="p-5 border-b border-gray-100 flex items-center gap-3">
+                    <img src="https://lh3.googleusercontent.com/d/1sy4WhFoKJnGlgFw9j_tnMcNWCxWSA48N"
+                         alt="Logo" class="h-10 w-auto">
+                    <div>
+                        <p class="font-bold text-gray-800 text-sm leading-tight">Warehouse</p>
+                        <p class="text-amber-500 font-semibold text-xs">Pulogadung</p>
+                    </div>
+                </div>
+
+                <!-- Nav items -->
+                <nav class="flex-1 overflow-y-auto p-3 space-y-1">
+
+                    <!-- Dashboard -->
+                    <button onclick="navTo('Dashboard')"
+                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                        Dashboard
+                    </button>
+
+                    <!-- Inventory Machine -->
+                    <div id="menu-inventory">
+                        <button onclick="toggleSubMenu('inventory-sub','arrow-inventory')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                                <span>Inventory Machine</span>
+                            </div>
+                            <span id="arrow-inventory" class="text-xs transition-transform duration-200">▼</span>
+                        </button>
+                        <div id="inventory-sub" class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button onclick="navTo('Stock Master')" class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Stock Master</button>
+                            <button onclick="navTo('Report Inventory')" class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report</button>
+                        </div>
+                    </div>
+
+                    <!-- Plan Task -->
+                    <div id="menu-plan-task">
+                        <button onclick="toggleSubMenu('plan-task-sub','arrow-plan')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                                <span>Plan Task</span>
+                            </div>
+                            <span id="arrow-plan" class="text-xs">▼</span>
+                        </button>
+                        <div id="plan-task-sub" class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button onclick="navTo('Plan Task')" class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Plan Task</button>
+                            <button onclick="navTo('Report KPI')" class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report KPI</button>
+                        </div>
+                    </div>
+
+                    <!-- Maintenance -->
+                    <div id="menu-maintenance">
+                        <button onclick="toggleSubMenu('maintenance-sub','arrow-maintenance')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                <span>Maintenance</span>
+                            </div>
+                            <span id="arrow-maintenance" class="text-xs">▼</span>
+                        </button>
+                        <div id="maintenance-sub" class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button onclick="navTo('Report Maintenance')" class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report Maintenance</button>
+                        </div>
+                    </div>
+
+                    <!-- Purchase Order -->
+                    <div id="menu-po">
+                        <button onclick="toggleSubMenu('po-sub','arrow-po')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                <span>Purchase Order</span>
+                            </div>
+                            <span id="arrow-po" class="text-xs">▼</span>
+                        </button>
+                        <div id="po-sub" class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button onclick="navTo('Purchase Order')" class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Form PO</button>
+                            <button onclick="navTo('Report Status')" class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report Status</button>
+                        </div>
+                    </div>
+
+                    <!-- [TAMBAH MENU BARU DI SINI] -->
+                </nav>
+
+                <!-- Footer sidebar: role info -->
+                <div class="p-4 border-t border-gray-100">
+                    <div class="flex items-center gap-2 px-2 py-2 rounded-xl bg-gray-50">
+                        <div class="w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
+                            <svg class="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                        </div>
+                        <div class="overflow-hidden">
+                            <p id="user-role-label" class="text-xs font-semibold text-gray-700 truncate"></p>
+                            <p class="text-[10px] text-gray-400">Warehouse Pulogadung</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- AREA KONTEN UTAMA -->
+            <main id="content-area" class="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-50">
+                <h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>
+            </main>
         </div>
-    </main>
+    </div>
 
     <script>
     // =========================================================================
-    // KONFIGURASI URL API (Google Apps Script)
-    // Ganti URL di sini jika endpoint berubah, tanpa perlu mencari ke dalam fungsi.
+    // STATE GLOBAL
     // =========================================================================
+    let currentUserRole = '';
+
     // =========================================================================
     // KONFIGURASI URL API
-    // purchaseOrder & reportStatus menggunakan 1 GAS yang sama.
-    // Ganti GANTI_URL_GAS_PO_ANDA dengan URL deployment GAS terbaru Anda.
     // =========================================================================
-    const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyQHyCGhXLOHGGVJbWh_boZrijju4WYR3MflQQTTlaVVRl_Q0qIVaeh7Fao3JVcRD_n/exec'; // ← paste URL GAS baru di sini
+    const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyQHyCGhXLOHGGVJbWh_boZrijju4WYR3MflQQTTlaVVRl_Q0qIVaeh7Fao3JVcRD_n/exec';
 
     const API_URLS = {
-        stockMaster:      'https://script.google.com/macros/s/AKfycbw_dT47dMFwtwM0qTmyOQemxzmrUYccmCwglqhFI8haRTGRmNJc98b_t1fBXxaylrUn/exec',
-        reportInventory:  'https://script.google.com/macros/s/AKfycbyrXKkSEcXq01x5RVnS0Ys9d5pIYELsfM8VbUOOCj1qPO4WpqIpHuowq0xZOZ2lUOkyrQ/exec',
-        planTask:         'https://script.google.com/macros/s/AKfycbzbCPzwQoMmnp0uKlVIYRdozphCJC7Yrb01SJNebZoOZmKkCvofBw8D3vndo9T1iB3rOg/exec',
-        reportKPI:        'https://script.google.com/macros/s/AKfycbwrKz5dFywZ1WzfWyA6JmF_dh1GfKiZQWT6p1aUQDGAftrkNrTCMwV0hpZQczYHpeD1DA/exec',
-        reportMaintenance:'https://script.google.com/macros/s/AKfycbzlEFCiljPTTBlnpzhu26s9WK03JLScJKcLaJkMWYqSGhVeW0GBI9WeW0-t1Wov46WT/exec',
-        purchaseOrder:    PO_GAS_URL, // getNames (GET) + submitPO (POST)
-        reportStatus:     'https://script.google.com/macros/s/AKfycby4VxU3vN27tvm3iVjBjf0MC7BkqFSF2wXPaTdCnpDImXIuxb6gXl0Dsb2EYjdtTJSH/exec', // getPOData (GET) + closePO (POST)
+        stockMaster:       'https://script.google.com/macros/s/AKfycbw_dT47dMFwtwM0qTmyOQemxzmrUYccmCwglqhFI8haRTGRmNJc98b_t1fBXxaylrUn/exec',
+        reportInventory:   'https://script.google.com/macros/s/AKfycbyrXKkSEcXq01x5RVnS0Ys9d5pIYELsfM8VbUOOCj1qPO4WpqIpHuowq0xZOZ2lUOkyrQ/exec',
+        planTask:          'https://script.google.com/macros/s/AKfycbzbCPzwQoMmnp0uKlVIYRdozphCJC7Yrb01SJNebZoOZmKkCvofBw8D3vndo9T1iB3rOg/exec',
+        reportKPI:         'https://script.google.com/macros/s/AKfycbwrKz5dFywZ1WzfWyA6JmF_dh1GfKiZQWT6p1aUQDGAftrkNrTCMwV0hpZQczYHpeD1DA/exec',
+        reportMaintenance: 'https://script.google.com/macros/s/AKfycbzlEFCiljPTTBlnpzhu26s9WK03JLScJKcLaJkMWYqSGhVeW0GBI9WeW0-t1Wov46WT/exec',
+        purchaseOrder:     PO_GAS_URL,
+        reportStatus:      PO_GAS_URL,
     };
+
+    // =========================================================================
+    // LOGIN
+    // =========================================================================
+    function checkLogin() {
+        const pass  = document.getElementById('passwordInput').value;
+        const error = document.getElementById('loginError');
+
+        if (pass === 'admin123') {
+            currentUserRole = 'ADMIN';
+            startApp();
+        } else if (pass === 'staff123') {
+            currentUserRole = 'PO_User';
+            startApp();
+        } else {
+            error.classList.remove('hidden');
+            return;
+        }
+        error.classList.add('hidden');
+    }
+
+    /** Tampilkan app sesuai role setelah login berhasil */
+    function startApp() {
+        document.getElementById('login-page').classList.add('hidden');
+
+        const app = document.getElementById('app-container');
+        app.classList.remove('hidden');
+        app.classList.add('flex');
+
+        // Update label role di sidebar footer dan topbar badge
+        const roleLabel = document.getElementById('user-role-label');
+        const roleBadge = document.getElementById('user-role-badge');
+        if (currentUserRole === 'ADMIN') {
+            if (roleLabel) roleLabel.textContent = 'Administrator';
+            if (roleBadge) { roleBadge.textContent = 'Admin'; roleBadge.classList.remove('hidden'); }
+        } else {
+            if (roleLabel) roleLabel.textContent = 'PO User';
+            if (roleBadge) { roleBadge.textContent = 'PO User'; roleBadge.classList.remove('hidden'); }
+        }
+
+        // Sidebar di desktop: tampil default terbuka
+        if (window.innerWidth >= 768) {
+            document.getElementById('sidebar').classList.remove('-translate-x-full');
+            sidebarOpen = false; // di desktop tidak pakai overlay
+        }
+
+        if (currentUserRole === 'PO_User') {
+            document.getElementById('menu-inventory').classList.add('hidden');
+            document.getElementById('menu-plan-task').classList.add('hidden');
+            document.getElementById('menu-maintenance').classList.add('hidden');
+            // Buka PO submenu otomatis
+            document.getElementById('po-sub').classList.remove('hidden');
+            document.getElementById('arrow-po').textContent = '▲';
+            navTo('Purchase Order');
+        } else {
+            navTo('Dashboard');
+        }
+    }
+
+    /** Logout: reset state dan kembali ke halaman login */
+    function logout() {
+        if (!confirm('Yakin ingin logout?')) return;
+
+        // Reset role
+        currentUserRole = '';
+
+        // Reset form password
+        document.getElementById('passwordInput').value = '';
+        document.getElementById('loginError').classList.add('hidden');
+
+        // Sembunyikan app, tampilkan login
+        const app = document.getElementById('app-container');
+        app.classList.add('hidden');
+        app.classList.remove('flex');
+        document.getElementById('login-page').classList.remove('hidden');
+
+        // Reset visibilitas menu
+        document.getElementById('menu-inventory').classList.remove('hidden');
+        document.getElementById('menu-plan-task').classList.remove('hidden');
+        document.getElementById('menu-maintenance').classList.remove('hidden');
+
+        // Reset badge dan label role
+        const roleBadge = document.getElementById('user-role-badge');
+        if (roleBadge) roleBadge.classList.add('hidden');
+        document.getElementById('page-title').textContent = 'Dashboard';
+
+        // Reset sidebar ke posisi tertutup (mobile)
+        document.getElementById('sidebar').classList.add('-translate-x-full');
+        document.getElementById('sidebar-overlay').classList.add('hidden');
+        sidebarOpen = false;
+
+        // Reset po-sub
+        document.getElementById('po-sub').classList.add('hidden');
+        document.getElementById('arrow-po').textContent = '▼';
+
+        // Reset konten area
+        document.getElementById('content-area').innerHTML =
+            '<h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>';
+    }
 
     // =========================================================================
     // UTILITAS UI
     // =========================================================================
-
-    /** Menampilkan pesan loading di content area */
     function setLoading(message = 'Memuat data...') {
-        document.getElementById('content-area').innerHTML =
-            `<p class="text-gray-500">${message}</p>`;
+        document.getElementById('content-area').innerHTML = `
+            <div class="flex flex-col items-center justify-center h-64 gap-4">
+                <div class="w-10 h-10 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+                <p class="text-gray-500 text-sm">${message}</p>
+            </div>`;
     }
 
-    /** Menampilkan pesan error di content area */
     function setError(message) {
         document.getElementById('content-area').innerHTML =
-            `<p class="text-red-500 p-4">Error: ${message}</p>`;
+            `<div class="flex flex-col items-center justify-center h-64 gap-3">
+                <div class="text-4xl">❌</div>
+                <p class="text-red-500 font-semibold">Terjadi Kesalahan</p>
+                <p class="text-gray-400 text-sm text-center max-w-xs">${message}</p>
+            </div>`;
     }
 
-    /** Toggle sidebar di mobile */
-    document.getElementById('menu-btn').addEventListener('click', () => {
-        document.getElementById('sidebar').classList.toggle('hidden');
+    // =========================================================================
+    // MODAL ALERT & CONFIRM (pengganti browser alert/confirm)
+    // =========================================================================
+    function showAlert(type, title, message) {
+        const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
+        const colors = {
+            success: 'bg-green-500 hover:bg-green-600',
+            error:   'bg-red-500 hover:bg-red-600',
+            info:    'bg-blue-500 hover:bg-blue-600',
+            warning: 'bg-amber-500 hover:bg-amber-600',
+        };
+        document.getElementById('modal-icon').textContent    = icons[type] || icons.info;
+        document.getElementById('modal-title').textContent   = title;
+        document.getElementById('modal-message').textContent = message;
+        document.getElementById('modal-btn').className =
+            `w-full py-2 rounded-xl font-bold text-white transition ${colors[type] || colors.info}`;
+        document.getElementById('modal-overlay').classList.remove('hidden');
+    }
+
+    function closeModal() {
+        document.getElementById('modal-overlay').classList.add('hidden');
+    }
+
+    // Menutup modal jika klik di luar kotak
+    document.getElementById('modal-overlay').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
     });
 
-    /** Toggle submenu sidebar dengan animasi panah */
+    let confirmResolve = null;
+    function showConfirm(title, message) {
+        return new Promise(resolve => {
+            document.getElementById('confirm-title').textContent   = title;
+            document.getElementById('confirm-message').textContent = message;
+            document.getElementById('confirm-overlay').classList.remove('hidden');
+            confirmResolve = (result) => {
+                document.getElementById('confirm-overlay').classList.add('hidden');
+                resolve(result);
+            };
+        });
+    }
+
+    // =========================================================================
+    // SIDEBAR TOGGLE
+    // =========================================================================
+    let sidebarOpen = false;
+
+    function toggleSidebar() {
+        const sidebar  = document.getElementById('sidebar');
+        const overlay  = document.getElementById('sidebar-overlay');
+        sidebarOpen    = !sidebarOpen;
+
+        if (sidebarOpen) {
+            sidebar.classList.remove('-translate-x-full');
+            overlay.classList.remove('hidden');
+        } else {
+            sidebar.classList.add('-translate-x-full');
+            overlay.classList.add('hidden');
+        }
+    }
+
+    // Tutup sidebar saat resize ke desktop
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 768 && sidebarOpen) {
+            document.getElementById('sidebar-overlay').classList.add('hidden');
+        }
+    });
+
     function toggleSubMenu(menuId, arrowId) {
         const subMenu = document.getElementById(menuId);
         const arrow   = document.getElementById(arrowId);
@@ -169,30 +438,61 @@
         arrow.textContent = subMenu.classList.contains('hidden') ? '▼' : '▲';
     }
 
-    // =========================================================================
-    // ROUTER HALAMAN
-    // Tambahkan case baru di sini untuk menu baru yang ingin ditambahkan.
-    // =========================================================================
-    async function showPage(pageName) {
-        const contentArea = document.getElementById('content-area');
+    /** Highlight nav item yang aktif */
+    function setActiveNav(pageName) {
+        document.querySelectorAll('.nav-item, .sub-item').forEach(el => {
+            el.classList.remove('bg-amber-500', 'text-white', 'font-bold');
+            el.classList.add('text-gray-700');
+        });
+        const all = document.querySelectorAll('.nav-item, .sub-item');
+        all.forEach(el => {
+            if (el.textContent.trim() === pageName ||
+                (pageName === 'Purchase Order' && el.textContent.trim() === 'Form PO') ||
+                (pageName === 'Dashboard' && el.textContent.trim() === 'Dashboard')) {
+                el.classList.add('bg-amber-500', 'text-white', 'font-bold');
+                el.classList.remove('text-gray-700', 'text-gray-500');
+            }
+        });
+    }
 
-        // Tutup sidebar di mobile setelah memilih menu
-        if (window.innerWidth < 768) {
-            document.getElementById('sidebar').classList.add('hidden');
-        }
+    // =========================================================================
+    // ROUTER
+    // =========================================================================
+
+    /** Wrapper navigasi: update title bar, highlight menu, tutup sidebar di mobile */
+    function navTo(pageName) {
+        const titles = {
+            'Dashboard':          'Dashboard',
+            'Stock Master':       'Stock Master',
+            'Report Inventory':   'Report Inventory',
+            'Plan Task':          'Plan Task',
+            'Report KPI':         'Report KPI',
+            'Report Maintenance': 'Report Maintenance',
+            'Purchase Order':     'Form Purchase Order',
+            'Report Status':      'Report Status PO',
+        };
+        document.getElementById('page-title').textContent = titles[pageName] || pageName;
+        setActiveNav(pageName);
+
+        // Tutup sidebar di mobile setelah klik menu
+        if (window.innerWidth < 768 && sidebarOpen) toggleSidebar();
+
+        showPage(pageName);
+    }
+
+    async function showPage(pageName) {
 
         switch (pageName) {
-            case 'Dashboard':        showDashboard();           break;
-            case 'Stock Master':     await showStockMaster();   break;
-            case 'Report Inventory': await showReportInventory(); break;
-            case 'Plan Task':        await showPlanTask();       break;
-            case 'Report KPI':       await showReportKPI();      break;
+            case 'Dashboard':          showDashboard();              break;
+            case 'Stock Master':       await showStockMaster();      break;
+            case 'Report Inventory':   await showReportInventory();  break;
+            case 'Plan Task':          await showPlanTask();         break;
+            case 'Report KPI':         await showReportKPI();        break;
             case 'Report Maintenance': await showReportMaintenance(); break;
-            case 'Purchase Order':   await showFormPO();         break;
-            case 'Report Status':    await showReportStatus();  break;
-            // [TAMBAH CASE BARU DI SINI]
+            case 'Purchase Order':     await showFormPO();           break;
+            case 'Report Status':      await showReportStatus();     break;
             default:
-                contentArea.innerHTML = `
+                document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
                     <p class="mt-4 text-gray-600">Halaman ini sedang dalam pengembangan.</p>`;
         }
@@ -203,12 +503,10 @@
     // =========================================================================
     function showDashboard() {
         document.getElementById('content-area').innerHTML = `
-            <h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>
-            <div class="mt-8">
-                <img src="https://lh3.googleusercontent.com/d/19epa7IlpjqaS0f7F_WEgDZSwhriLpikp"
-                     alt="Dashboard Image"
-                     class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">
-            </div>`;
+            <h1 class="text-3xl font-semibold text-gray-700 mb-6">Dashboard</h1>
+            <img src="https://lh3.googleusercontent.com/d/19epa7IlpjqaS0f7F_WEgDZSwhriLpikp"
+                 alt="Dashboard Image"
+                 class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">`;
     }
 
     // =========================================================================
@@ -217,21 +515,17 @@
     async function showStockMaster() {
         setLoading();
         const contentArea = document.getElementById('content-area');
-
         try {
             const response = await fetch(API_URLS.stockMaster);
             const data     = await response.json();
             const rows     = data.slice(3);
-
             const HIDDEN_KEYWORDS = ["Descaling Kit", "Sleeve Box"];
 
             let rows_html = '';
             for (const row of rows) {
                 const machineName = String(row[1] || '');
                 const stock       = String(row[2] || '');
-
                 if (machineName === '' || HIDDEN_KEYWORDS.some(k => machineName.includes(k))) continue;
-
                 rows_html += `
                     <tr class="hover:bg-gray-50">
                         <td class="p-2 font-medium text-center">${machineName}</td>
@@ -249,14 +543,10 @@
                                 <th class="p-2 text-center w-1/2">Stock Available</th>
                             </tr>
                         </thead>
-                        <tbody class="text-gray-600 divide-y divide-gray-200">
-                            ${rows_html}
-                        </tbody>
+                        <tbody class="text-gray-600 divide-y divide-gray-200">${rows_html}</tbody>
                     </table>
                 </div>`;
-        } catch (err) {
-            setError(err.message);
-        }
+        } catch (err) { setError(err.message); }
     }
 
     // =========================================================================
@@ -265,12 +555,10 @@
     async function showReportInventory() {
         setLoading();
         const contentArea = document.getElementById('content-area');
-
         try {
             const response = await fetch(API_URLS.reportInventory);
             const data     = await response.json();
 
-            // -- Tabel 1: Report per-Minggu (baris 6-15) --
             let tableMingguan = `
                 <h2 class="text-lg font-bold text-gray-800 mb-2">Report per-Minggu</h2>
                 <div class="overflow-x-auto border border-gray-400 mb-8">
@@ -296,20 +584,14 @@
                 const validRow   = row.slice(0, 10);
                 const isRowEmpty = validRow.every(c => c === '' || c === '-' || c == null);
                 if (isRowEmpty) continue;
-
                 const isTotal = String(validRow[0]).trim().toLowerCase() === 'total';
                 tableMingguan += `<tr class="border-b border-gray-300 ${isTotal ? 'bg-gray-200' : 'hover:bg-blue-50'}">`;
-                validRow.forEach(cell => {
-                    tableMingguan += `<td class="p-2 border-r border-gray-300">${cell || '-'}</td>`;
-                });
+                validRow.forEach(cell => { tableMingguan += `<td class="p-2 border-r border-gray-300">${cell || '-'}</td>`; });
                 tableMingguan += '</tr>';
             }
             tableMingguan += '</tbody></table></div>';
 
-            // -- Tabel 2: Report Outbound per-Bulan (baris 22+) --
-            const MONTHS = ["Machine Detail","Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agt","Sep","Okt","Nov","Des","Total"];
-
-            // Kumpulkan dulu semua baris data yang valid
+            const MONTHS      = ["Machine Detail","Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agt","Sep","Okt","Nov","Des","Total"];
             const bulananRows = [];
             for (let i = 22; i < data.length; i++) {
                 const row  = data[i];
@@ -320,10 +602,8 @@
                 if (name.includes('stainless steel cup')) break;
             }
 
-            // Tentukan kolom mana yang punya setidaknya satu nilai (bukan '-' dan bukan kosong),
-            // selain kolom pertama (Machine Detail) yang selalu ditampilkan.
             const activeCols = MONTHS.reduce((acc, _, colIdx) => {
-                if (colIdx === 0) { acc.push(colIdx); return acc; } // kolom nama selalu tampil
+                if (colIdx === 0) { acc.push(colIdx); return acc; }
                 const hasValue = bulananRows.some(row => {
                     const cell = row[colIdx];
                     return cell !== '' && cell !== '-' && cell != null;
@@ -354,9 +634,7 @@
             tableBulanan += '</tbody></table></div>';
 
             contentArea.innerHTML = tableMingguan + tableBulanan;
-        } catch (err) {
-            setError(err.message);
-        }
+        } catch (err) { setError(err.message); }
     }
 
     // =========================================================================
@@ -365,15 +643,11 @@
     async function showPlanTask() {
         setLoading();
         const contentArea = document.getElementById('content-area');
-
         try {
             const response = await fetch(API_URLS.planTask);
             const data     = await response.json();
-
             const taskData = data.slice(1).filter(row =>
-                row[0] &&
-                !row[0].toString().includes('Tidak ada tugas aktif') &&
-                row[0] !== ''
+                row[0] && !row[0].toString().includes('Tidak ada tugas aktif') && row[0] !== ''
             );
 
             if (taskData.length === 0) {
@@ -387,15 +661,11 @@
                 return;
             }
 
-            /** Format tanggal dari ISO string ke "DD-Mon-YYYY" */
             function formatDeadline(cell) {
                 const raw = String(cell).trim();
                 if (!raw.includes('T')) return raw;
-
-                const datePart = raw.split('T')[0];
-                const date     = new Date(datePart);
+                const date = new Date(raw.split('T')[0]);
                 date.setDate(date.getDate() + 1);
-
                 const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agt","Sep","Okt","Nov","Des"];
                 return `${String(date.getDate()).padStart(2,'0')}-${months[date.getMonth()]}-${date.getFullYear()}`;
             }
@@ -405,24 +675,14 @@
                 rows_html += '<tr class="hover:bg-gray-50 text-xs">';
                 row.forEach((cell, index) => {
                     let value = String(cell || '-').trim();
-
                     if (index === 0 || index === 2) {
-                        // Kolom Task & Schedule Time: pecah per baris
-                        value = value.split('\n')
-                            .map(t => t.replace(/^- /, '').trim())
-                            .filter(t => t !== '')
-                            .join('<br>');
+                        value = value.split('\n').map(t => t.replace(/^- /, '').trim()).filter(t => t !== '').join('<br>');
                     } else if (index === 1) {
-                        // Kolom Deadline: format tanggal
                         value = formatDeadline(cell);
                     } else if (index === 4) {
-                        // Kolom Status: deduplikasi
-                        const statuses = value.split('\n')
-                            .map(s => s.replace(/^- /, '').trim())
-                            .filter(s => s !== '' && s !== '-');
+                        const statuses = value.split('\n').map(s => s.replace(/^- /, '').trim()).filter(s => s !== '' && s !== '-');
                         value = [...new Set(statuses)].join('<br>');
                     }
-
                     const extra = index === 1 ? 'whitespace-nowrap' : '';
                     rows_html += `<td class="p-3 border-r border-gray-200 text-center ${extra}">${value}</td>`;
                 });
@@ -446,15 +706,11 @@
                                     ${data[0].map(h => `<th class="p-3 text-center border-r">${h}</th>`).join('')}
                                 </tr>
                             </thead>
-                            <tbody class="text-gray-600 divide-y divide-gray-200">
-                                ${rows_html}
-                            </tbody>
+                            <tbody class="text-gray-600 divide-y divide-gray-200">${rows_html}</tbody>
                         </table>
                     </div>
                 </div>`;
-        } catch (err) {
-            setError(err.message);
-        }
+        } catch (err) { setError(err.message); }
     }
 
     // =========================================================================
@@ -463,44 +719,30 @@
     async function showReportKPI() {
         setLoading('Memuat data KPI...');
         const contentArea = document.getElementById('content-area');
-
         try {
             const response = await fetch(API_URLS.reportKPI);
             const data     = await response.json();
 
-            /**
-             * Membuat HTML tabel dari rentang baris & kolom yang ditentukan.
-             * Baris/kolom yang sepenuhnya kosong otomatis disembunyikan.
-             */
             function renderTable(title, startRow, endRow, colStart, colEnd) {
-                // Tentukan kolom aktif (ada datanya)
                 const activeCols = [];
                 for (let j = colStart; j <= colEnd; j++) {
                     const hasData = Array.from({ length: endRow - startRow }, (_, k) => startRow + 1 + k)
-                        .some(i => {
-                            const cell = data[i]?.[j];
-                            return cell !== '' && cell !== '-' && cell != null;
-                        });
+                        .some(i => { const cell = data[i]?.[j]; return cell !== '' && cell !== '-' && cell != null; });
                     if (hasData || j === colStart) activeCols.push(j);
                 }
-
                 let html = `
                     <h2 class="text-sm font-bold text-gray-700 mt-8 mb-3">${title}</h2>
                     <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                         <table class="w-full text-xs border-collapse">
-                            <thead>
-                                <tr class="bg-gray-800 text-white">
-                                    ${activeCols.map(j => `<th class="p-3 border-r border-gray-600 text-center">${data[startRow][j] || ''}</th>`).join('')}
-                                </tr>
-                            </thead>
+                            <thead><tr class="bg-gray-800 text-white">
+                                ${activeCols.map(j => `<th class="p-3 border-r border-gray-600 text-center">${data[startRow][j] || ''}</th>`).join('')}
+                            </tr></thead>
                             <tbody class="divide-y divide-gray-200">`;
-
                 for (let i = startRow + 1; i <= endRow; i++) {
                     if (!data[i]) continue;
                     const rowData    = activeCols.map(j => data[i][j]);
                     const isRowEmpty = rowData.slice(1).every(c => !c || c === '-' || c === '');
                     if (isRowEmpty) continue;
-
                     const isTotal = String(data[i][colStart]).toLowerCase().includes('total');
                     html += `<tr class="${isTotal ? 'bg-amber-100 font-bold' : 'hover:bg-gray-50'}">`;
                     activeCols.forEach(j => {
@@ -513,34 +755,25 @@
                 return html;
             }
 
-            /**
-             * Membuat tabel Productivity khusus (nama orang sebagai baris).
-             */
             function renderProductivityTable(title, startRow, endRow) {
                 const VALID_NAMES = ["Rizal", "Adam", "Helmi", "Raka"];
-
                 let html = `
                     <h2 class="text-sm font-bold text-gray-700 mt-8 mb-3">${title}</h2>
                     <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                         <table class="w-full text-xs border-collapse">
-                            <thead>
-                                <tr class="bg-gray-800 text-white">
-                                    <th class="p-3 border-r border-gray-600 text-center">Nama</th>
-                                    <th class="p-3 border-r border-gray-600 text-center">Loading</th>
-                                    <th class="p-3 border-r border-gray-600 text-center">Prepare</th>
-                                    <th class="p-3 border-r border-gray-600 text-center">Support</th>
-                                    <th class="p-3 border-r border-gray-600 text-center">Perapihan</th>
-                                </tr>
-                            </thead>
+                            <thead><tr class="bg-gray-800 text-white">
+                                <th class="p-3 border-r border-gray-600 text-center">Nama</th>
+                                <th class="p-3 border-r border-gray-600 text-center">Loading</th>
+                                <th class="p-3 border-r border-gray-600 text-center">Prepare</th>
+                                <th class="p-3 border-r border-gray-600 text-center">Support</th>
+                                <th class="p-3 border-r border-gray-600 text-center">Perapihan</th>
+                            </tr></thead>
                             <tbody class="divide-y divide-gray-200">`;
-
                 for (let i = startRow; i <= endRow; i++) {
                     if (!data[i]) continue;
-                    const rowData = data[i];
-                    const nama    = rowData.find(c => VALID_NAMES.includes(c));
+                    const nama  = data[i].find(c => VALID_NAMES.includes(c));
                     if (!nama) continue;
-
-                    const angka = rowData.filter(c => !isNaN(c) && c !== '' && c != null && !VALID_NAMES.includes(c));
+                    const angka = data[i].filter(c => !isNaN(c) && c !== '' && c != null && !VALID_NAMES.includes(c));
                     html += `
                         <tr class="hover:bg-gray-50">
                             <td class="p-3 border-r font-bold text-center bg-gray-50">${nama}</td>
@@ -559,11 +792,8 @@
             content += renderTable("Report KPI Bulanan",    1,  6,  0,  5);
             content += renderTable("Tren Activity/Bulan",  16, 20,  6,  9);
             content += renderProductivityTable("Productivity/Bulan", 22, 27);
-
             contentArea.innerHTML = content;
-        } catch (err) {
-            contentArea.innerHTML = '<p class="text-red-500 p-4">Error memuat data. Periksa koneksi.</p>';
-        }
+        } catch (err) { setError(err.message); }
     }
 
     // =========================================================================
@@ -572,25 +802,16 @@
     async function showReportMaintenance() {
         setLoading();
         const contentArea = document.getElementById('content-area');
-
         try {
             const response = await fetch(API_URLS.reportMaintenance);
             const data     = await response.json();
 
-            /**
-             * Membuat tabel dengan hanya menampilkan kolom yang memiliki data.
-             * @param {string} title      - Judul tabel
-             * @param {Array}  headerRow  - Array header kolom
-             * @param {Array}  bodyRows   - Array baris data
-             */
             function createTable(title, headerRow, bodyRows) {
-                // Cari indeks kolom yang tidak kosong
                 const validCols = headerRow.reduce((acc, _, colIndex) => {
                     const hasData = bodyRows.some(row => row[colIndex] !== '' && row[colIndex] !== '-' && row[colIndex] != null);
                     if (hasData) acc.push(colIndex);
                     return acc;
                 }, []);
-
                 let html = `
                     <h2 class="text-lg font-bold text-gray-700 mb-2 mt-6">${title}</h2>
                     <div class="overflow-x-auto shadow-sm border border-gray-200 rounded-lg mb-4">
@@ -599,51 +820,33 @@
                                 <tr>${validCols.map(i => `<th class="p-3 border-r">${headerRow[i]}</th>`).join('')}</tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 bg-white">`;
-
                 bodyRows.forEach(row => {
                     const isTotal = row[0] && row[0].toString().toLowerCase() === 'total';
                     html += `<tr class="${isTotal ? 'bg-gray-200 font-bold' : 'hover:bg-gray-50'}">`;
-                    validCols.forEach(i => {
-                        html += `<td class="p-3 border-r">${row[i] || '-'}</td>`;
-                    });
+                    validCols.forEach(i => { html += `<td class="p-3 border-r">${row[i] || '-'}</td>`; });
                     html += '</tr>';
                 });
                 html += '</tbody></table></div>';
                 return html;
             }
 
-            const tableRepair    = createTable("Report Progress Repair",                    data[0],  data.slice(2, 11));
-            const tableExRepair  = createTable("Report Ex Repair Vs Reused Vs Service",     data[14], data.slice(16, 24));
-            const tableSparepart = createTable("Report Type Unit yang sering di-Repair",    data[27], data.slice(29, 40));
-            const tableTypeUnit  = createTable("Report Type Unit yang sering di-Repair",    data[43], data.slice(44, 51));
-
             contentArea.innerHTML =
                 '<h1 class="text-2xl font-bold text-gray-700 mb-4">Report Maintenance</h1>' +
-                tableRepair + tableExRepair + tableSparepart + tableTypeUnit;
-        } catch (err) {
-            setError(err.message);
-        }
+                createTable("Report Progress Repair",                 data[0],  data.slice(2,  11)) +
+                createTable("Report Ex Repair Vs Reused Vs Service",  data[14], data.slice(16, 24)) +
+                createTable("Report Type Unit yang sering di-Repair", data[27], data.slice(29, 40)) +
+                createTable("Report Type Unit yang sering di-Repair", data[43], data.slice(44, 51));
+        } catch (err) { setError(err.message); }
     }
 
     // =========================================================================
     // HALAMAN: FORM PURCHASE ORDER
     // =========================================================================
-
-    /**
-     * Peta kategori → kode prefix No. PO
-     * Tambahkan entri baru di sini jika ada kategori baru.
-     */
     const CATEGORY_CODE = {
-        'Outlet':      'OT',
-        'Event':       'EV',
-        'KOL':         'KOL',
-        'B2C':         'B2C',
-        'B2B':         'B2B',
-        'Selling':     'SEL',
-        'Switch Unit': 'SU',
+        'Outlet': 'OT', 'Event': 'EV', 'KOL': 'KOL',
+        'B2C': 'B2C', 'B2B': 'B2B', 'Selling': 'SEL', 'Switch Unit': 'SU',
     };
 
-    /** Memformat Date ke string "DDMMYYYY" untuk No. PO */
     function formatDateForPO(date) {
         const dd   = String(date.getDate()).padStart(2, '0');
         const mm   = String(date.getMonth() + 1).padStart(2, '0');
@@ -655,31 +858,28 @@
         setLoading('Memuat form...');
         const contentArea = document.getElementById('content-area');
 
-        // Ambil daftar nama dari sheet Source (kolom B2 ke bawah) via API
         let namaOptions = '<option value="">-- Pilih Nama --</option>';
         try {
             const res   = await fetch(API_URLS.purchaseOrder + '?action=getNames');
             const names = await res.json();
-            // API mengembalikan array nama (string), filter yang kosong
-            names.filter(n => n && String(n).trim() !== '').forEach(name => {
-                namaOptions += `<option value="${name}">${name}</option>`;
-            });
+            if (Array.isArray(names)) {
+                names.filter(n => n && String(n).trim() !== '').forEach(name => {
+                    namaOptions += `<option value="${name}">${name}</option>`;
+                });
+            } else {
+                namaOptions += '<option disabled>Gagal memuat nama</option>';
+            }
         } catch (e) {
-            // Jika gagal fetch, biarkan dropdown kosong dengan pesan
             namaOptions += '<option disabled>Gagal memuat nama</option>';
         }
 
-        // Buat opsi kategori dari CATEGORY_CODE
         const categoryOptions = Object.keys(CATEGORY_CODE)
-            .map(k => `<option value="${k}">${k}</option>`)
-            .join('');
+            .map(k => `<option value="${k}">${k}</option>`).join('');
 
         contentArea.innerHTML = `
             <div class="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200">
                 <h1 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">Form Purchase Order</h1>
                 <div class="space-y-4">
-
-                    <!-- No. PO (preview otomatis) -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">No. PO (otomatis)</label>
                         <div id="po-preview"
@@ -687,8 +887,6 @@
                             Pilih kategori untuk melihat preview No. PO
                         </div>
                     </div>
-
-                    <!-- Nama Pemohon (dropdown dari sheet Source) -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Pemohon</label>
                         <select id="nama"
@@ -696,8 +894,6 @@
                             ${namaOptions}
                         </select>
                     </div>
-
-                    <!-- Kategori -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Kategori</label>
                         <select id="category" onchange="updatePOPreview()"
@@ -706,14 +902,11 @@
                             ${categoryOptions}
                         </select>
                     </div>
-
-                    <!-- Upload PDF -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Upload File PDF</label>
                         <input type="file" id="pdfFile" accept="application/pdf"
                             class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm">
                     </div>
-
                     <button id="submitBtn" onclick="submitPO()"
                         class="w-full bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md mt-4">
                         Kirim PO
@@ -722,36 +915,24 @@
             </div>`;
     }
 
-    /**
-     * Memperbarui preview No. PO setiap kali kategori dipilih.
-     * Format: {KODE}-{DDMMYYYY}-{urutan}
-     * Urutan dihitung dari sisi Google Apps Script saat submit;
-     * di preview kita tampilkan "?" sebagai placeholder urutan.
-     */
     function updatePOPreview() {
         const category = document.getElementById('category').value;
         const preview  = document.getElementById('po-preview');
         if (!category || !CATEGORY_CODE[category]) {
             preview.textContent = 'Pilih kategori untuk melihat preview No. PO';
-            preview.classList.add('text-gray-500');
-            preview.classList.remove('text-amber-700', 'font-bold');
+            preview.className   = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 text-sm font-mono tracking-wide';
             return;
         }
-        const code    = CATEGORY_CODE[category];
-        const dateStr = formatDateForPO(new Date());
-        preview.textContent = `${code}-${dateStr}-?`;
-        preview.classList.remove('text-gray-500');
-        preview.classList.add('text-amber-700', 'font-bold');
+        preview.textContent = `${CATEGORY_CODE[category]}-${formatDateForPO(new Date())}-?`;
+        preview.className   = 'w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold';
     }
 
-    /** Mengirim data Form PO ke Google Apps Script */
     async function submitPO() {
         const namaEl     = document.getElementById('nama');
         const categoryEl = document.getElementById('category');
         const fileInput  = document.getElementById('pdfFile');
         const btn        = document.getElementById('submitBtn');
 
-        // Validasi input
         if (!namaEl.value)     { alert('Pilih nama pemohon terlebih dahulu.'); return; }
         if (!categoryEl.value) { alert('Pilih kategori terlebih dahulu.'); return; }
         const file = fileInput.files[0];
@@ -763,29 +944,23 @@
         const reader = new FileReader();
         reader.onload = async function (e) {
             const payload = {
-                action:       'submitPO',                        // aksi di GAS
+                action:       'submitPO',
                 nama:         namaEl.value,
                 category:     categoryEl.value,
-                categoryCode: CATEGORY_CODE[categoryEl.value],  // kode prefix No. PO
-                tanggal:      formatDateForPO(new Date()),       // DDMMYYYY untuk No. PO
+                categoryCode: CATEGORY_CODE[categoryEl.value],
+                tanggal:      formatDateForPO(new Date()),
                 fileData:     e.target.result.split(',')[1],
                 fileName:     file.name,
                 fileType:     file.type,
             };
-
             try {
-                const response = await fetch(API_URLS.purchaseOrder, {
-                    method: 'POST',
-                    body:   JSON.stringify(payload),
-                });
-                const result = await response.json();
+                const response = await fetch(API_URLS.purchaseOrder, { method: 'POST', body: JSON.stringify(payload) });
+                const result   = await response.json();
                 alert('Berhasil! No. PO: ' + result.po);
-
-                // Reset form
                 namaEl.selectedIndex     = 0;
                 categoryEl.selectedIndex = 0;
                 fileInput.value          = '';
-                updatePOPreview(); // reset preview No. PO
+                updatePOPreview();
             } catch (err) {
                 alert('Gagal kirim: ' + err.message);
             } finally {
@@ -802,15 +977,23 @@
     async function showReportStatus() {
         setLoading('Memuat status PO...');
         const contentArea = document.getElementById('content-area');
+        const isAdmin     = currentUserRole === 'ADMIN';
 
         try {
-            const response = await fetch(API_URLS.reportStatus + '?action=getPOData');
-            const raw      = await response.json();
+            // Coba getPOData dulu; fallback ke fetch biasa jika GAS belum update
+            let data = [];
+            try {
+                const res1 = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                const raw1 = await res1.json();
+                data = Array.isArray(raw1) ? raw1 : [];
+            } catch (_) {}
 
-            // GAS kadang return object {error:...} jika action tidak dikenal — tangani di sini
-            const data = Array.isArray(raw) ? raw : [];
+            if (data.length === 0) {
+                const res2 = await fetch(API_URLS.reportStatus);
+                const raw2 = await res2.json();
+                data = Array.isArray(raw2) ? raw2 : [];
+            }
 
-            // Filter di sisi JS: buang header, baris kosong, dan yang sudah Closed
             const activeData = data.slice(1).filter(row =>
                 row[1] !== '' && row[1] != null && String(row[1]).trim() !== '' && row[4] !== 'Closed'
             );
@@ -824,45 +1007,69 @@
                 return;
             }
 
+            // Tampilkan semua PO (Open & Closed), bukan hanya yang Open
+            const allRows = data.slice(1).filter(row =>
+                row[1] !== '' && row[1] != null && String(row[1]).trim() !== ''
+            );
+
             let rows_html = '';
-            activeData.forEach(row => {
+            allRows.forEach(row => {
                 const noPO    = row[1] || '-';
                 const nama    = row[2] || '-';
                 const kat     = row[3] || '-';
-                const status  = row[4];              // kosong = Open, "Closed" = Closed
+                const status  = row[4];
                 const link    = row[5];
+                const isClosed = status && status.toString().trim() === 'Closed';
 
-                // Kolom Status: kosong → badge "Open" hijau
-                const statusBadge = (!status || status.toString().trim() === '')
-                    ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Open</span>`
-                    : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Closed</span>`;
+                const statusBadge = isClosed
+                    ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Closed</span>`
+                    : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Open</span>`;
 
-                // Tampilkan URL lengkap jika pendek, atau teks "Buka" jika terlalu panjang
                 const linkCell = (link && link !== '')
                     ? `<a href="${link}" target="_blank"
-                          class="inline-block max-w-[160px] truncate align-middle text-blue-600 underline hover:text-blue-800"
-                          title="${link}">
+                          title="${link}"
+                          class="inline-block max-w-[200px] truncate align-middle text-blue-600 underline hover:text-blue-800 text-xs">
                           ${link}
                        </a>`
                     : '-';
 
+                // Tombol aksi: jika Open → tombol "Closed", jika Closed → tombol "Remove" (merah)
+                const aksiCell = isAdmin ? `
+                    <td class="p-3 border-b">
+                        ${!isClosed
+                            ? `<button id="btn-${noPO}" onclick="closePO('${noPO}')"
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold transition">
+                                Closed
+                               </button>`
+                            : `<button id="btn-${noPO}" onclick="removePORow('${noPO}')"
+                                class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1 mx-auto">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                                Remove
+                               </button>`
+                        }
+                    </td>` : '';
+
                 rows_html += `
-                    <tr id="row-${noPO}">
-                        <td class="p-3 border-b">${noPO}</td>
+                    <tr id="row-${noPO}" class="${isClosed ? 'bg-gray-50 opacity-60' : 'hover:bg-amber-50'}">
+                        <td class="p-3 border-b font-mono">${noPO}</td>
                         <td class="p-3 border-b">${nama}</td>
                         <td class="p-3 border-b">${kat}</td>
                         <td class="p-3 border-b" id="status-${noPO}">${statusBadge}</td>
-                        <td class="p-3 border-b">${linkCell}</td>
-                        <td class="p-3 border-b">
-                            <button
-                                id="btn-${noPO}"
-                                onclick="closePO('${noPO}')"
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-semibold transition">
-                                Closed
-                            </button>
-                        </td>
+                        ${isAdmin ? `<td class="p-3 border-b">${linkCell}</td>` : ''}
+                        ${aksiCell}
                     </tr>`;
             });
+
+            if (allRows.length === 0) {
+                contentArea.innerHTML = `
+                    <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
+                    <div class="p-8 text-center bg-white border border-gray-200 rounded-lg shadow-sm">
+                        <p class="text-gray-500">✅ Tidak ada PO yang berlangsung.</p>
+                    </div>`;
+                return;
+            }
 
             contentArea.innerHTML = `
                 <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
@@ -874,30 +1081,23 @@
                                 <th class="p-3">Nama</th>
                                 <th class="p-3">Kategori</th>
                                 <th class="p-3">Status</th>
-                                <th class="p-3">Link</th>
-                                <th class="p-3">Aksi</th>
+                                ${isAdmin ? '<th class="p-3">Link</th><th class="p-3">Aksi</th>' : ''}
                             </tr>
                         </thead>
-                        <tbody>${rows_html}</tbody>
+                        <tbody id="po-table-body">${rows_html}</tbody>
                     </table>
                 </div>`;
-        } catch (err) {
-            setError(err.message);
-        }
+        } catch (err) { setError(err.message); }
     }
 
-    /**
-     * Menutup PO: kirim POST ke GAS untuk update kolom E → "Closed",
-     * lalu update tampilan baris secara langsung tanpa reload halaman.
-     */
     async function closePO(poNumber) {
-        if (!confirm(`Tutup PO ${poNumber}?`)) return;
+        const ok = await showConfirm('Tutup Purchase Order?', `PO ${poNumber} akan ditandai sebagai Closed. Tindakan ini tidak dapat dibatalkan.`);
+        if (!ok) return;
 
         const btn        = document.getElementById(`btn-${poNumber}`);
         const statusCell = document.getElementById(`status-${poNumber}`);
-
         btn.disabled  = true;
-        btn.innerText = 'Menyimpan...';
+        btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>Menyimpan...';
 
         try {
             const response = await fetch(API_URLS.reportStatus, {
@@ -905,45 +1105,81 @@
                 body:   JSON.stringify({ action: 'closePO', poNumber }),
             });
             const result = await response.json();
-
             if (result.success) {
-                // Update badge status → Closed (merah) tanpa reload halaman
                 statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Closed</span>`;
-                btn.disabled         = true;
-                btn.innerText        = '✓ Closed';
-                btn.className        = 'bg-gray-300 text-gray-500 px-3 py-1 rounded text-xs font-semibold cursor-not-allowed';
+
+                // Ganti tombol "Closed" → "Remove" dan baris menjadi redup
+                const row = document.getElementById(`row-${poNumber}`);
+                if (row) {
+                    row.classList.remove('hover:bg-amber-50');
+                    row.classList.add('bg-gray-50', 'opacity-60');
+                }
+                btn.onclick   = () => removePORow(poNumber);
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Remove`;
+                btn.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center mx-auto';
+                btn.disabled  = false;
+                showAlert('success', 'PO Berhasil Ditutup', `PO ${poNumber} telah ditandai sebagai Closed.`);
             } else {
-                alert('Gagal menutup PO: ' + (result.message || 'Terjadi kesalahan.'));
+                showAlert('error', 'Gagal Menutup PO', result.message || 'Terjadi kesalahan, coba lagi.');
                 btn.disabled  = false;
                 btn.innerText = 'Closed';
             }
         } catch (err) {
-            alert('Error: ' + err.message);
+            showAlert('error', 'Terjadi Kesalahan', err.message);
             btn.disabled  = false;
             btn.innerText = 'Closed';
         }
     }
 
+    /**
+     * Menghapus baris PO dari tampilan (bukan dari sheet).
+     * Hanya menghilangkan baris di tabel secara visual — data di sheet tetap ada.
+     */
+    async function removePORow(poNumber) {
+        const ok = await showConfirm(
+            'Hapus baris dari tampilan?',
+            `Baris PO ${poNumber} akan dihapus dari tampilan ini. Data di sheet tetap tersimpan.`
+        );
+        if (!ok) return;
+
+        const row = document.getElementById(`row-${poNumber}`);
+        if (!row) return;
+
+        // Animasi fade out sebelum dihapus
+        row.style.transition = 'opacity 0.3s, transform 0.3s';
+        row.style.opacity    = '0';
+        row.style.transform  = 'translateX(20px)';
+
+        setTimeout(() => {
+            row.remove();
+
+            // Jika tabel sudah kosong, tampilkan pesan
+            const tbody = document.getElementById('po-table-body');
+            if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                document.getElementById('content-area').innerHTML = `
+                    <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
+                    <div class="p-8 text-center bg-white border border-gray-200 rounded-lg shadow-sm">
+                        <p class="text-gray-500">✅ Tidak ada PO yang ditampilkan.</p>
+                    </div>`;
+            }
+        }, 300);
+    }
+
     // =========================================================================
-    // FITUR: SHARE TO WHATSAPP (Screenshot via html2canvas)
+    // FITUR: SHARE TO WHATSAPP
     // =========================================================================
     function shareToWhatsApp() {
         const captureArea = document.getElementById('captureArea');
         const btn         = document.getElementById('shareBtn');
-
         btn.style.display = 'none';
-
         html2canvas(captureArea, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
             .then(canvas => {
                 canvas.toBlob(blob => {
                     btn.style.display = 'inline-block';
-
                     const file = new File([blob], 'PlanTask.png', { type: 'image/png' });
-
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         navigator.share({ files: [file] });
                     } else {
-                        // Fallback: download langsung
                         const link    = document.createElement('a');
                         link.download = 'PlanTask.png';
                         link.href     = canvas.toDataURL('image/png');
