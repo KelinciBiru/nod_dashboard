@@ -53,7 +53,7 @@
         <div class="bg-white p-8 rounded-lg shadow-xl w-80 text-center border border-gray-100">
             <div class="flex flex-col items-center mb-4">
                 <img src="https://lh3.googleusercontent.com/d/1sy4WhFoKJnGlgFw9j_tnMcNWCxWSA48N" alt="Logo"
-                    class="h-20 w-auto mb-2">
+                    class="h-20 w-auto max-w-full object-contain mb-2" style="image-rendering:auto;">
             </div>
             <h2 class="text-xl font-bold mb-4 text-gray-700">Login</h2>
             <input type="password" id="passwordInput" onkeydown="if(event.key==='Enter') checkLogin()"
@@ -235,7 +235,7 @@
 
                     <!-- [TAMBAH MENU BARU DI SINI] -->
                     <!-- Process PO Baru -->
-                    <button onclick="navTo('Process PO')"
+                    <button id="menu-process-po" onclick="navTo('Process PO')"
                         class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -343,9 +343,11 @@
             }
 
             if (currentUserRole === 'PO_User') {
+                // Staff: hanya bisa akses Purchase Order, Process PO TERSEMBUNYI
                 document.getElementById('menu-inventory').classList.add('hidden');
                 document.getElementById('menu-plan-task').classList.add('hidden');
                 document.getElementById('menu-maintenance').classList.add('hidden');
+                document.getElementById('menu-process-po').classList.add('hidden');
                 // Buka PO submenu otomatis
                 document.getElementById('po-sub').classList.remove('hidden');
                 document.getElementById('arrow-po').textContent = '▲';
@@ -356,8 +358,11 @@
                 document.getElementById('menu-plan-task').classList.add('hidden');
                 document.getElementById('menu-maintenance').classList.add('hidden');
                 document.getElementById('menu-po').classList.add('hidden');
+                document.getElementById('menu-process-po').classList.remove('hidden');
                 navTo('Process PO');
             } else {
+                // ADMIN: semua menu tampil termasuk Process PO
+                document.getElementById('menu-process-po').classList.remove('hidden');
                 navTo('Dashboard');
             }
         }
@@ -384,6 +389,7 @@
             document.getElementById('menu-plan-task').classList.remove('hidden');
             document.getElementById('menu-maintenance').classList.remove('hidden');
             document.getElementById('menu-po').classList.remove('hidden');
+            document.getElementById('menu-process-po').classList.remove('hidden');
 
             // Reset badge dan label role
             const roleBadge = document.getElementById('user-role-badge');
@@ -521,6 +527,11 @@
 
         /** Wrapper navigasi: update title bar, highlight menu, tutup sidebar di mobile */
         function navTo(pageName) {
+            // ── AKSES KONTROL: Process PO hanya untuk ADMIN dan WAREHOUSE ──
+            if (pageName === 'Process PO' && currentUserRole === 'PO_User') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Process PO" hanya dapat diakses oleh Team Warehouse dan Admin.');
+                return;
+            }
             const titles = {
                 'Dashboard': 'Dashboard',
                 'Stock Master': 'Stock Master',
@@ -1033,6 +1044,63 @@
             reader.readAsDataURL(file);
         }
 
+        // =========================================================================
+        // LOAD DAFTAR PO STATUS "OPEN" UNTUK DROPDOWN DI PROCESS PO
+        // =========================================================================
+        async function loadOpenPOList() {
+            const sel = document.getElementById('proc-no-po-select');
+            const statusEl = document.getElementById('po-list-status');
+            if (!sel) return;
+
+            if (statusEl) { statusEl.textContent = 'Memuat daftar PO...'; statusEl.className = 'text-xs text-blue-500 mt-1'; }
+
+            try {
+                let data = [];
+                try {
+                    const res = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                    const raw = await res.json();
+                    data = Array.isArray(raw) ? raw : [];
+                } catch (_) {}
+
+                if (data.length === 0) {
+                    const res2 = await fetch(API_URLS.reportStatus);
+                    const raw2 = await res2.json();
+                    data = Array.isArray(raw2) ? raw2 : [];
+                }
+
+                // Filter hanya yang status = Open (bukan Closed, bukan kosong)
+                const openPOs = data.slice(1).filter(row => {
+                    const noPO   = String(row[1] || '').trim();
+                    const status = String(row[4] || '').trim().toLowerCase();
+                    return noPO !== '' && status !== 'closed';
+                });
+
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">— Pilih No. PO (opsional) —</option>';
+                openPOs.forEach(row => {
+                    const noPO = String(row[1] || '').trim();
+                    const nama = String(row[2] || '').trim();
+                    const opt  = document.createElement('option');
+                    opt.value = noPO;
+                    opt.textContent = noPO + (nama ? ' — ' + nama : '');
+                    if (noPO === currentVal) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+
+                if (statusEl) {
+                    if (openPOs.length > 0) {
+                        statusEl.textContent = `✅ ${openPOs.length} PO Open tersedia.`;
+                        statusEl.className = 'text-xs text-green-600 mt-1';
+                    } else {
+                        statusEl.textContent = 'Tidak ada PO Open saat ini.';
+                        statusEl.className = 'text-xs text-gray-400 mt-1';
+                    }
+                }
+            } catch (err) {
+                if (statusEl) { statusEl.textContent = '❌ Gagal memuat: ' + err.message; statusEl.className = 'text-xs text-red-500 mt-1'; }
+            }
+        }
+
         async function showProcessPO() {
             document.getElementById('content-area').innerHTML = `
         <h1 class="text-2xl font-bold text-gray-700 mb-6">Proses PO Masuk</h1>
@@ -1041,14 +1109,14 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">IMPORT FILE PO (PDF)</label>
-                <div class="flex gap-2 items-center">
-                    <input type="file" id="pdfFile" accept="application/pdf" class="flex-1 text-sm border border-gray-300 rounded p-1">
+                <div class="flex flex-col gap-2">
+                    <input type="file" id="pdfFile" accept="application/pdf" class="w-full text-sm border border-gray-300 rounded p-1.5">
                     <button id="btn-import" onclick="handlePDFImport()" 
-                        class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition whitespace-nowrap">
-                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                         </svg>
-                        Import
+                        Import PDF
                     </button>
                 </div>
                 <p id="import-status" class="text-xs text-gray-400 mt-1"></p>
@@ -1057,6 +1125,35 @@
                 <label class="block text-xs font-bold text-gray-500 mb-2">TANGGAL PROSES PO</label>
                 <input type="date" id="proc-tgl-proses" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none"
                     value="${new Date().toISOString().split('T')[0]}">
+            </div>
+        </div>
+
+        <!-- Baris 1b: No PO (Open) + Crew Packing -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">NO. PO <span class="text-green-600">(Open)</span></label>
+                <div class="flex items-center gap-2">
+                    <select id="proc-no-po-select" class="flex-1 p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
+                        <option value="">— Pilih No. PO (opsional) —</option>
+                    </select>
+                    <button onclick="loadOpenPOList()" title="Refresh daftar PO"
+                        class="flex-shrink-0 p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-500">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </button>
+                </div>
+                <p id="po-list-status" class="text-xs text-gray-400 mt-1"></p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">CREW PACKING</label>
+                <select id="proc-crew-packing" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
+                    <option value="">— Pilih Crew —</option>
+                    <option value="Adam">Adam</option>
+                    <option value="Rizal">Rizal</option>
+                    <option value="Helmi">Helmi</option>
+                    <option value="Raka">Raka</option>
+                </select>
             </div>
         </div>
 
@@ -1101,69 +1198,134 @@
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
-                    Proses & Simpan ke Outbound_Log
+                    Proses
                 </button>
             </div>
         </div>
     `;
+            // Auto-load daftar PO Open setelah halaman ter-render
+            loadOpenPOList();
         }
 
         // =========================================================================
-        // IMPORT PDF → EKSTRAK TEKS via pdf.js (PURE CLIENT-SIDE, TANPA PIHAK KETIGA)
+        // IMPORT PDF → EKSTRAK TEKS via pdf.js  (PURE CLIENT-SIDE)
+        // Menggunakan koordinat X/Y aktual untuk akurasi tinggi.
         // =========================================================================
 
         /**
-         * Ekstrak seluruh teks dari semua halaman PDF menggunakan pdf.js
+         * Ekstrak teks dari semua halaman PDF.
+         * Setiap token disimpan dengan posisi x,y asli (y = top-down).
+         * Return: { text: string, pageData: [ rows[] ] }
+         * rows[] = [ { y, tokens: [{str, x}] } ]
          */
         async function extractTextFromPDF(file) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             let fullText = '';
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                // Gabungkan teks item per baris berdasarkan posisi Y
-                const items = textContent.items;
-                let lastY = null;
-                let line = '';
-                for (const item of items) {
-                    const y = Math.round(item.transform[5]);
-                    if (lastY !== null && Math.abs(y - lastY) > 3) {
-                        fullText += line.trim() + '\n';
-                        line = '';
-                    }
-                    line += item.str + ' ';
-                    lastY = y;
+            const pageData = [];
+
+            for (let p = 1; p <= pdf.numPages; p++) {
+                const page  = await pdf.getPage(p);
+                const tc    = await page.getTextContent();
+                const vp    = page.getViewport({ scale: 1 });
+                const rowMap = new Map();
+
+                for (const item of tc.items) {
+                    if (!item.str || !item.str.trim()) continue;
+                    const x = Math.round(item.transform[4]);
+                    // Flip Y: PDF bottom=0 → top-down; bucket 4pt untuk stabilitas
+                    const y = Math.round((vp.height - item.transform[5]) / 4) * 4;
+                    if (!rowMap.has(y)) rowMap.set(y, { y, tokens: [] });
+                    rowMap.get(y).tokens.push({ str: item.str.trim(), x });
                 }
-                if (line.trim()) fullText += line.trim() + '\n';
+
+                const rows = Array.from(rowMap.values()).sort((a, b) => a.y - b.y);
+                rows.forEach(r => r.tokens.sort((a, b) => a.x - b.x));
+                pageData.push(rows);
+
+                for (const row of rows) {
+                    fullText += row.tokens.map(t => t.str).join(' ') + '\n';
+                }
                 fullText += '\n';
             }
-            return fullText.trim();
+            return { text: fullText.trim(), pageData };
         }
 
         /**
-         * Parser teks PO → JSON terstruktur
-         * Mendukung berbagai format PO umum yang beredar di Indonesia.
+         * VALID UOM list (case-insensitive match)
          */
-        function parsePOText(text) {
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const VALID_UOM = ['box','pcs','unit','karton','pack','kg','ltr','l','lusin','set',
+                           'roll','sheet','btl','dus','pak','ctn','ea','bh','buah','lembar',
+                           'm','meter','can','tin','bag','sck','pouch','ktn','botol','sachet'];
 
-            // ── Helper: cari nilai setelah keyword (case-insensitive, 1-2 baris ke depan)
-            function findAfter(keywords, maxLookAhead = 2) {
+        /**
+         * VALID DESCRIPTION list
+         */
+        const VALID_DESC = ['Capsule Selling','Sampling','Machine Selling','Machine Display','Supplies'];
+
+        function isUOM(s) {
+            return VALID_UOM.some(u => u.toLowerCase() === s.trim().toLowerCase());
+        }
+
+        function isDescription(s) {
+            return VALID_DESC.some(d => d.toLowerCase() === s.trim().toLowerCase());
+        }
+
+        /**
+         * Klasifikasi description sebagai fallback jika kolom DESC tidak ditemukan di PDF
+         */
+        function classifyDescription(namaBarang) {
+            const n = namaBarang.toUpperCase();
+            if (/CAPSUL/.test(n))                                        return 'Capsule Selling';
+            if (/DISPLAY|DEMO|SHOWROOM/.test(n))                         return 'Machine Display';
+            if (/MACHINE|MESIN|COFFEE MAKER|BREWER|ESPRESSO/.test(n))    return 'Machine Selling';
+            if (/SAMPL|TESTER|TRIAL/.test(n))                            return 'Sampling';
+            return 'Supplies';
+        }
+
+        /**
+         * PARSER UTAMA — Strategi berbasis koordinat kolom.
+         *
+         * PDF format NOD:
+         *  Header "Ordered by | Ship to" → dua blok kiri/kanan
+         *  Metadata: Name, Phone, Order Date (kiri) | Name, Phone, Address, Shipping Date (kanan)
+         *  Tabel: NO | NAME | Qty | UOM | DESCRIPTION
+         *
+         * Pendekatan:
+         *  1. Temukan baris header "Ordered by" dan "Ship to" → pisahkan kiri/kanan by X midpoint
+         *  2. Dari blok kiri ambil "Name :" → orderedBy
+         *     Dari blok kanan ambil "Name :" → shipTo, "Shipping Date :" → shippingDate
+         *  3. Temukan baris header tabel → rekam posisi X tiap kolom
+         *  4. Baca baris data → distribusikan token ke kolom terdekat
+         *  5. Jika description kosong → gunakan classifyDescription
+         */
+        function parsePOData(pageData, rawText) {
+            const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+
+            // ─────────────────────────────────────────────────────────────────
+            // HELPER: cari nilai setelah keyword pada teks mentah
+            // ─────────────────────────────────────────────────────────────────
+            function findAfterKeyword(keywords, maxLook = 4) {
                 for (let i = 0; i < lines.length; i++) {
-                    const upperLine = lines[i].toUpperCase();
+                    const up = lines[i].toUpperCase();
                     for (const kw of keywords) {
-                        if (upperLine.includes(kw.toUpperCase())) {
-                            // Coba ambil di baris yang sama setelah separator
-                            const parts = lines[i].split(/[:：|]\s*/);
-                            if (parts.length > 1 && parts.slice(1).join(' ').trim()) {
-                                return parts.slice(1).join(' ').trim();
+                        if (up.includes(kw.toUpperCase())) {
+                            // Nilai di baris yang sama setelah ':'
+                            const colonIdx = lines[i].indexOf(':');
+                            if (colonIdx !== -1) {
+                                const after = lines[i].slice(colonIdx + 1).trim();
+                                if (after.length > 1) return after;
                             }
-                            // Coba baris berikutnya
-                            for (let j = 1; j <= maxLookAhead; j++) {
-                                if (lines[i + j] && !lines[i + j].toUpperCase().includes(':') &&
-                                    lines[i + j].length > 1) {
-                                    return lines[i + j].trim();
+                            // Baris-baris berikutnya
+                            for (let j = 1; j <= maxLook; j++) {
+                                const nx = lines[i + j];
+                                if (!nx) continue;
+                                if (nx.includes(':')) {
+                                    // ada label lain, ambil setelah ':'
+                                    const v = nx.slice(nx.indexOf(':') + 1).trim();
+                                    if (v.length > 1) return v;
+                                } else if (nx.length > 1 && !/^[A-Z\s]{3,}$/.test(nx)) {
+                                    return nx;
                                 }
                             }
                         }
@@ -1172,109 +1334,244 @@
                 return '';
             }
 
-            // ── Ordered By (berbagai label)
-            const orderedBy = findAfter([
-                'ORDERED BY', 'ORDER BY', 'BILL TO', 'DIPESAN OLEH',
-                'NAMA PEMESAN', 'BUYER', 'PURCHASER', 'PELANGGAN', 'CUSTOMER'
-            ]) || findAfter(['DARI', 'FROM']);
+            // ─────────────────────────────────────────────────────────────────
+            // HELPER: ekstrak metadata dari pageData menggunakan X midpoint
+            // Mencari baris yang mengandung "Ordered by" DAN "Ship to" berdampingan
+            // lalu membagi token kiri/kanan, kemudian scan baris-baris berikutnya
+            // ─────────────────────────────────────────────────────────────────
+            function extractMetaFromLayout() {
+                let result = { orderedBy: '', shipTo: '', shippingDate: '' };
 
-            // ── Ship To
-            const shipTo = findAfter([
-                'SHIP TO', 'DELIVER TO', 'KIRIM KE', 'ALAMAT PENGIRIMAN',
-                'DELIVERY ADDRESS', 'TUJUAN', 'TO'
-            ]);
+                for (const rows of pageData) {
+                    // Cari baris header "Ordered by" / "Ship to"
+                    let splitX = -1;
+                    let headerRowIdx = -1;
 
-            // ── Shipping Date
-            const shippingDate = findAfter([
-                'SHIPPING DATE', 'DELIVERY DATE', 'TANGGAL PENGIRIMAN',
-                'TGL KIRIM', 'REQUIRED DATE', 'DELIVERY', 'SHIP DATE',
-                'REQUESTED DELIVERY', 'TANGGAL KIRIM'
-            ]) || (() => {
-                // Fallback: cari pola tanggal di seluruh teks
-                const datePattern = /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Agt|Aug|Sep|Okt|Oct|Nov|Des|Dec)\s+\d{4})\b/i;
-                const m = text.match(datePattern);
-                return m ? m[0] : '';
-            })();
-
-            // ── No PO
-            const noPO = findAfter([
-                'PURCHASE ORDER NO', 'PO NUMBER', 'NO. PO', 'NO PO',
-                'ORDER NUMBER', 'NO ORDER', 'NOMOR PO', 'P.O. NUMBER', 'PO#', 'ORDER#'
-            ]) || (() => {
-                // Fallback: cari pola seperti PO-12345 / PO/2024/001 / OT-01062025-1
-                const m = text.match(/\b([A-Z]{1,5}[-\/]\d{4,}[-\/\d]*\d)\b/);
-                return m ? m[0] : '';
-            })();
-
-            // ── Items: cari baris yang mengandung pola qty + nama barang
-            const items = [];
-            // Pendekatan 1: baris dengan angka yang tampak seperti item (qty di depan atau belakang)
-            // Kita cari blok tabel setelah kata kunci ITEM / DESCRIPTION / PRODUCT / NO
-            let tableStartIdx = -1;
-            const tableKeywords = ['ITEM', 'DESCRIPTION', 'PRODUCT', 'NAMA BARANG', 'KETERANGAN', 'NO.', 'QTY', 'QUANTITY'];
-            for (let i = 0; i < lines.length; i++) {
-                const up = lines[i].toUpperCase();
-                if (tableKeywords.filter(k => up.includes(k)).length >= 2) {
-                    tableStartIdx = i + 1;
-                    break;
-                }
-            }
-
-            if (tableStartIdx > 0) {
-                // Ambil baris setelah header tabel sampai total/subtotal/tanda tangan
-                const stopKeywords = ['TOTAL', 'SUBTOTAL', 'GRAND TOTAL', 'CATATAN', 'NOTE', 'TERMS', 'TANDA TANGAN', 'APPROVED'];
-                for (let i = tableStartIdx; i < lines.length; i++) {
-                    const up = lines[i].toUpperCase();
-                    if (stopKeywords.some(k => up.startsWith(k))) break;
-                    // Baris item: biasanya dimulai dengan angka (nomor urut) atau mengandung angka qty
-                    const tokens = lines[i].split(/\s{2,}|\t/); // split by 2+ spaces or tab
-                    if (tokens.length >= 2) {
-                        // Coba parse: cari token angka untuk qty
-                        let namaBarang = '', qty = '', uom = '', desc = '';
-                        const numTokens = tokens.map((t, idx) => ({ t, idx, isNum: /^\d+([.,]\d+)?$/.test(t.replace(/,/g, '')) }));
-                        const firstNum = numTokens.find(t => t.isNum);
-                        const textTokens = numTokens.filter(t => !t.isNum && t.t.length > 1);
-                        if (firstNum && textTokens.length > 0) {
-                            // Heuristic: jika nomor pertama kecil (≤ 3 digit) dan ada teks sebelumnya, itu nomor urut
-                            if (firstNum.idx === 0 && parseInt(tokens[0]) <= 999 && tokens.length > 2) {
-                                // Format: [No] [Nama Barang ...] [Qty] [UOM] [...]
-                                const restNums = numTokens.filter(t => t.isNum && t.idx > 0);
-                                namaBarang = textTokens.map(t => t.t).join(' ');
-                                qty = restNums.length > 0 ? restNums[0].t : firstNum.t;
-                                uom = tokens[firstNum.idx + 1] && !/^\d/.test(tokens[firstNum.idx + 1])
-                                    ? tokens[firstNum.idx + 1] : (restNums[1] ? '' : '');
-                            } else {
-                                namaBarang = tokens.slice(0, firstNum.idx).join(' ') || textTokens[0]?.t || '';
-                                qty = firstNum.t;
-                                uom = tokens[firstNum.idx + 1] && !/^\d/.test(tokens[firstNum.idx + 1]) ? tokens[firstNum.idx + 1] : '';
-                                desc = tokens.slice(firstNum.idx + 2).join(' ');
+                    for (let ri = 0; ri < rows.length; ri++) {
+                        const rowText = rows[ri].tokens.map(t => t.str).join(' ').toUpperCase();
+                        if (rowText.includes('ORDERED BY') || rowText.includes('ORDERED  BY')) {
+                            // Cari token "Ship" atau "SHIP" untuk dapat posisi X pemisah
+                            for (const tk of rows[ri].tokens) {
+                                if (tk.str.toUpperCase().includes('SHIP')) {
+                                    splitX = tk.x - 10; // sedikit sebelum SHIP
+                                    break;
+                                }
                             }
-                            if (namaBarang && qty) {
-                                items.push({
-                                    nama_barang: namaBarang.replace(/^\d+\.?\s*/, '').trim(),
-                                    qty_po: qty.replace(/,/g, ''),
-                                    uom: uom.trim(),
-                                    description: desc.trim()
-                                });
+                            if (splitX === -1) {
+                                // Fallback: pakai tengah viewport
+                                const xs = rows[ri].tokens.map(t => t.x);
+                                splitX = (Math.min(...xs) + Math.max(...xs)) / 2;
                             }
+                            headerRowIdx = ri;
+                            break;
                         }
                     }
+
+                    if (headerRowIdx === -1 || splitX === -1) continue;
+
+                    // Scan baris di bawah header sampai ketemu baris tabel (NO / NAME / QTY)
+                    for (let ri = headerRowIdx + 1; ri < rows.length; ri++) {
+                        const rowText = rows[ri].tokens.map(t => t.str).join(' ').toUpperCase();
+                        // Hentikan jika sudah sampai tabel items
+                        if (/^\s*NO\b/.test(rowText) || rowText.includes('DEAR TEAM') ||
+                            rowText.includes('HEREBY')) break;
+
+                        const leftTokens  = rows[ri].tokens.filter(t => t.x < splitX);
+                        const rightTokens = rows[ri].tokens.filter(t => t.x >= splitX);
+                        const leftText    = leftTokens.map(t => t.str).join(' ');
+                        const rightText   = rightTokens.map(t => t.str).join(' ');
+
+                        // Kiri: ambil Name (= Ordered By)
+                        if (!result.orderedBy && /NAME\s*:/i.test(leftText)) {
+                            const v = leftText.replace(/.*NAME\s*:\s*/i, '').trim();
+                            if (v.length > 1) result.orderedBy = v;
+                        }
+
+                        // Kanan: ambil Name (= Ship To)
+                        if (!result.shipTo && /NAME\s*:/i.test(rightText)) {
+                            const v = rightText.replace(/.*NAME\s*:\s*/i, '').trim();
+                            if (v.length > 1) result.shipTo = v;
+                        }
+
+                        // Kanan: ambil Shipping Date
+                        if (!result.shippingDate && /SHIPPING\s*DATE\s*:/i.test(rightText)) {
+                            const v = rightText.replace(/.*SHIPPING\s*DATE\s*:\s*/i, '').trim();
+                            if (v.length > 1) result.shippingDate = v;
+                        }
+                    }
+
+                    if (result.orderedBy || result.shipTo) break; // sudah dapat, stop
+                }
+                return result;
+            }
+
+            // ─────────────────────────────────────────────────────────────────
+            // METADATA
+            // ─────────────────────────────────────────────────────────────────
+            const meta = extractMetaFromLayout();
+
+            // Fallback ke teks mentah jika layout parsing gagal
+            const orderedBy = meta.orderedBy ||
+                findAfterKeyword(['ORDERED BY','ORDER BY','DIPESAN OLEH','BUYER','NAMA PEMESAN']);
+            const shipTo    = meta.shipTo    ||
+                findAfterKeyword(['SHIP TO','DELIVER TO','KIRIM KE','ALAMAT PENGIRIMAN']);
+            let shippingDate = meta.shippingDate ||
+                findAfterKeyword(['SHIPPING DATE','DELIVERY DATE','TANGGAL PENGIRIMAN','SHIP DATE','TGL KIRIM']);
+            if (!shippingDate) {
+                const m = rawText.match(/\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Agt|Aug|Sep|Okt|Oct|Nov|Des|Dec)\w*\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/i);
+                if (m) shippingDate = m[0];
+            }
+
+            // No PO
+            const noPO = findAfterKeyword(['IPO NUMBER','PURCHASE ORDER NO','PO NUMBER','NO. PO','NO PO','NOMOR PO','PO#','ORDER#'])
+                || (() => {
+                    const m = rawText.match(/\b([A-Z]{1,4}[\/\-]\d{2}[\/\-]\d{2}[\/\-]\d+|[A-Z]{1,5}[-\/]\d{4,}[-\/\d]*\d)\b/);
+                    return m ? m[0] : '';
+                })();
+
+            // ─────────────────────────────────────────────────────────────────
+            // TABEL ITEMS — berbasis koordinat kolom
+            // ─────────────────────────────────────────────────────────────────
+            const items = [];
+            const STOP_KW = ['NOTES','NOTE','CATATAN','TOTAL','SUBTOTAL','GRAND TOTAL',
+                             'TANDA TANGAN','APPROVED','AUTHORIZED','SIGNATURE',
+                             'PROPOSED BY','PROCESSED BY'];
+
+            for (const rows of pageData) {
+                let hdrIdx  = -1;
+                let cols    = null; // { no, name, qty, uom, desc } → x position of each header
+
+                for (let ri = 0; ri < rows.length; ri++) {
+                    const rowText = rows[ri].tokens.map(t => t.str).join(' ').toUpperCase();
+
+                    // ── Deteksi header tabel ──
+                    // Harus mengandung setidaknya NAME/ITEM + QTY/Qty
+                    const hasName = /\bNAME\b|\bITEM\b|\bNAMA BARANG\b|\bPRODUCT\b/.test(rowText);
+                    const hasQty  = /\bQTY\b|\bQUANTITY\b|\bJUMLAH\b/.test(rowText);
+
+                    if (hasName && hasQty && hdrIdx === -1) {
+                        hdrIdx = ri;
+                        cols = {};
+                        for (const tk of rows[ri].tokens) {
+                            const up = tk.str.toUpperCase().trim();
+                            if (up === 'NO' || up === 'NO.')                                    cols.no   = tk.x;
+                            else if (/^(NAME|ITEM|NAMA|PRODUCT|KETERANGAN)$/.test(up))          cols.name = tk.x;
+                            else if (/^(QTY|QUANTITY|JUMLAH)$/.test(up))                        cols.qty  = tk.x;
+                            else if (/^(UOM|UNIT|SATUAN)$/.test(up))                            cols.uom  = tk.x;
+                            else if (/^(DESCRIPTION|DESC|KETERANGAN|DESKRIPSI)$/.test(up))      cols.desc = tk.x;
+                        }
+                        // Jika NAME tidak terdeteksi exact, ambil kolom terlebar (kemungkinan nama barang)
+                        if (cols.name === undefined && cols.qty !== undefined) {
+                            // Kolom paling kiri setelah NO adalah NAME
+                            const noX = cols.no !== undefined ? cols.no : 0;
+                            const leftmost = rows[ri].tokens
+                                .filter(t => t.x > noX + 10 && t.x < cols.qty - 10)
+                                .sort((a,b) => a.x - b.x)[0];
+                            if (leftmost) cols.name = leftmost.x;
+                        }
+                        continue;
+                    }
+
+                    // ── Baris data setelah header ──
+                    if (hdrIdx === -1) continue;
+
+                    // Stop conditions
+                    if (STOP_KW.some(k => rowText.trimStart().startsWith(k))) break;
+                    if (rows[ri].tokens.length === 0) continue;
+
+                    // Abaikan baris yang hanya berisi nomor urut (baris kosong di template)
+                    const allTokensText = rows[ri].tokens.map(t => t.str.trim()).join('');
+                    if (/^\d+$/.test(allTokensText)) continue; // hanya nomor, skip
+
+                    if (!cols) continue;
+
+                    // ── Distribusikan token ke kolom ──
+                    // Setiap token → kolom dengan X terdekat
+                    const colKeys = Object.keys(cols); // ['no','name','qty','uom','desc']
+                    const buckets = {};
+                    colKeys.forEach(k => buckets[k] = []);
+
+                    for (const tk of rows[ri].tokens) {
+                        let bestCol = null, bestDist = Infinity;
+                        for (const k of colKeys) {
+                            const d = Math.abs(tk.x - cols[k]);
+                            if (d < bestDist) { bestDist = d; bestCol = k; }
+                        }
+                        if (bestCol) buckets[bestCol].push(tk.str.trim());
+                    }
+
+                    const namaArr = (buckets.name || []).filter(s => !/^\d+\.?$/.test(s));
+                    const namaStr = namaArr.join(' ').trim();
+                    const qtyRaw  = (buckets.qty  || []).join(' ').trim();
+                    const uomRaw  = (buckets.uom  || []).join(' ').trim();
+                    const descRaw = (buckets.desc || []).join(' ').trim();
+
+                    // Validasi: nama barang tidak boleh kosong atau hanya angka
+                    if (!namaStr || /^\d+$/.test(namaStr)) continue;
+                    // Skip baris stop
+                    if (STOP_KW.some(k => namaStr.toUpperCase().includes(k))) continue;
+
+                    // Qty: ambil angka dari qtyRaw (bisa ada noise)
+                    const qtyMatch = qtyRaw.match(/\d+(?:[.,]\d+)?/);
+                    if (!qtyMatch) continue; // tidak ada angka qty → skip
+                    const qty = qtyMatch[0].replace(',', '.');
+                    if (parseFloat(qty) <= 0) continue;
+
+                    // UOM: validasi, fallback ke 'Pcs'
+                    let uom = uomRaw;
+                    if (!isUOM(uom)) {
+                        // coba cari token UOM dari semua bucket
+                        const allTk = rows[ri].tokens.map(t => t.str.trim());
+                        uom = allTk.find(t => isUOM(t)) || 'Pcs';
+                    }
+                    // Kapitalisasi UOM
+                    uom = uom.charAt(0).toUpperCase() + uom.slice(1).toLowerCase();
+                    if (uom.toLowerCase() === 'box') uom = 'Box';
+                    if (uom.toLowerCase() === 'pcs') uom = 'Pcs';
+                    if (uom.toLowerCase() === 'unit') uom = 'Unit';
+                    if (uom.toLowerCase() === 'karton') uom = 'Karton';
+                    if (uom.toLowerCase() === 'pack') uom = 'Pack';
+
+                    // Description: validasi
+                    let desc = descRaw;
+                    if (!isDescription(desc)) {
+                        // Coba cari dari semua bucket
+                        const allTk = rows[ri].tokens.map(t => t.str.trim());
+                        const joined = allTk.join(' ');
+                        const found = VALID_DESC.find(d => joined.toLowerCase().includes(d.toLowerCase()));
+                        desc = found || classifyDescription(namaStr);
+                    }
+
+                    items.push({ nama_barang: namaStr, qty_po: qty, uom, description: desc });
                 }
             }
 
-            // Fallback items: scan semua baris dengan pola "nama qty uom"
+            // ─────────────────────────────────────────────────────────────────
+            // FALLBACK AKHIR: regex pada teks mentah
+            // Hanya dipakai jika tabel tidak terdeteksi sama sekali
+            // ─────────────────────────────────────────────────────────────────
             if (items.length === 0) {
-                const itemPattern = /^(.+?)\s+(\d+(?:[.,]\d+)?)\s+(pcs|unit|kg|box|ltr|lusin|set|roll|sheet|btl|dus|pak|karton|ctn|ea|bh|buah|lembar|m|meter)/i;
-                for (const line of lines) {
-                    const m = line.match(itemPattern);
-                    if (m) {
-                        items.push({
-                            nama_barang: m[1].replace(/^\d+\.?\s*/, '').trim(),
-                            qty_po: m[2].replace(/,/g, ''),
-                            uom: m[3],
-                            description: ''
-                        });
-                    }
+                const descPat = VALID_DESC.map(d => d.replace(' ', '\\s+')).join('|');
+                // Format: [No.] Nama Barang  Qty  UOM  Description
+                const lineRe = new RegExp(
+                    '^(?:\\d+\\.?\\s+)?(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s+(' +
+                    VALID_UOM.join('|') + ')\\s+(' + descPat + ')?',
+                    'i'
+                );
+                for (const ln of lines) {
+                    const m = ln.match(lineRe);
+                    if (!m) continue;
+                    const nama = m[1].replace(/^\d+\.?\s*/, '').trim();
+                    if (STOP_KW.some(k => nama.toUpperCase().startsWith(k))) continue;
+                    if (!nama || nama.length < 2) continue;
+                    const uomRaw = m[3] || 'Pcs';
+                    const descRaw = m[4] || classifyDescription(nama);
+                    items.push({
+                        nama_barang: nama,
+                        qty_po: m[2].replace(',', '.'),
+                        uom: uomRaw.charAt(0).toUpperCase() + uomRaw.slice(1).toLowerCase(),
+                        description: isDescription(descRaw) ? descRaw : classifyDescription(nama)
+                    });
                 }
             }
 
@@ -1301,8 +1598,8 @@
             statusEl.className = 'text-xs text-blue-500 mt-1';
 
             try {
-                // Ekstrak teks murni dari PDF menggunakan pdf.js (lokal, tanpa server)
-                const rawText = await extractTextFromPDF(file);
+                // 1. Ekstrak teks + koordinat dari PDF (semua halaman)
+                const { text: rawText, pageData } = await extractTextFromPDF(file);
 
                 if (!rawText || rawText.length < 10) {
                     throw new Error('PDF tidak dapat dibaca atau tidak mengandung teks (kemungkinan PDF scan/gambar).');
@@ -1310,38 +1607,45 @@
 
                 statusEl.textContent = 'Menganalisis struktur dokumen PO...';
 
-                // Parse teks menjadi data terstruktur
-                const parsed = parsePOText(rawText);
+                // 2. Parse menggunakan koordinat kolom → akurasi tinggi
+                const parsed = parsePOData(pageData, rawText);
 
                 // ── Isi field form ──
                 document.getElementById('proc-ordered-by').value = parsed.ordered_by || '';
-                document.getElementById('proc-ship').value = parsed.ship_to || '';
+                document.getElementById('proc-ship').value       = parsed.ship_to    || '';
                 document.getElementById('proc-shipping-date').value = parsed.shipping_date || '';
                 document.getElementById('proc-ordered-by').dataset.nopo = parsed.no_po || '';
 
                 // ── Isi tabel items ──
                 const tbody = document.getElementById('proc-table-body');
+                const DESCRIPTION_OPTIONS = ['Supplies','Sampling','Machine Selling','Machine Display','Capsule Selling'];
                 if (parsed.items && parsed.items.length > 0) {
-                    tbody.innerHTML = parsed.items.map((item, idx) => `
+                    tbody.innerHTML = parsed.items.map((item, idx) => {
+                        const descOpts = DESCRIPTION_OPTIONS.map(o =>
+                            `<option value="${o}" ${item.description && item.description.toLowerCase() === o.toLowerCase() ? 'selected' : ''}>${o}</option>`
+                        ).join('');
+                        return `
                         <tr class="${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-100">
                             <td class="p-2 font-medium" contenteditable="true">${item.nama_barang || ''}</td>
-                            <td class="p-2 text-center" contenteditable="true">${item.qty_po || ''}</td>
+                            <td class="p-2 text-center font-semibold text-gray-700">${item.qty_po || ''}</td>
                             <td class="p-2 text-center">
                                 <input type="number" min="0" value="${item.qty_po || ''}"
                                     class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
                             </td>
                             <td class="p-2 text-center" contenteditable="true">${item.uom || ''}</td>
-                            <td class="p-2 text-gray-500" contenteditable="true">${item.description || ''}</td>
-                        </tr>
-                    `).join('');
+                            <td class="p-2">
+                                <select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">
+                                    ${descOpts}
+                                </select>
+                            </td>
+                        </tr>`;
+                    }).join('');
                 } else {
-                    // Jika parser tidak berhasil menemukan item, tampilkan teks mentah
-                    // dan 1 baris kosong yang bisa diisi manual
                     tbody.innerHTML = `
                         <tr class="bg-yellow-50 border-b border-yellow-200">
                             <td colspan="5" class="p-3 text-center text-xs text-yellow-700">
                                 ⚠️ Item tidak terdeteksi otomatis. Silakan isi manual atau periksa format PDF.<br>
-                                <span class="text-gray-400">Teks yang diekstrak: ${rawText.substring(0, 200).replace(/\n/g, ' ')}...</span>
+                                <span class="text-gray-400 text-[10px]">Ekstrak: ${rawText.substring(0, 200).replace(/\n/g, ' ')}...</span>
                             </td>
                         </tr>
                         <tr class="bg-white border-b border-gray-100">
@@ -1352,12 +1656,17 @@
                                     class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
                             </td>
                             <td class="p-2 text-center" contenteditable="true">pcs</td>
-                            <td class="p-2 text-gray-500" contenteditable="true">-</td>
+                            <td class="p-2">
+                                <select class="w-full text-xs border border-gray-200 rounded p-1 bg-white">
+                                    <option>Supplies</option><option>Sampling</option><option>Machine Selling</option>
+                                    <option>Machine Display</option><option>Capsule Selling</option>
+                                </select>
+                            </td>
                         </tr>`;
                 }
 
-                const itemCount = parsed.items.length;
-                statusEl.textContent = `✅ Berhasil diekstrak — ${itemCount} item${parsed.no_po ? ' — No. PO: ' + parsed.no_po : ''}. Data bisa diedit langsung di tabel.`;
+                const itemCount = parsed.items ? parsed.items.length : 0;
+                statusEl.textContent = `✅ Berhasil — ${itemCount} item ditemukan${parsed.no_po ? ' — No. PO: ' + parsed.no_po : ''}. Data dapat diedit langsung.`;
                 statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
 
             } catch (err) {
@@ -1576,7 +1885,16 @@
             const shipTo = document.getElementById('proc-ship')?.value?.trim() || '';
             const shippingDate = document.getElementById('proc-shipping-date')?.value?.trim() || '';
             const tglProses = document.getElementById('proc-tgl-proses')?.value || '';
-            const noPO = orderedByEl?.dataset?.nopo || '';
+            const crewPacking = document.getElementById('proc-crew-packing')?.value || '';
+            // No PO: prioritaskan dropdown pilihan, fallback ke dataset dari PDF
+            const noPOFromSelect = document.getElementById('proc-no-po-select')?.value || '';
+            const noPO = noPOFromSelect || orderedByEl?.dataset?.nopo || '';
+
+            // Validasi Crew Packing
+            if (!crewPacking) {
+                showAlert('warning', 'Crew Packing Belum Dipilih', 'Silakan pilih Crew Packing terlebih dahulu.');
+                return;
+            }
 
             // ── Validasi ──
             if (!orderedBy) {
@@ -1598,6 +1916,7 @@
             rows.forEach(row => {
                 if (row.cells.length < 5 || row.querySelector('td[colspan]')) return;
                 const qtyOutboundInput = row.querySelector('input[type="number"]');
+                const descSelect = row.querySelector('select');
                 const namaBarang = row.cells[0].innerText.trim();
                 const qtyPO = row.cells[1].innerText.trim();
                 if (!namaBarang || namaBarang === '-') return; // skip baris kosong
@@ -1606,7 +1925,7 @@
                     qtyPO: qtyPO,
                     qtyOutbound: qtyOutboundInput ? qtyOutboundInput.value : row.cells[2].innerText.trim(),
                     uom: row.cells[3].innerText.trim(),
-                    description: row.cells[4].innerText.trim(),
+                    description: descSelect ? descSelect.value : row.cells[4].innerText.trim(),
                 });
             });
 
@@ -1636,6 +1955,7 @@
                 shipTo: shipTo,
                 shippingDate: shippingDate,
                 tanggalProsesPO: tglProses,
+                crewPacking: crewPacking,
                 items: items
             };
 
@@ -1675,6 +1995,10 @@
                         document.getElementById('import-status').textContent = '';
                         const pdfInput = document.getElementById('pdfFile');
                         if (pdfInput) pdfInput.value = '';
+                        const crewEl = document.getElementById('proc-crew-packing');
+                        if (crewEl) crewEl.value = '';
+                        const poSelect = document.getElementById('proc-no-po-select');
+                        if (poSelect) poSelect.value = '';
                         document.getElementById('proc-table-body').innerHTML =
                             '<tr><td colspan="5" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
                     }, 1500);
@@ -1687,7 +2011,7 @@
             } finally {
                 if (saveBtn) {
                     saveBtn.disabled = false;
-                    saveBtn.innerHTML = originalBtnHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Proses & Simpan ke Outbound_Log`;
+                    saveBtn.innerHTML = originalBtnHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Proses`;
                 }
             }
         }
