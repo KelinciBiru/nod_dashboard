@@ -282,7 +282,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyQHyCGhXLOHGGVJbWh_boZrijju4WYR3MflQQTTlaVVRl_Q0qIVaeh7Fao3JVcRD_n/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwy1Jmqw0XJkn_TbbonKZd3vwheA9_arVAt2D6jFA6TkoG6InYfgpiKk3nfwsn7c8I/exec';
 
         const API_URLS = {
             stockMaster: 'https://script.google.com/macros/s/AKfycbw_dT47dMFwtwM0qTmyOQemxzmrUYccmCwglqhFI8haRTGRmNJc98b_t1fBXxaylrUn/exec',
@@ -964,7 +964,7 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Pemohon</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ordered By</label>
                         <select id="nama"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             ${namaOptions}
@@ -977,6 +977,12 @@
                             <option value="">-- Pilih Kategori --</option>
                             ${categoryOptions}
                         </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Allocated To</label>
+                        <input type="text" id="allocated-to"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan nama penerima alokasi...">
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Upload File PDF</label>
@@ -1006,6 +1012,7 @@
         async function submitPO() {
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
+            const allocatedToEl = document.getElementById('allocated-to');
             const fileInput = document.getElementById('pdfFile');
             const btn = document.getElementById('submitBtn');
 
@@ -1024,6 +1031,7 @@
                     nama: namaEl.value,
                     category: categoryEl.value,
                     categoryCode: CATEGORY_CODE[categoryEl.value],
+                    allocatedTo: allocatedToEl ? allocatedToEl.value.trim() : '',
                     tanggal: formatDateForPO(new Date()),
                     fileData: e.target.result.split(',')[1],
                     fileName: file.name,
@@ -1035,6 +1043,7 @@
                     alert('Berhasil! No. PO: ' + result.po);
                     namaEl.selectedIndex = 0;
                     categoryEl.selectedIndex = 0;
+                    if (allocatedToEl) allocatedToEl.value = '';
                     fileInput.value = '';
                     updatePOPreview();
                 } catch (err) {
@@ -1082,7 +1091,7 @@
                 sel.innerHTML = '<option value="">— Pilih No. PO (opsional) —</option>';
                 openPOs.forEach(row => {
                     const noPO = String(row[1] || '').trim();
-                    const nama = String(row[2] || '').trim();
+                    const nama = String(row[6] || '').trim();
                     const opt = document.createElement('option');
                     opt.value = noPO;
                     opt.textContent = noPO + (nama ? ' — ' + nama : '');
@@ -2070,8 +2079,6 @@
                 }
             }
         }
-
-
         // =========================================================================
         // FITUR: SHARE TO WHATSAPP
         // =========================================================================
