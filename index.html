@@ -282,7 +282,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwy1Jmqw0XJkn_TbbonKZd3vwheA9_arVAt2D6jFA6TkoG6InYfgpiKk3nfwsn7c8I/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycby8d88xxubiu2PKKgMiyBrwKYQ6nkRwCVHtdisHU7S4MIBNW6yAuQMO_8AKc_-86VxO/exec';
 
         const API_URLS = {
             stockMaster: 'https://script.google.com/macros/s/AKfycbw_dT47dMFwtwM0qTmyOQemxzmrUYccmCwglqhFI8haRTGRmNJc98b_t1fBXxaylrUn/exec',
@@ -1221,6 +1221,7 @@
     `;
             // Auto-load daftar PO Open setelah halaman ter-render
             loadOpenPOList();
+            preloadSourceItems();
         }
 
         // =========================================================================
@@ -1712,6 +1713,26 @@
             }, 200);
         }
 
+        // =========================================================================
+        // CACHE: daftar item dari sheet Source kolom C
+        // =========================================================================
+        let _sourceItemsCache = null;
+
+        async function getSourceItems() {
+            if (_sourceItemsCache) return _sourceItemsCache;
+            try {
+                const res = await fetch(PO_GAS_URL + '?action=getSourceItems');
+                const data = await res.json();
+                _sourceItemsCache = Array.isArray(data) ? data.filter(Boolean) : [];
+            } catch (_) {
+                _sourceItemsCache = [];
+            }
+            return _sourceItemsCache;
+        }
+
+        // Preload saat halaman Process PO dibuka
+        function preloadSourceItems() { getSourceItems(); }
+
         function tambahBarisManual() {
             const tbody = document.getElementById('proc-table-body'); if (!tbody) return;
             const placeholder = tbody.querySelector('tr[data-placeholder], tr td[colspan]');
@@ -1721,10 +1742,91 @@
             const bg = tbody.querySelectorAll('tr').length % 2 === 0 ? 'bg-white' : 'bg-gray-50';
             const tr = document.createElement('tr');
             tr.className = `${bg} border-b border-gray-100`;
-            tr.innerHTML = `<td class="p-2 font-medium" contenteditable="true">-</td><td class="p-2 text-center font-semibold text-gray-700" contenteditable="true">1</td><td class="p-2 text-center"><input type="number" min="0" value="1" class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td><td class="p-2 text-center" contenteditable="true">Pcs</td><td class="p-2"><select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select></td><td class="p-2 text-xs text-gray-500" contenteditable="true"></td><td class="p-2 text-center"><button onclick="hapusBaris(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>`;
+
+            // Kolom Nama Barang pakai input + datalist autocomplete
+            const rowId = 'row-' + Date.now();
+            tr.setAttribute('data-rowid', rowId);
+            tr.innerHTML = `
+                <td class="p-2 font-medium relative">
+                    <div class="relative">
+                        <input type="text"
+                            class="nama-barang-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                            placeholder="Ketik nama barang..."
+                            autocomplete="off">
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
+                    </div>
+                </td>
+                <td class="p-2 text-center font-semibold text-gray-700" contenteditable="true">1</td>
+                <td class="p-2 text-center"><input type="number" min="0" value="1" class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
+                <td class="p-2 text-center" contenteditable="true">Pcs</td>
+                <td class="p-2"><select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select></td>
+                <td class="p-2 text-xs text-gray-500" contenteditable="true"></td>
+                <td class="p-2 text-center"><button onclick="hapusBaris(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>`;
+
             tbody.appendChild(tr);
-            const namaCell = tr.querySelector('td[contenteditable]');
-            if (namaCell) { namaCell.focus(); const range = document.createRange(); range.selectNodeContents(namaCell); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); }
+
+            // Pasang event autocomplete
+            const input = tr.querySelector('.nama-barang-input');
+            const list = tr.querySelector('.autocomplete-list');
+
+            function renderList(filtered) {
+                list.innerHTML = '';
+                if (filtered.length === 0) { list.classList.add('hidden'); return; }
+                filtered.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    li.className = 'px-3 py-2 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition';
+                    li.onmousedown = (e) => {
+                        e.preventDefault();
+                        input.value = item;
+                        list.classList.add('hidden');
+                    };
+                    list.appendChild(li);
+                });
+                list.classList.remove('hidden');
+            }
+
+            input.addEventListener('input', async () => {
+                const q = input.value.trim().toLowerCase();
+                if (!q) { list.classList.add('hidden'); return; }
+                const items = await getSourceItems();
+                const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
+                renderList(filtered);
+            });
+
+            input.addEventListener('focus', async () => {
+                const q = input.value.trim().toLowerCase();
+                if (!q) return;
+                const items = await getSourceItems();
+                const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
+                renderList(filtered);
+            });
+
+            input.addEventListener('blur', () => {
+                setTimeout(() => list.classList.add('hidden'), 150);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                const lis = list.querySelectorAll('li');
+                const active = list.querySelector('li.bg-amber-100');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const next = active ? active.nextElementSibling : lis[0];
+                    if (active) active.classList.remove('bg-amber-100');
+                    if (next) next.classList.add('bg-amber-100');
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const prev = active ? active.previousElementSibling : lis[lis.length - 1];
+                    if (active) active.classList.remove('bg-amber-100');
+                    if (prev) prev.classList.add('bg-amber-100');
+                } else if (e.key === 'Enter') {
+                    if (active) { e.preventDefault(); input.value = active.textContent; list.classList.add('hidden'); }
+                } else if (e.key === 'Escape') {
+                    list.classList.add('hidden');
+                }
+            });
+
+            input.focus();
         }
 
 
@@ -1966,7 +2068,8 @@
                 if (row.cells.length < 5 || row.querySelector('td[colspan]')) return;
                 const qtyOutboundInput = row.querySelector('input[type="number"]');
                 const descSelect = row.querySelector('select');
-                const namaBarang = row.cells[0].innerText.trim();
+                const namaBarangInput = row.querySelector('.nama-barang-input');
+                const namaBarang = namaBarangInput ? namaBarangInput.value.trim() : row.cells[0].innerText.trim();
                 const qtyPO = row.cells[1].innerText.trim();
                 if (!namaBarang || namaBarang === '-') return; // skip baris kosong
                 items.push({
