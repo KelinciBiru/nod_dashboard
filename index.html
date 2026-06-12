@@ -91,7 +91,26 @@
                 <span class="font-bold text-gray-700 text-sm md:text-base" id="page-title">Dashboard</span>
             </div>
             <!-- Kanan: role badge + logout -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 relative">
+                <button id="notif-bell-btn" onclick="toggleNotifPopup()"
+                    class="hidden relative p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span id="notif-bell-dot"
+                        class="hidden absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
+                </button>
+                <div id="notif-popup"
+                    class="hidden absolute top-12 right-0 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+                    <div class="p-3 border-b border-gray-100 font-bold text-sm text-gray-700" id="notif-popup-title">
+                        PO Ready To Ship
+                    </div>
+                    <div id="notif-popup-content" class="divide-y divide-gray-100">
+                        <div class="p-3 text-sm text-gray-400 text-center">Memuat...</div>
+                    </div>
+                </div>
                 <span id="user-role-badge"
                     class="hidden md:inline-block text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700">
                 </span>
@@ -355,6 +374,11 @@
                 document.getElementById('po-sub').classList.remove('hidden');
                 document.getElementById('arrow-po').textContent = '▲';
                 navTo('Purchase Order');
+
+                // Tampilkan tombol notifikasi & load data Ready To Ship
+                const bellBtn = document.getElementById('notif-bell-btn');
+                if (bellBtn) bellBtn.classList.remove('hidden');
+                loadNotifReadyToShip();
             } else if (currentUserRole === 'WAREHOUSE') {
                 // Team Warehouse: hanya tampilkan menu Process PO
                 document.getElementById('menu-inventory').classList.add('hidden');
@@ -363,6 +387,11 @@
                 document.getElementById('menu-po').classList.add('hidden');
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 navTo('Process PO');
+
+                // Tampilkan tombol notifikasi & load data Open
+                const bellBtn2 = document.getElementById('notif-bell-btn');
+                if (bellBtn2) bellBtn2.classList.remove('hidden');
+                loadNotifReadyToShip();
             } else {
                 // ADMIN: semua menu tampil termasuk Process PO
                 document.getElementById('menu-process-po').classList.remove('hidden');
@@ -399,6 +428,12 @@
             if (roleBadge) roleBadge.classList.add('hidden');
             document.getElementById('page-title').textContent = 'Dashboard';
 
+            // Sembunyikan notifikasi bell & popup
+            const bellBtn = document.getElementById('notif-bell-btn');
+            if (bellBtn) bellBtn.classList.add('hidden');
+            const notifPopup = document.getElementById('notif-popup');
+            if (notifPopup) notifPopup.classList.add('hidden');
+
             // Reset sidebar ke posisi tertutup (mobile)
             document.getElementById('sidebar').classList.add('-translate-x-full');
             document.getElementById('sidebar-overlay').classList.add('hidden');
@@ -412,6 +447,104 @@
             document.getElementById('content-area').innerHTML =
                 '<h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>';
         }
+
+        // =========================================================================
+        // NOTIFIKASI: PO Ready To Ship (untuk PO_User)
+        // =========================================================================
+
+        /** Tampilkan/sembunyikan popup notifikasi */
+        function toggleNotifPopup() {
+            const popup = document.getElementById('notif-popup');
+            if (!popup) return;
+            const willShow = popup.classList.contains('hidden');
+            if (willShow) {
+                popup.classList.remove('hidden');
+                loadNotifReadyToShip();
+                // Tutup popup jika klik di luar
+                setTimeout(() => {
+                    document.addEventListener('click', closeNotifPopupOutside);
+                }, 0);
+            } else {
+                popup.classList.add('hidden');
+                document.removeEventListener('click', closeNotifPopupOutside);
+            }
+        }
+
+        /** Handler untuk menutup popup notifikasi saat klik di luar area */
+        function closeNotifPopupOutside(e) {
+            const popup = document.getElementById('notif-popup');
+            const bellBtn = document.getElementById('notif-bell-btn');
+            if (!popup || !bellBtn) return;
+            if (!popup.contains(e.target) && !bellBtn.contains(e.target)) {
+                popup.classList.add('hidden');
+                document.removeEventListener('click', closeNotifPopupOutside);
+            }
+        }
+
+        /** Ambil data PO sesuai status target role lalu tampilkan di popup notifikasi */
+        async function loadNotifReadyToShip() {
+            const contentEl = document.getElementById('notif-popup-content');
+            const dotEl = document.getElementById('notif-bell-dot');
+            const titleEl = document.getElementById('notif-popup-title');
+            if (!contentEl) return;
+
+            // Tentukan status target & label sesuai role
+            const targetStatus = currentUserRole === 'WAREHOUSE' ? 'Open' : 'Ready To Ship';
+            const badgeClass = currentUserRole === 'WAREHOUSE'
+                ? 'bg-red-100 text-red-700'
+                : 'bg-blue-100 text-blue-700';
+            if (titleEl) titleEl.textContent = `PO ${targetStatus}`;
+
+            try {
+                let data = [];
+                try {
+                    const res1 = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                    const raw1 = await res1.json();
+                    data = Array.isArray(raw1) ? raw1 : [];
+                } catch (_) { }
+
+                if (data.length === 0) {
+                    const res2 = await fetch(API_URLS.reportStatus);
+                    const raw2 = await res2.json();
+                    data = Array.isArray(raw2) ? raw2 : [];
+                }
+
+                const filteredRows = data.slice(1).filter(row => {
+                    const noPO = String(row[1] || '').trim();
+                    const statusRaw = row[4] ? row[4].toString().trim() : '';
+                    if (noPO === '') return false;
+                    if (targetStatus === 'Open') {
+                        // Anggap PO "Open" jika status kosong atau bukan Ready To Ship/Closed
+                        return statusRaw !== 'Ready To Ship' && statusRaw !== 'Closed';
+                    }
+                    return statusRaw === targetStatus;
+                });
+
+                if (dotEl) {
+                    if (filteredRows.length > 0) dotEl.classList.remove('hidden');
+                    else dotEl.classList.add('hidden');
+                }
+
+                if (filteredRows.length === 0) {
+                    contentEl.innerHTML = `<div class="p-3 text-sm text-gray-400 text-center">Tidak ada PO ${targetStatus}.</div>`;
+                    return;
+                }
+
+                contentEl.innerHTML = filteredRows.map(row => {
+                    const noPO = row[1] || '-';
+                    const nama = row[2] || '-';
+                    return `
+                    <div class="p-3 hover:bg-blue-50 transition">
+                        <p class="text-sm font-semibold text-gray-700 font-mono">${noPO}</p>
+                        <p class="text-xs text-gray-500">${nama}</p>
+                        <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${targetStatus}</span>
+                    </div>`;
+                }).join('');
+            } catch (err) {
+                contentEl.innerHTML = `<div class="p-3 text-sm text-red-400 text-center">Gagal memuat notifikasi.</div>`;
+            }
+        }
+
 
         // =========================================================================
         // UTILITAS UI
