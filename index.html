@@ -1142,22 +1142,84 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Allocated To</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
                         <input type="text" id="allocated-to"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan Nama (Event/Outlet/Penerima)">
                     </div>
                     <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat</label>
+                        <input type="text" id="po-alamat"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan alamat pengiriman">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">No. Telepon</label>
+                        <input type="tel" id="po-phone"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Contoh: 08123456789">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Shipping Date</label>
+                        <input type="date" id="po-shipping-date"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Upload File PDF</label>
                         <input type="file" id="pdfFile" accept="application/pdf"
                             class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm">
+                        <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                            <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Upload file PDF <span class="font-semibold text-amber-600">Request Order</span> yang telah diunduh sebelumnya
+                        </p>
                     </div>
                     <button id="submitBtn" onclick="submitPO()"
                         class="w-full bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md mt-4">
                         Kirim PO
                     </button>
                 </div>
+            </div>
+
+            <!-- Tabel Item PO -->
+            <div class="max-w-4xl mx-auto mt-6 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+                <h2 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">Detail Item</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-800 text-white">
+                                <th class="p-2 text-left rounded-tl-lg" style="min-width:200px">Item</th>
+                                <th class="p-2 text-center" style="width:70px">Qty</th>
+                                <th class="p-2 text-center" style="width:80px">UOM</th>
+                                <th class="p-2 text-left" style="min-width:140px">Description</th>
+                                <th class="p-2 text-left" style="min-width:140px">Note</th>
+                                <th class="p-2 text-center rounded-tr-lg" style="width:50px">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="po-item-table-body">
+                            <tr data-placeholder>
+                                <td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <button onclick="tambahBarisFormPO()" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-xs transition shadow-sm">
+                        <svg class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                        Tambah Baris
+                    </button>
+                    <button onclick="downloadRequestOrderPDF()"
+                        class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold text-xs transition shadow-md sm:ml-auto">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Download Request Order
+                    </button>
+                </div>
             </div>`;
+            // Preload items for autocomplete
+            preloadSourceItems();
         }
 
         function updatePOPreview() {
@@ -1170,6 +1232,22 @@
             }
             preview.textContent = `${CATEGORY_CODE[category]}-${formatDateForPO(new Date())}-?`;
             preview.className = 'w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold';
+        }
+
+        /** Auto-trigger No. PO preview when item table gets first row filled */
+        function checkAutoTriggerPOPreview() {
+            const category = document.getElementById('category');
+            const preview = document.getElementById('po-preview');
+            if (!category || !preview) return;
+            // Only auto-trigger if category already selected but preview not yet shown
+            const hasCategory = category.value && CATEGORY_CODE[category.value];
+            if (hasCategory) return; // already triggered via onchange
+            const tbody = document.getElementById('po-item-table-body');
+            if (!tbody) return;
+            const hasItem = tbody.querySelectorAll('tr:not([data-placeholder])').length > 0;
+            if (hasItem && category.value) {
+                updatePOPreview();
+            }
         }
 
         async function submitPO() {
@@ -1217,6 +1295,356 @@
                 }
             };
             reader.readAsDataURL(file);
+        }
+
+        // =========================================================================
+        // FORM PO: TAMBAH BARIS ITEM
+        // =========================================================================
+        function tambahBarisFormPO() {
+            const tbody = document.getElementById('po-item-table-body');
+            if (!tbody) return;
+            const placeholder = tbody.querySelector('tr[data-placeholder]');
+            if (placeholder) placeholder.remove();
+
+            const DESCRIPTION_OPTIONS = ['Supplies', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Machine Event'];
+            const UOM_OPTIONS = ['Pcs', 'Box', 'Unit', 'Pack', 'Karton', 'Kg', 'Ltr', 'Lusin', 'Set', 'Roll', 'Sheet', 'Btl', 'Dus', 'Meter'];
+            const descOpts = DESCRIPTION_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
+            const uomOpts = UOM_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
+
+            const bg = tbody.querySelectorAll('tr').length % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            const tr = document.createElement('tr');
+            tr.className = `${bg} border-b border-gray-100`;
+
+            tr.innerHTML = `
+                <td class="p-2 font-medium relative">
+                    <div class="relative">
+                        <input type="text"
+                            class="po-item-nama w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                            placeholder="Ketik/pilih item..."
+                            autocomplete="off">
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
+                    </div>
+                </td>
+                <td class="p-2 text-center">
+                    <input type="number" min="1" value="1" class="po-item-qty w-full p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
+                </td>
+                <td class="p-2 text-center">
+                    <select class="po-item-uom w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">
+                        ${uomOpts}
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="po-item-desc w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select>
+                </td>
+                <td class="p-2">
+                    <input type="text" class="po-item-note w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Catatan...">
+                </td>
+                <td class="p-2 text-center">
+                    <button onclick="hapusBarisFormPO(this)" title="Hapus baris"
+                        class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </td>`;
+
+            tbody.appendChild(tr);
+
+            // Auto-show No. PO preview when first row is added
+            checkAutoTriggerPOPreview();
+
+            // Autocomplete logic
+            const input = tr.querySelector('.po-item-nama');
+            const list = tr.querySelector('.autocomplete-list');
+
+            function renderList(filtered) {
+                list.innerHTML = '';
+                if (filtered.length === 0) { list.classList.add('hidden'); return; }
+                filtered.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    li.className = 'px-3 py-2 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition';
+                    li.onmousedown = (e) => {
+                        e.preventDefault();
+                        input.value = item;
+                        list.classList.add('hidden');
+                    };
+                    list.appendChild(li);
+                });
+                list.classList.remove('hidden');
+            }
+
+            input.addEventListener('input', async () => {
+                const q = input.value.trim().toLowerCase();
+                if (!q) { list.classList.add('hidden'); return; }
+                const items = await getSourceItems();
+                const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
+                renderList(filtered);
+            });
+
+            input.addEventListener('focus', async () => {
+                const q = input.value.trim().toLowerCase();
+                if (q) {
+                    const items = await getSourceItems();
+                    const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
+                    renderList(filtered);
+                }
+            });
+
+            input.addEventListener('blur', () => {
+                setTimeout(() => list.classList.add('hidden'), 150);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                const lis = list.querySelectorAll('li');
+                const active = list.querySelector('li.bg-amber-100');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const next = active ? active.nextElementSibling : lis[0];
+                    if (active) active.classList.remove('bg-amber-100');
+                    if (next) next.classList.add('bg-amber-100');
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const prev = active ? active.previousElementSibling : lis[lis.length - 1];
+                    if (active) active.classList.remove('bg-amber-100');
+                    if (prev) prev.classList.add('bg-amber-100');
+                } else if (e.key === 'Enter') {
+                    if (active) { e.preventDefault(); input.value = active.textContent; list.classList.add('hidden'); }
+                } else if (e.key === 'Escape') {
+                    list.classList.add('hidden');
+                }
+            });
+
+            input.focus();
+        }
+
+        function hapusBarisFormPO(btn) {
+            const tr = btn.closest('tr');
+            const tbody = document.getElementById('po-item-table-body');
+            if (!tbody) return;
+            tr.remove();
+            if (tbody.querySelectorAll('tr').length === 0) {
+                tbody.innerHTML = '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+            }
+        }
+
+        // =========================================================================
+        // FORM PO: DOWNLOAD REQUEST ORDER PDF
+        // =========================================================================
+        async function downloadRequestOrderPDF() {
+            const namaEl = document.getElementById('nama');
+            const categoryEl = document.getElementById('category');
+            const allocatedToEl = document.getElementById('allocated-to');
+            const poPreview = document.getElementById('po-preview');
+
+            const orderedBy = namaEl ? namaEl.value : '';
+            const allocatedTo = allocatedToEl ? allocatedToEl.value.trim() : '';
+            const alamat = document.getElementById('po-alamat')?.value?.trim() || '';
+            const phone = document.getElementById('po-phone')?.value?.trim() || '';
+            const shippingDateRaw = document.getElementById('po-shipping-date')?.value || '';
+            const shippingDate = shippingDateRaw ? formatTanggalIndo(shippingDateRaw) : '-';
+            const noPO = poPreview ? poPreview.textContent.trim() : '';
+
+            // Ambil item dari tabel
+            const rows = document.querySelectorAll('#po-item-table-body tr:not([data-placeholder])');
+            const items = [];
+            rows.forEach(row => {
+                const nama = row.querySelector('.po-item-nama')?.value?.trim() || '';
+                if (!nama) return;
+                const qty = row.querySelector('.po-item-qty')?.value || '1';
+                const uom = row.querySelector('.po-item-uom')?.value || '-';
+                const description = row.querySelector('.po-item-desc')?.value || '-';
+                const note = row.querySelector('.po-item-note')?.value?.trim() || '';
+                items.push({ nama, qty, uom, description, note });
+            });
+
+            if (items.length === 0) {
+                showAlert('warning', 'Tabel Kosong', 'Tambahkan minimal satu item sebelum download.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const marginX = 14;
+            const today = new Date().toISOString().split('T')[0];
+
+            // ── Hitung No. PO berikutnya dari data yang sudah ada ──
+            let resolvedPONumber = null;
+            if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
+                const catCode = CATEGORY_CODE[categoryEl.value];
+                const dateStr = formatDateForPO(new Date());
+                const prefix = `${catCode}-${dateStr}-`;
+                try {
+                    let poData = [];
+                    try {
+                        const r = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                        const raw = await r.json();
+                        poData = Array.isArray(raw) ? raw : [];
+                    } catch (_) {}
+                    if (poData.length === 0) {
+                        const r2 = await fetch(API_URLS.reportStatus);
+                        const raw2 = await r2.json();
+                        poData = Array.isArray(raw2) ? raw2 : [];
+                    }
+                    // Cari sequence tertinggi dengan prefix yang sama
+                    let maxSeq = 0;
+                    poData.slice(1).forEach(row => {
+                        const no = String(row[1] || '').trim();
+                        if (no.startsWith(prefix)) {
+                            const seq = parseInt(no.replace(prefix, ''), 10);
+                            if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                        }
+                    });
+                    resolvedPONumber = `${prefix}${maxSeq + 1}`;
+                } catch (_) {}
+            }
+
+            // ── Logo NOD ──
+            const logoData = await loadImageAsDataURL(NOD_LOGO_URL);
+            let logoBottomY = 18;
+            if (logoData) {
+                try {
+                    const dims = getImageFitDims(logoData, 26, 14);
+                    doc.addImage(logoData.dataUrl, logoData.format, marginX, 8, dims.w, dims.h);
+                    logoBottomY = 8 + dims.h;
+                } catch (_) {
+                    drawFallbackLogo(doc, marginX);
+                    logoBottomY = 22;
+                }
+            } else {
+                drawFallbackLogo(doc, marginX);
+                logoBottomY = 22;
+            }
+
+            // ── Tagline ──
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(7.5);
+            doc.setTextColor(120, 113, 108);
+            doc.text('Your All-in-One Drink Maker', marginX, logoBottomY + 4);
+
+            // ── Judul Dokumen: REQUEST ORDER ──
+            doc.setTextColor(17, 24, 39);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.text('REQUEST ORDER', pageWidth - marginX, 16, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(107, 114, 128);
+            const poLabel = resolvedPONumber || (noPO && noPO !== 'Pilih kategori untuk melihat preview No. PO' ? noPO : '-');
+            doc.text('No. PO: ' + poLabel, pageWidth - marginX, 22, { align: 'right' });
+
+            // Garis pemisah
+            doc.setDrawColor(229, 231, 235);
+            doc.setLineWidth(0.4);
+            doc.line(marginX, 28, pageWidth - marginX, 28);
+
+            // ── Info Box ──
+            let y = 36;
+            doc.setFontSize(10);
+            doc.setTextColor(31, 41, 55);
+
+            const infoLeft = [
+                ['Tanggal', formatTanggalIndo(today)],
+                ['No. PO', poLabel],
+                ['Ordered By', orderedBy || '-'],
+                ['Phone', phone || '-'],
+            ];
+            const infoRight = [
+                ['Kategori', categoryEl ? categoryEl.value || '-' : '-'],
+                ['Ship To', allocatedTo || '-'],
+                ['Alamat', alamat || '-'],
+                ['Shipping Date', shippingDate],
+            ];
+
+            const colLeftX = marginX;
+            const colLeftLabelW = 28;
+            const colRightX = pageWidth / 2 + 4;
+            const colRightLabelW = 28;
+            const lineH = 6;
+            const colRightValueX = colRightX + colRightLabelW + 3;
+            const colRightMaxW = pageWidth - marginX - colRightValueX;
+
+            // Render left column (no wrapping needed)
+            infoLeft.forEach((row, i) => {
+                const yy = y + i * lineH;
+                doc.setFont('helvetica', 'bold'); doc.text(row[0], colLeftX, yy);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colLeftX + colLeftLabelW, yy);
+                doc.text(String(row[1] || '-'), colLeftX + colLeftLabelW + 3, yy);
+            });
+
+            // Render right column with text wrapping (justify) for multi-line values
+            let rightY = y;
+            infoRight.forEach((row) => {
+                if (!row[0]) return;
+                doc.setFont('helvetica', 'bold'); doc.text(row[0], colRightX, rightY);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colRightX + colRightLabelW, rightY);
+                const wrapped = doc.splitTextToSize(String(row[1] || '-'), colRightMaxW);
+                doc.text(wrapped, colRightValueX, rightY);
+                rightY += lineH * wrapped.length;
+            });
+
+            y += Math.max(infoLeft.length * lineH, rightY - y) + 6;
+
+            // ── Tabel Item ──
+            const tableBody = items.map((it, idx) => [
+                String(idx + 1),
+                it.nama,
+                it.qty || '-',
+                it.uom || '-',
+                it.description || '-',
+                it.note || '-'
+            ]);
+
+            doc.autoTable({
+                startY: y,
+                head: [['No', 'Item', 'Qty', 'UOM', 'Description', 'Note']],
+                body: tableBody,
+                theme: 'grid',
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle' },
+                headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 9 },
+                    2: { halign: 'center', cellWidth: 16 },
+                    3: { halign: 'center', cellWidth: 18 },
+                    5: { cellWidth: 35 },
+                },
+                margin: { left: marginX, right: marginX },
+            });
+
+            // ── Tanda Tangan ──
+            let finalY = doc.lastAutoTable.finalY + 18;
+            const pageHeight = doc.internal.pageSize.getHeight();
+            if (finalY > pageHeight - 90) { doc.addPage(); finalY = 30; }
+
+            const sigColW = (pageWidth - marginX * 2) / 3;
+            const sigLabels = ['Diminta oleh,', 'Disetujui oleh,', 'Diterima oleh,'];
+            const sigNames = [orderedBy || '', '', ''];
+
+            sigLabels.forEach((label, i) => {
+                const x = marginX + i * sigColW;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(31, 41, 55);
+                doc.text(label, x, finalY);
+                doc.line(x, finalY + 18, x + sigColW - 10, finalY + 18);
+                doc.setFont('helvetica', 'bold');
+                doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
+            });
+
+            // ── Footer Image ──
+            const footerW = pageWidth - marginX * 2;
+            const footerH = footerW * (355 / 1060);
+            const footerY = pageHeight - footerH;
+            try { doc.addImage(NOD_FOOTER_IMG, 'JPEG', marginX, footerY, footerW, footerH); } catch (_) {}
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(180, 180, 180);
+            doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
+
+            const fileName = `Request_Order_${poLabel !== '-' ? poLabel : 'PO'}_${today}.pdf`;
+            doc.save(fileName);
         }
 
         // =========================================================================
@@ -1523,29 +1951,110 @@
 
             // ─────────────────────────────────────────────────────────────────
             // HELPER: ekstrak metadata dari pageData menggunakan X midpoint
-            // Mencari baris yang mengandung "Ordered by" DAN "Ship to" berdampingan
-            // lalu membagi token kiri/kanan, kemudian scan baris-baris berikutnya
+            // Mendukung dua format:
+            //   FORMAT A (Request Order NOD): field label di kiri seperti
+            //     "Ordered By : Nama", "Ship To : Nama", "Shipping Date : ..."
+            //   FORMAT B (PO eksternal lama): blok "Ordered by | Ship to"
+            //     dengan sub-field "Name :", "Shipping Date :"
             // ─────────────────────────────────────────────────────────────────
             function extractMetaFromLayout() {
                 let result = { orderedBy: '', shipTo: '', shippingDate: '' };
 
                 for (const rows of pageData) {
-                    // Cari baris header "Ordered by" / "Ship to"
+
+                    // ── FORMAT A: Request Order NOD ──
+                    // Ciri khas: ada baris yang token-tokennya membentuk "Ordered By : <nilai>"
+                    // dan baris lain "Ship To : <nilai>". Setiap baris bisa mengandung
+                    // dua kolom (kiri & kanan) yang dipisahkan posisi X.
+                    let foundFormatA = false;
+                    for (let ri = 0; ri < rows.length; ri++) {
+                        const rowText = rows[ri].tokens.map(t => t.str).join(' ');
+                        const rowUp = rowText.toUpperCase();
+
+                        // Deteksi baris "Ordered By : ..." (kiri) dan "Ship To : ..." (kanan)
+                        // Bisa ada di baris yang SAMA (dua kolom) atau baris berbeda
+                        if (/ORDERED\s*BY\s*:/i.test(rowText)) {
+                            foundFormatA = true;
+                            // Pisahkan berdasarkan posisi X: cari titik split (Ship To jika ada di baris sama)
+                            let splitX = Infinity;
+                            for (const tk of rows[ri].tokens) {
+                                if (/^SHIP$/i.test(tk.str)) { splitX = tk.x - 5; break; }
+                                if (/^KATEGORI$/i.test(tk.str)) { splitX = tk.x - 5; break; }
+                            }
+                            // Kumpulkan token kiri (Ordered By block)
+                            const leftTokens = rows[ri].tokens.filter(t => t.x < splitX);
+                            const leftText = leftTokens.map(t => t.str).join(' ');
+                            if (!result.orderedBy && /ORDERED\s*BY\s*:/i.test(leftText)) {
+                                // Ambil nilai setelah ":"  — hanya sampai kata pertama yang bukan nama
+                                const afterColon = leftText.replace(/.*ORDERED\s*BY\s*:\s*/i, '').trim();
+                                // Ambil hanya nama: stop sebelum keyword "Alamat", "Phone", "No.", dll.
+                                const nameOnly = afterColon.split(/\s+(?=ALAMAT\s*:|PHONE\s*:|NO\.\s*TELP|TELP\s*:|SHIPPING)/i)[0].trim();
+                                if (nameOnly.length > 1) result.orderedBy = nameOnly;
+                            }
+                            // Cek juga apakah Ship To ada di baris yang sama (kolom kanan)
+                            const rightTokens = rows[ri].tokens.filter(t => t.x >= splitX);
+                            const rightText = rightTokens.map(t => t.str).join(' ');
+                            if (!result.shipTo && /SHIP\s*TO\s*:/i.test(rightText)) {
+                                const v = rightText.replace(/.*SHIP\s*TO\s*:\s*/i, '').trim();
+                                // Ambil hanya nama (satu "segment" sebelum Alamat/Phone/dll)
+                                const nameOnly = v.split(/\s+(?=ALAMAT\s*:|PHONE\s*:|SHIPPING)/i)[0].trim();
+                                if (nameOnly.length > 1) result.shipTo = nameOnly;
+                            }
+                        }
+
+                        // Baris tersendiri "Ship To : ..." (jika berbeda baris dari Ordered By)
+                        if (!result.shipTo && /SHIP\s*TO\s*:/i.test(rowText)) {
+                            foundFormatA = true;
+                            const v = rowText.replace(/.*SHIP\s*TO\s*:\s*/i, '').trim();
+                            // Buang teks setelah keyword lain yang mungkin ikut terbaca
+                            const nameOnly = v.split(/\s+(?=ALAMAT\s*:|PHONE\s*:|SHIPPING\s*DATE\s*:)/i)[0].trim();
+                            if (nameOnly.length > 1) result.shipTo = nameOnly;
+                        }
+
+                        // Baris "Shipping Date : ..."
+                        if (!result.shippingDate && /SHIPPING\s*DATE\s*:/i.test(rowText)) {
+                            foundFormatA = true;
+                            // Ambil token SETELAH ":" yang ada di baris ini
+                            // Temukan posisi X token ":"
+                            let colonX = -1;
+                            for (const tk of rows[ri].tokens) {
+                                if (tk.str === ':' && colonX === -1) {
+                                    // Cek apakah ada token SHIPPING sebelumnya di baris ini
+                                    const before = rows[ri].tokens.filter(t => t.x < tk.x).map(t => t.str).join(' ');
+                                    if (/SHIPPING/i.test(before)) { colonX = tk.x; break; }
+                                }
+                            }
+                            if (colonX !== -1) {
+                                const afterColon = rows[ri].tokens
+                                    .filter(t => t.x > colonX)
+                                    .map(t => t.str).join(' ').trim();
+                                if (afterColon.length > 1) result.shippingDate = afterColon;
+                            } else {
+                                const v = rowText.replace(/.*SHIPPING\s*DATE\s*:\s*/i, '').trim();
+                                if (v.length > 1) result.shippingDate = v;
+                            }
+                        }
+                    }
+
+                    if (foundFormatA && (result.orderedBy || result.shipTo)) break;
+
+                    // ── FORMAT B: PO Eksternal (format lama dengan blok "Ordered by | Ship to") ──
                     let splitX = -1;
                     let headerRowIdx = -1;
 
                     for (let ri = 0; ri < rows.length; ri++) {
                         const rowText = rows[ri].tokens.map(t => t.str).join(' ').toUpperCase();
-                        if (rowText.includes('ORDERED BY') || rowText.includes('ORDERED  BY')) {
-                            // Cari token "Ship" atau "SHIP" untuk dapat posisi X pemisah
+                        // Format B: baris HEADER yang isinya hanya "Ordered by" dan "Ship to"
+                        // (bukan baris data seperti "Ordered By : Nama")
+                        if ((rowText.includes('ORDERED BY') || rowText.includes('ORDERED  BY')) &&
+                            !/:/.test(rowText)) {
                             for (const tk of rows[ri].tokens) {
                                 if (tk.str.toUpperCase().includes('SHIP')) {
-                                    splitX = tk.x - 10; // sedikit sebelum SHIP
+                                    splitX = tk.x - 10;
                                     break;
                                 }
                             }
                             if (splitX === -1) {
-                                // Fallback: pakai tengah viewport
                                 const xs = rows[ri].tokens.map(t => t.x);
                                 splitX = (Math.min(...xs) + Math.max(...xs)) / 2;
                             }
@@ -1556,10 +2065,8 @@
 
                     if (headerRowIdx === -1 || splitX === -1) continue;
 
-                    // Scan baris di bawah header sampai ketemu baris tabel (NO / NAME / QTY)
                     for (let ri = headerRowIdx + 1; ri < rows.length; ri++) {
                         const rowText = rows[ri].tokens.map(t => t.str).join(' ').toUpperCase();
-                        // Hentikan jika sudah sampai tabel items
                         if (/^\s*NO\b/.test(rowText) || rowText.includes('DEAR TEAM') ||
                             rowText.includes('HEREBY')) break;
 
@@ -1568,26 +2075,21 @@
                         const leftText = leftTokens.map(t => t.str).join(' ');
                         const rightText = rightTokens.map(t => t.str).join(' ');
 
-                        // Kiri: ambil Name (= Ordered By)
                         if (!result.orderedBy && /NAME\s*:/i.test(leftText)) {
                             const v = leftText.replace(/.*NAME\s*:\s*/i, '').trim();
                             if (v.length > 1) result.orderedBy = v;
                         }
-
-                        // Kanan: ambil Name (= Ship To)
                         if (!result.shipTo && /NAME\s*:/i.test(rightText)) {
                             const v = rightText.replace(/.*NAME\s*:\s*/i, '').trim();
                             if (v.length > 1) result.shipTo = v;
                         }
-
-                        // Kanan: ambil Shipping Date
                         if (!result.shippingDate && /SHIPPING\s*DATE\s*:/i.test(rightText)) {
                             const v = rightText.replace(/.*SHIPPING\s*DATE\s*:\s*/i, '').trim();
                             if (v.length > 1) result.shippingDate = v;
                         }
                     }
 
-                    if (result.orderedBy || result.shipTo) break; // sudah dapat, stop
+                    if (result.orderedBy || result.shipTo) break;
                 }
                 return result;
             }
@@ -1598,10 +2100,17 @@
             const meta = extractMetaFromLayout();
 
             // Fallback ke teks mentah jika layout parsing gagal
-            const orderedBy = meta.orderedBy ||
+            const _orderedByRaw = meta.orderedBy ||
                 findAfterKeyword(['ORDERED BY', 'ORDER BY', 'DIPESAN OLEH', 'BUYER', 'NAMA PEMESAN']);
-            const shipTo = meta.shipTo ||
+            // Buang bagian alamat/phone yang ikut terbaca setelah nama
+            const orderedBy = _orderedByRaw
+                .split(/\s+(?=Alamat\s*:|Phone\s*:|No\.\s*Telp|Telp\s*:|Shipping)/i)[0].trim();
+            const _shipToRaw = meta.shipTo ||
                 findAfterKeyword(['SHIP TO', 'DELIVER TO', 'KIRIM KE', 'ALAMAT PENGIRIMAN']);
+            // Untuk Ship To: ambil hanya nama lokasi, buang "Ship To :" jika ikut terbaca
+            const shipTo = _shipToRaw
+                .replace(/^(SHIP\s*TO\s*:?\s*)/i, '')
+                .split(/\s+(?=Alamat\s*:|Phone\s*:|Shipping\s*Date)/i)[0].trim();
             let shippingDate = meta.shippingDate ||
                 findAfterKeyword(['SHIPPING DATE', 'DELIVERY DATE', 'TANGGAL PENGIRIMAN', 'SHIP DATE', 'TGL KIRIM']);
             if (!shippingDate) {
