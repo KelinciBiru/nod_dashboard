@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 
 <body class="font-sans text-gray-800 bg-gray-50">
@@ -256,6 +257,16 @@
                     </div>
 
                     <!-- [TAMBAH MENU BARU DI SINI] -->
+                    <!-- Process Inbound Baru -->
+                    <button id="menu-process-inbound" onclick="navTo('Process Inbound')"
+                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 16l4 4L21 6M3 12h18" />
+                        </svg>
+                        Process Inbound
+                    </button>
+
                     <!-- Process PO Baru -->
                     <button id="menu-process-po" onclick="navTo('Process PO')"
                         class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
@@ -302,6 +313,9 @@
         // KONFIGURASI URL API
         // =========================================================================
         const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycby8d88xxubiu2PKKgMiyBrwKYQ6nkRwCVHtdisHU7S4MIBNW6yAuQMO_8AKc_-86VxO/exec';
+
+        // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
+        const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbyZzgffsxDJ5zjj4kkrJFWJ_WIZD0cxx9F_bekPAM3mRONCrCahWYMnMzANizRUK2tx/exec';
 
         const API_URLS = {
             stockMaster: 'https://script.google.com/macros/s/AKfycbw_dT47dMFwtwM0qTmyOQemxzmrUYccmCwglqhFI8haRTGRmNJc98b_t1fBXxaylrUn/exec',
@@ -370,6 +384,7 @@
                 document.getElementById('menu-plan-task').classList.add('hidden');
                 document.getElementById('menu-maintenance').classList.add('hidden');
                 document.getElementById('menu-process-po').classList.add('hidden');
+                document.getElementById('menu-process-inbound').classList.add('hidden');
                 // Buka PO submenu otomatis
                 document.getElementById('po-sub').classList.remove('hidden');
                 document.getElementById('arrow-po').textContent = '▲';
@@ -386,6 +401,7 @@
                 document.getElementById('menu-maintenance').classList.add('hidden');
                 document.getElementById('menu-po').classList.add('hidden');
                 document.getElementById('menu-process-po').classList.remove('hidden');
+                document.getElementById('menu-process-inbound').classList.remove('hidden');
                 navTo('Process PO');
 
                 // Tampilkan tombol notifikasi & load data Open
@@ -395,6 +411,7 @@
             } else {
                 // ADMIN: semua menu tampil termasuk Process PO
                 document.getElementById('menu-process-po').classList.remove('hidden');
+                document.getElementById('menu-process-inbound').classList.remove('hidden');
                 navTo('Dashboard');
             }
         }
@@ -422,6 +439,7 @@
             document.getElementById('menu-maintenance').classList.remove('hidden');
             document.getElementById('menu-po').classList.remove('hidden');
             document.getElementById('menu-process-po').classList.remove('hidden');
+            document.getElementById('menu-process-inbound').classList.remove('hidden');
 
             // Reset badge dan label role
             const roleBadge = document.getElementById('user-role-badge');
@@ -668,6 +686,10 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Process PO" hanya dapat diakses oleh Team Warehouse dan Admin.');
                 return;
             }
+            if (pageName === 'Process Inbound' && currentUserRole === 'PO_User') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Process Inbound" hanya dapat diakses oleh Team Warehouse dan Admin.');
+                return;
+            }
             const titles = {
                 'Dashboard': 'Dashboard',
                 'Stock Master': 'Stock Master',
@@ -677,7 +699,8 @@
                 'Report Maintenance': 'Report Maintenance',
                 'Purchase Order': 'Form Purchase Order',
                 'Report Status': 'Report Status PO',
-                'Process PO': 'Proses PO Masuk'
+                'Process PO': 'Proses PO Masuk',
+                'Process Inbound': 'Process Inbound'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -700,6 +723,7 @@
                 case 'Purchase Order': await showFormPO(); break;
                 case 'Report Status': await showReportStatus(); break;
                 case 'Process PO': await showProcessPO(); break;
+                case 'Process Inbound': await showProcessInbound(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -1962,6 +1986,351 @@
             input.focus();
         }
 
+
+        // =========================================================================
+        // HALAMAN: PROCESS INBOUND
+        // =========================================================================
+        const INBOUND_CATEGORY_OPTIONS = ['Event', 'Outlet', 'B2B', 'B2C', 'KOL', 'Need Repair', 'Box Damaged'];
+        const INBOUND_CREW_OPTIONS = ['Adam', 'Rizal', 'Helmi', 'Raka'];
+
+        async function showProcessInbound() {
+            const today = new Date().toISOString().split('T')[0];
+            const categoryOpts = INBOUND_CATEGORY_OPTIONS.map(c => `<option value="${c}">${c}</option>`).join('');
+            const crewOpts = INBOUND_CREW_OPTIONS.map(c => `<option value="${c}">${c}</option>`).join('');
+
+            document.getElementById('content-area').innerHTML = `
+        <h1 class="text-2xl font-bold text-gray-700 mb-6">Process Inbound</h1>
+
+        <!-- Baris 1: Tanggal Inbound, Ex Lokasi -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">TANGGAL INBOUND</label>
+                <input type="date" id="inb-tanggal" max="${today}"
+                    class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                    value="${today}" onchange="validateInboundDate(this)">
+                <p id="inb-tanggal-error" class="text-xs text-red-500 mt-1 hidden">Tanggal tidak boleh lebih dari hari ini.</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">EX LOKASI</label>
+                <input type="text" id="inb-ex-lokasi" placeholder="Masukkan Ex Lokasi"
+                    class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none">
+            </div>
+        </div>
+
+        <!-- Baris 2: Crew, Kategori -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">CREW</label>
+                <select id="inb-crew" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
+                    <option value="">— Pilih Crew —</option>
+                    ${crewOpts}
+                </select>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">KATEGORI</label>
+                <select id="inb-category" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
+                    <option value="">— Pilih Kategori —</option>
+                    ${categoryOpts}
+                </select>
+            </div>
+        </div>
+
+        <!-- Scan QR Code -->
+        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-6">
+            <label class="block text-xs font-bold text-gray-500 mb-2">SCAN QR CODE BARANG</label>
+            <div class="flex flex-col gap-3">
+                <div id="inb-qr-reader-container" class="hidden">
+                    <div id="inb-qr-reader" class="w-full max-w-sm mx-auto"></div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="inb-scan-btn" onclick="toggleInboundScanner()"
+                        class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/>
+                        </svg>
+                        Scan QR Code
+                    </button>
+                </div>
+                <p id="inb-scan-status" class="text-xs text-gray-400"></p>
+            </div>
+        </div>
+
+        <!-- Tabel Detail Inbound -->
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200">
+            <h2 class="text-sm font-bold text-gray-700 mb-3">Detail Inbound</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-gray-800 text-white">
+                            <th class="p-2 text-left rounded-tl-lg">Nama Barang</th>
+                            <th class="p-2 text-center">Qty</th>
+                            <th class="p-2 text-left">Serial Number</th>
+                            <th class="p-2 text-left">Remark</th>
+                            <th class="p-2 text-center rounded-tr-lg">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inb-table-body">
+                        <tr data-placeholder>
+                            <td colspan="5" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 flex items-center justify-between gap-3">
+                <button onclick="tambahBarisInbound()" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-xs transition shadow-sm">
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    Tambah Baris
+                </button>
+            </div>
+            <div class="mt-4">
+                <button onclick="prosesInbound()"
+                    class="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold text-sm transition shadow-md">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Proses Inbound
+                </button>
+            </div>
+        </div>`;
+
+            preloadSourceItems();
+        }
+
+        /** Validasi tanggal inbound tidak boleh lebih dari hari ini */
+        function validateInboundDate(input) {
+            const errEl = document.getElementById('inb-tanggal-error');
+            const today = new Date().toISOString().split('T')[0];
+            if (input.value > today) {
+                input.value = today;
+                if (errEl) errEl.classList.remove('hidden');
+                setTimeout(() => { if (errEl) errEl.classList.add('hidden'); }, 2500);
+            } else {
+                if (errEl) errEl.classList.add('hidden');
+            }
+        }
+
+        /** Tambah baris kosong ke tabel Detail Inbound, dengan autocomplete Nama Barang */
+        function tambahBarisInbound(prefillName = '') {
+            const tbody = document.getElementById('inb-table-body');
+            if (!tbody) return;
+            const placeholder = tbody.querySelector('tr[data-placeholder]');
+            if (placeholder) placeholder.remove();
+
+            const bg = tbody.querySelectorAll('tr').length % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            const tr = document.createElement('tr');
+            tr.className = `${bg} border-b border-gray-100`;
+            tr.innerHTML = `
+                <td class="p-2 font-medium relative">
+                    <div class="relative">
+                        <input type="text" value="${prefillName.replace(/"/g, '&quot;')}"
+                            class="nama-barang-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                            placeholder="Ketik nama barang..." autocomplete="off">
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
+                    </div>
+                </td>
+                <td class="p-2 text-center"><input type="number" min="0" value="1" class="qty-input w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
+                <td class="p-2"><input type="text" class="serial-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number"></td>
+                <td class="p-2"><input type="text" class="remark-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Remark"></td>
+                <td class="p-2 text-center"><button onclick="hapusBarisInbound(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>`;
+
+            tbody.appendChild(tr);
+
+            const input = tr.querySelector('.nama-barang-input');
+            const list = tr.querySelector('.autocomplete-list');
+
+            function renderList(filtered) {
+                list.innerHTML = '';
+                if (filtered.length === 0) { list.classList.add('hidden'); return; }
+                filtered.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    li.className = 'px-3 py-2 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition';
+                    li.onmousedown = (e) => { e.preventDefault(); input.value = item; list.classList.add('hidden'); };
+                    list.appendChild(li);
+                });
+                list.classList.remove('hidden');
+            }
+
+            input.addEventListener('input', async () => {
+                const q = input.value.trim().toLowerCase();
+                if (!q) { list.classList.add('hidden'); return; }
+                const items = await getSourceItems();
+                renderList(items.filter(i => i.toLowerCase().includes(q)).slice(0, 20));
+            });
+            input.addEventListener('focus', async () => {
+                const q = input.value.trim().toLowerCase();
+                if (!q) return;
+                const items = await getSourceItems();
+                renderList(items.filter(i => i.toLowerCase().includes(q)).slice(0, 20));
+            });
+            input.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 150));
+
+            if (!prefillName) input.focus();
+            return tr;
+        }
+
+        function hapusBarisInbound(btn) {
+            const row = btn.closest('tr'); if (!row) return;
+            row.style.transition = 'opacity 0.2s, transform 0.2s';
+            row.style.opacity = '0'; row.style.transform = 'translateX(10px)';
+            setTimeout(() => {
+                row.remove();
+                const tbody = document.getElementById('inb-table-body');
+                if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                    tbody.innerHTML = `<tr data-placeholder><td colspan="5" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>`;
+                }
+            }, 200);
+        }
+
+        // =========================================================================
+        // SCAN QR CODE (html5-qrcode)
+        // =========================================================================
+        let _inboundHtml5QrCode = null;
+        let _inboundScannerActive = false;
+
+        async function toggleInboundScanner() {
+            const container = document.getElementById('inb-qr-reader-container');
+            const btn = document.getElementById('inb-scan-btn');
+            const statusEl = document.getElementById('inb-scan-status');
+
+            if (_inboundScannerActive) {
+                try { await _inboundHtml5QrCode.stop(); _inboundHtml5QrCode.clear(); } catch (_) { }
+                _inboundScannerActive = false;
+                container.classList.add('hidden');
+                btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/></svg> Scan QR Code`;
+                if (statusEl) statusEl.textContent = '';
+                return;
+            }
+
+            container.classList.remove('hidden');
+            statusEl.textContent = 'Mengaktifkan kamera...';
+            statusEl.className = 'text-xs text-blue-500';
+
+            try {
+                _inboundHtml5QrCode = new Html5Qrcode('inb-qr-reader');
+                await _inboundHtml5QrCode.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: 220 },
+                    onInboundQrScanSuccess,
+                    () => { /* ignore per-frame errors */ }
+                );
+                _inboundScannerActive = true;
+                btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Tutup Scanner`;
+                statusEl.textContent = 'Arahkan kamera ke QR Code barang.';
+                statusEl.className = 'text-xs text-gray-400';
+            } catch (err) {
+                statusEl.textContent = '❌ Gagal mengaktifkan kamera: ' + err.message;
+                statusEl.className = 'text-xs text-red-500';
+                container.classList.add('hidden');
+            }
+        }
+
+        /** Callback ketika QR code berhasil di-scan: cocokkan ke Source Items lalu isi ke tabel */
+        async function onInboundQrScanSuccess(decodedText) {
+            const statusEl = document.getElementById('inb-scan-status');
+            const items = await getSourceItems();
+
+            const raw = decodedText.trim();
+            // Cocokkan: exact match dulu, lalu partial/contains
+            let matched = items.find(i => i.toLowerCase() === raw.toLowerCase());
+            if (!matched) matched = items.find(i => i.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(i.toLowerCase()));
+
+            const namaBarang = matched || raw;
+            tambahBarisInbound(namaBarang);
+
+            if (statusEl) {
+                statusEl.textContent = matched
+                    ? `✅ Terdeteksi: "${namaBarang}" — ditambahkan ke tabel.`
+                    : `⚠️ "${raw}" tidak ditemukan di daftar item, ditambahkan apa adanya.`;
+                statusEl.className = matched ? 'text-xs text-green-600' : 'text-xs text-amber-600';
+            }
+        }
+
+        // =========================================================================
+        // PROSES INBOUND → KIRIM KE SPREADSHEET
+        // =========================================================================
+        async function prosesInbound() {
+            const tanggal = document.getElementById('inb-tanggal')?.value || '';
+            const exLokasi = document.getElementById('inb-ex-lokasi')?.value?.trim() || '';
+            const crew = document.getElementById('inb-crew')?.value || '';
+            const category = document.getElementById('inb-category')?.value || '';
+
+            // ── Validasi ──
+            const today = new Date().toISOString().split('T')[0];
+            if (!tanggal) { showAlert('warning', 'Data Belum Lengkap', 'Tanggal Inbound belum diisi.'); return; }
+            if (tanggal > today) { showAlert('warning', 'Tanggal Tidak Valid', 'Tanggal Inbound tidak boleh lebih dari hari ini.'); return; }
+            if (!exLokasi) { showAlert('warning', 'Data Belum Lengkap', 'Ex Lokasi belum diisi.'); return; }
+            if (!crew) { showAlert('warning', 'Data Belum Lengkap', 'Crew belum dipilih.'); return; }
+            if (!category) { showAlert('warning', 'Data Belum Lengkap', 'Kategori belum dipilih.'); return; }
+
+            const rows = document.querySelectorAll('#inb-table-body tr');
+            const items = [];
+            rows.forEach(row => {
+                if (row.hasAttribute('data-placeholder')) return;
+                const namaInput = row.querySelector('.nama-barang-input');
+                const qtyInput = row.querySelector('.qty-input');
+                const serialInput = row.querySelector('.serial-input');
+                const remarkInput = row.querySelector('.remark-input');
+                const nama = namaInput ? namaInput.value.trim() : '';
+                if (!nama) return;
+                items.push({
+                    namaBarang: nama,
+                    qty: qtyInput ? qtyInput.value : '',
+                    serialNumber: serialInput ? serialInput.value.trim() : '',
+                    remark: remarkInput ? remarkInput.value.trim() : '',
+                });
+            });
+
+            if (items.length === 0) {
+                showAlert('warning', 'Tabel Kosong', 'Tambahkan minimal 1 barang pada Detail Inbound.');
+                return;
+            }
+
+            const ok = await showConfirm('Proses Inbound?', `${items.length} item akan disimpan ke spreadsheet Inbound.`);
+            if (!ok) return;
+
+            const btn = document.querySelector('button[onclick="prosesInbound()"]');
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Menyimpan...`;
+            }
+
+            const payload = {
+                action: 'simpanInbound',
+                tanggalProses: tanggal,
+                crew: crew,
+                exLocation: exLokasi,
+                category: category,
+                items: items
+            };
+
+            try {
+                const response = await fetch(INBOUND_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('success', '✅ Berhasil Diproses!', `Data inbound (${items.length} item) tersimpan ke spreadsheet.`);
+                    // Reset form
+                    document.getElementById('inb-ex-lokasi').value = '';
+                    document.getElementById('inb-crew').value = '';
+                    document.getElementById('inb-category').value = '';
+                    document.getElementById('inb-tanggal').value = today;
+                    document.getElementById('inb-table-body').innerHTML =
+                        '<tr data-placeholder><td colspan="5" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>';
+                } else {
+                    showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
+                }
+            } catch (err) {
+                showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
+            }
+        }
 
         // =========================================================================
         // HALAMAN: REPORT STATUS PO
