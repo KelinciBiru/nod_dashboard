@@ -12,6 +12,7 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.4.4/qrcode.min.js"></script>
 </head>
 
 <body class="font-sans text-gray-800 bg-gray-50">
@@ -2585,6 +2586,12 @@
                 if (doLabel) doLabel.textContent = 'Delivery Order';
             };
 
+            // ── Generate QR Code (berisi seluruh isi Delivery Order) ──
+            const doQR = await generateDOQRCodeDataURL({
+                noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items
+            });
+
+
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
             const pageWidth = doc.internal.pageSize.getWidth();
@@ -2727,6 +2734,28 @@
                 doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
             });
 
+            // ── QR Code (kanan bawah halaman) — berisi seluruh isi Delivery Order ──
+            if (doQR && doQR.dataUrl) {
+                const qrSize = 22;
+                const qrX = pageWidth - marginX - qrSize;
+                const qrY = pageHeight - 30 - 4 - qrSize; // 4mm di atas footer
+                try {
+                    doc.addImage(doQR.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(107, 114, 128);
+                    doc.text('Scan untuk lihat detail lengkap', qrX + qrSize / 2, qrY - 2, { align: 'center' });
+                    if (doQR.truncated) {
+                        doc.setFontSize(5.5);
+                        doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
+                    }
+                } catch (errQr) {
+                    console.error('[DO QR] Gagal menambahkan QR Code ke PDF:', errQr);
+                }
+            } else {
+                console.warn('[DO QR] QR Code tidak dibuat (doQR kosong/null).');
+            }
+
             // ── Footer (background pola gelombang + teks vektor tajam) ──
             const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
 
@@ -2739,6 +2768,79 @@
             const fileName = `Delivery_Order_${noPO || 'PO'}_${tglProses || ''}.pdf`;
             doc.save(fileName);
             resetDoBtn();
+        }
+
+        /**
+         * Susun teks ringkasan SELURUH ISI Delivery Order (header + daftar item)
+         * untuk disimpan ke dalam QR Code. Saat QR ini di-scan, seluruh isi
+         * dokumen akan tampil sebagai teks.
+         */
+        function buildDeliveryOrderQRText({ noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items }) {
+            const lines = [];
+            lines.push('=== DELIVERY ORDER ===');
+            lines.push('No. PO: ' + (noPO || '-'));
+            lines.push('Tanggal Proses PO: ' + formatTanggalIndo(tglProses));
+            lines.push('Crew Packing: ' + (crewPacking || '-'));
+            lines.push('Ordered By: ' + (orderedBy || '-'));
+            lines.push('Ship To: ' + (shipTo || '-'));
+            lines.push('Shipping Date: ' + (shippingDate || '-'));
+            lines.push('');
+            lines.push('=== DAFTAR ITEM ===');
+            items.forEach((it, idx) => {
+                lines.push(
+                    `${idx + 1}. ${it.nama} | Qty: ${it.qty || '-'} | UOM: ${it.uom || '-'} | Desc: ${it.description || '-'}` +
+                    (it.remark ? ` | Remark: ${it.remark}` : '')
+                );
+            });
+            return lines.join('\n');
+        }
+
+        /**
+         * Generate QR Code (PNG data URL) dari sebuah teks menggunakan library
+         * `qrcode`. Jika teks terlalu panjang untuk ditampung QR Code (kapasitas
+         * maksimum Model 2 Versi 40), fungsi ini akan otomatis memotong daftar
+         * item secara bertahap sampai berhasil. Mengembalikan { dataUrl, truncated }
+         * atau null jika library tidak tersedia / gagal total.
+         */
+        async function generateDOQRCodeDataURL(doData) {
+            if (typeof QRCode === 'undefined') {
+                console.warn('[DO QR] Library QRCode tidak termuat — QR Code dilewati.');
+                return null;
+            }
+
+            const qrOptions = {
+                errorCorrectionLevel: 'L',
+                margin: 1,
+                color: { dark: '#111827', light: '#FFFFFF' }
+            };
+
+            let items = doData.items;
+            let truncated = false;
+
+            // Coba dengan seluruh item, lalu kurangi bertahap jika kapasitas tidak cukup
+            while (true) {
+                const text = buildDeliveryOrderQRText({ ...doData, items });
+                try {
+                    const dataUrl = await QRCode.toDataURL(text, qrOptions);
+                    return { dataUrl, truncated };
+                } catch (err) {
+                    // Kapasitas tidak cukup → potong item paling bawah
+                    if (items.length <= 1) {
+                        // Bahkan 1 item pun tidak cukup → kirim ringkasan header saja
+                        try {
+                            const headerOnlyText = buildDeliveryOrderQRText({ ...doData, items: [] }) +
+                                '\n(Daftar item terlalu banyak untuk QR Code,\nlihat dokumen PDF untuk detail lengkap)';
+                            const dataUrl = await QRCode.toDataURL(headerOnlyText, qrOptions);
+                            return { dataUrl, truncated: true };
+                        } catch (err2) {
+                            console.error('[DO QR] Gagal generate QR Code:', err2);
+                            return null;
+                        }
+                    }
+                    items = items.slice(0, items.length - 1);
+                    truncated = true;
+                }
+            }
         }
 
         /** Format tanggal YYYY-MM-DD → DD Bulan YYYY (Indonesia) */
