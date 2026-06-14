@@ -2756,7 +2756,7 @@
          * di atasnya.
          */
         function drawFooterBlock(doc, marginX, pageWidth, pageHeight) {
-            const footerH = 24;
+            const footerH = 30;
             const footerY = pageHeight - footerH;
 
             // ── Background pola gelombang (full-bleed) ──
@@ -2769,7 +2769,7 @@
             doc.setLineWidth(0.3);
             doc.line(marginX, footerY + 5, pageWidth - marginX, footerY + 5);
 
-            const textY = footerY + 11;
+            const textY = footerY + 10;
             const lineH = 4.3;
 
             // ── Kiri: Nama & Alamat Perusahaan ──
