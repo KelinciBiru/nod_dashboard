@@ -260,6 +260,28 @@
                         </div>
                     </div>
 
+                    <!-- Team Delivery -->
+                    <div id="menu-team-delivery">
+                        <button onclick="toggleSubMenu('team-delivery-sub','arrow-team-delivery')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 16V7a1 1 0 011-1h9a1 1 0 011 1v9M3 16h11m0 0h2.586a1 1 0 00.707-.293l2.414-2.414a1 1 0 00.293-.707V11a1 1 0 00-.293-.707l-2.414-2.414A1 1 0 0016.586 7H14m0 9V7m-9 9a2 2 0 104 0 2 2 0 10-4 0zm10 0a2 2 0 104 0 2 2 0 10-4 0z" />
+                                </svg>
+                                <span>Team Delivery</span>
+                            </div>
+                            <span id="arrow-team-delivery" class="text-xs">▼</span>
+                        </button>
+                        <div id="team-delivery-sub" class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button onclick="navTo('Route')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Route</button>
+                            <button onclick="navTo('Report Finish')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report Finish</button>
+                        </div>
+                    </div>
+
                     <!-- [TAMBAH MENU BARU DI SINI] -->
                     <!-- Process Inbound Baru -->
                     <button id="menu-process-inbound" onclick="navTo('Process Inbound')"
@@ -355,6 +377,9 @@
             } else if (pass === 'warehouse123') {
                 currentUserRole = 'WAREHOUSE';
                 startApp();
+            } else if (pass === 'driver123') {
+                currentUserRole = 'DRIVER';
+                startApp();
             } else {
                 error.classList.remove('hidden');
                 return;
@@ -379,6 +404,9 @@
             } else if (currentUserRole === 'WAREHOUSE') {
                 if (roleLabel) roleLabel.textContent = 'Team Warehouse';
                 if (roleBadge) { roleBadge.textContent = 'Warehouse'; roleBadge.classList.remove('hidden'); }
+            } else if (currentUserRole === 'DRIVER') {
+                if (roleLabel) roleLabel.textContent = 'Team Delivery (Driver)';
+                if (roleBadge) { roleBadge.textContent = 'Driver'; roleBadge.classList.remove('hidden'); }
             } else {
                 if (roleLabel) roleLabel.textContent = 'PO User';
                 if (roleBadge) { roleBadge.textContent = 'PO User'; roleBadge.classList.remove('hidden'); }
@@ -397,6 +425,7 @@
                 document.getElementById('menu-maintenance').classList.add('hidden');
                 document.getElementById('menu-process-po').classList.add('hidden');
                 document.getElementById('menu-process-inbound').classList.add('hidden');
+                document.getElementById('menu-team-delivery').classList.add('hidden');
                 // Buka PO submenu otomatis
                 document.getElementById('po-sub').classList.remove('hidden');
                 document.getElementById('arrow-po').textContent = '▲';
@@ -414,16 +443,31 @@
                 document.getElementById('menu-po').classList.add('hidden');
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
+                document.getElementById('menu-team-delivery').classList.add('hidden');
                 navTo('Process PO');
 
                 // Tampilkan tombol notifikasi & load data Open
                 const bellBtn2 = document.getElementById('notif-bell-btn');
                 if (bellBtn2) bellBtn2.classList.remove('hidden');
                 loadNotifReadyToShip();
+            } else if (currentUserRole === 'DRIVER') {
+                // Team Delivery (Driver): hanya tampilkan menu Team Delivery
+                document.getElementById('menu-inventory').classList.add('hidden');
+                document.getElementById('menu-plan-task').classList.add('hidden');
+                document.getElementById('menu-maintenance').classList.add('hidden');
+                document.getElementById('menu-po').classList.add('hidden');
+                document.getElementById('menu-process-po').classList.add('hidden');
+                document.getElementById('menu-process-inbound').classList.add('hidden');
+                document.getElementById('menu-team-delivery').classList.remove('hidden');
+                // Buka submenu Team Delivery otomatis
+                document.getElementById('team-delivery-sub').classList.remove('hidden');
+                document.getElementById('arrow-team-delivery').textContent = '▲';
+                navTo('Route');
             } else {
-                // ADMIN: semua menu tampil termasuk Process PO
+                // ADMIN: semua menu tampil termasuk Process PO & Team Delivery
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
+                document.getElementById('menu-team-delivery').classList.remove('hidden');
                 navTo('Dashboard');
             }
         }
@@ -452,6 +496,7 @@
             document.getElementById('menu-po').classList.remove('hidden');
             document.getElementById('menu-process-po').classList.remove('hidden');
             document.getElementById('menu-process-inbound').classList.remove('hidden');
+            document.getElementById('menu-team-delivery').classList.remove('hidden');
 
             // Reset badge dan label role
             const roleBadge = document.getElementById('user-role-badge');
@@ -472,6 +517,10 @@
             // Reset po-sub
             document.getElementById('po-sub').classList.add('hidden');
             document.getElementById('arrow-po').textContent = '▼';
+
+            // Reset team-delivery-sub
+            document.getElementById('team-delivery-sub').classList.add('hidden');
+            document.getElementById('arrow-team-delivery').textContent = '▼';
 
             // Reset konten area
             document.getElementById('content-area').innerHTML =
@@ -702,6 +751,12 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Process Inbound" hanya dapat diakses oleh Team Warehouse dan Admin.');
                 return;
             }
+            // ── AKSES KONTROL: Team Delivery hanya untuk ADMIN dan DRIVER ──
+            if ((pageName === 'Route' || pageName === 'Report Finish') &&
+                !(currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER')) {
+                showAlert('error', 'Akses Ditolak', 'Menu "Team Delivery" hanya dapat diakses oleh Admin dan Driver.');
+                return;
+            }
             const titles = {
                 'Dashboard': 'Dashboard',
                 'Stock Master': 'Stock Master',
@@ -712,7 +767,9 @@
                 'Purchase Order': 'Form Purchase Order',
                 'Report Status': 'Report Status PO',
                 'Process PO': 'Proses PO Masuk',
-                'Process Inbound': 'Process Inbound'
+                'Process Inbound': 'Process Inbound',
+                'Route': 'Team Delivery - Route',
+                'Report Finish': 'Team Delivery - Report Finish'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -724,6 +781,8 @@
         }
 
         async function showPage(pageName) {
+            // Hentikan kamera QR jika sedang aktif
+            if (typeof stopQRCamera === 'function') stopQRCamera();
 
             switch (pageName) {
                 case 'Dashboard': showDashboard(); break;
@@ -736,6 +795,8 @@
                 case 'Report Status': await showReportStatus(); break;
                 case 'Process PO': await showProcessPO(); break;
                 case 'Process Inbound': await showProcessInbound(); break;
+                case 'Route': await showTeamDeliveryRoute(); break;
+                case 'Report Finish': await showTeamDeliveryReportFinish(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -752,6 +813,830 @@
             <img src="https://lh3.googleusercontent.com/d/19epa7IlpjqaS0f7F_WEgDZSwhriLpikp"
                  alt="Dashboard Image"
                  class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">`;
+        }
+
+        // =========================================================================
+        // HALAMAN: TEAM DELIVERY → ROUTE
+        // Akses: ADMIN & DRIVER
+        // =========================================================================
+        const DELIVERY_GAS_URL = PO_GAS_URL; // Gunakan GAS yang sama (akan handle action deliveryDone)
+
+        async function showTeamDeliveryRoute() {
+            const contentArea = document.getElementById('content-area');
+            contentArea.innerHTML = `
+            <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Route</h1>
+            <p class="text-sm text-gray-500 mb-6">Scan QR Code dari lembar Request Order untuk mengisi data pengantaran secara otomatis.</p>
+
+            <!-- Panel Scan QR -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-5">
+                <h2 class="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
+                    <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                    Scan QR Code Request Order
+                </h2>
+
+                <!-- Tombol Scan Kamera — utama & menonjol -->
+                <button onclick="startQRCamera()"
+                    class="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold py-4 rounded-xl shadow-md transition text-base mb-4">
+                    <svg class="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    Buka Kamera &amp; Scan QR Code
+                </button>
+
+                <p id="do-scan-status" class="text-xs text-center text-gray-400 mb-4 italic">Tekan tombol di atas untuk membuka kamera dan scan QR Code dari lembar Request Order</p>
+
+                <!-- Divider -->
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="flex-1 h-px bg-gray-200"></div>
+                    <span class="text-xs text-gray-400 font-medium">atau</span>
+                    <div class="flex-1 h-px bg-gray-200"></div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-4 items-start">
+                    <!-- Upload PDF -->
+                    <div class="flex-1">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Upload File PDF Delivery Order</label>
+                        <div class="flex gap-2 items-center">
+                            <input type="file" id="do-pdf-file" accept="application/pdf"
+                                class="block w-full text-xs text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 border border-gray-200 rounded-lg cursor-pointer" />
+                            <button onclick="scanDOPdf()"
+                                class="whitespace-nowrap px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                Import
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Input manual No. PO -->
+                    <div class="sm:w-56">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Input No. PO Manual</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="do-manual-po" placeholder="Contoh: OT-001"
+                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                            <button onclick="loadDOByPO()"
+                                class="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold rounded-lg transition">
+                                Cari
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Data Delivery -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-5">
+                <h2 class="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
+                    <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    Data Delivery Order
+                </h2>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- No. PO -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">No. PO <span class="text-red-500">*</span></label>
+                        <input type="text" id="do-no-po" placeholder="Otomatis dari scan / isi manual"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-amber-50" readonly />
+                    </div>
+
+                    <!-- Ordered By -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Ordered By <span class="text-red-500">*</span></label>
+                        <input type="text" id="do-ordered-by" placeholder="Nama pemesan"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    </div>
+
+                    <!-- Ship To -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Ship To <span class="text-red-500">*</span></label>
+                        <input type="text" id="do-ship-to" placeholder="Tujuan pengiriman"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    </div>
+
+                    <!-- Shipping Date -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Shipping Date <span class="text-red-500">*</span></label>
+                        <input type="date" id="do-shipping-date"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    </div>
+
+                    <!-- Alamat -->
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Alamat <span class="text-red-500">*</span></label>
+                        <textarea id="do-alamat" rows="2" placeholder="Alamat lengkap tujuan pengiriman"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"></textarea>
+                    </div>
+
+                    <!-- Phone -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Phone <span class="text-red-500">*</span></label>
+                        <input type="text" id="do-phone" placeholder="Nomor telepon tujuan"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    </div>
+
+                    <!-- Tanggal Proses (otomatis) -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Konfirmasi</label>
+                        <input type="date" id="do-tgl-konfirmasi"
+                            value="${new Date().toISOString().split('T')[0]}"
+                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tombol Done -->
+            <div class="flex justify-end">
+                <button onclick="submitDeliveryDone()"
+                    class="flex items-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow transition text-sm">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Done
+                </button>
+            </div>`;
+        }
+
+        // =========================================================================
+        // SCAN QR VIA KAMERA — Modal permanen di body, bukan di innerHTML
+        // =========================================================================
+        let _qrStream     = null;
+        let _qrRAF        = null;
+        let _qrFacingBack = true;
+
+        async function startQRCamera(forceBack) {
+            if (typeof forceBack === 'boolean') _qrFacingBack = forceBack;
+
+            const modal     = document.getElementById('qr-camera-modal');
+            const video     = document.getElementById('qr-video');
+            const camStat   = document.getElementById('qr-cam-status');
+            const switchBtn = document.getElementById('qr-switch-btn');
+
+            if (!modal || !video) {
+                alert('Error: Elemen kamera tidak ditemukan. Silakan refresh halaman.');
+                return;
+            }
+
+            // Tampilkan modal dulu
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+
+            // Hentikan stream lama
+            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+            if (_qrRAF)    { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+
+            // Set status awal
+            if (camStat) camStat.innerHTML = `<span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">⏳ Memuat...</span>`;
+
+            // Muat jsQR jika belum ada
+            if (typeof jsQR === 'undefined') {
+                await new Promise((res, rej) => {
+                    const s = document.createElement('script');
+                    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
+                    s.onload = res;
+                    s.onerror = () => rej(new Error('Gagal memuat library jsQR'));
+                    document.head.appendChild(s);
+                }).catch(err => { throw err; });
+            }
+
+            if (camStat) camStat.innerHTML = `<span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">⏳ Membuka kamera...</span>`;
+
+            try {
+                // Coba kamera environment (belakang) atau user (depan/webcam)
+                const preferred = _qrFacingBack ? 'environment' : 'user';
+                try {
+                    _qrStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: preferred }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                    });
+                } catch (_) {
+                    // Fallback: kamera apapun
+                    _qrStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                }
+
+                video.srcObject = _qrStream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    _tickQR();
+                    if (camStat) camStat.innerHTML = `<span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">📷 Arahkan ke QR Code...</span>`;
+                };
+
+                // Tampilkan tombol ganti kamera jika >1 kamera
+                if (switchBtn) {
+                    try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        const count   = devices.filter(d => d.kind === 'videoinput').length;
+                        switchBtn.classList.toggle('hidden', count < 2);
+                    } catch (_) { switchBtn.classList.add('hidden'); }
+                }
+
+            } catch (err) {
+                if (camStat) camStat.innerHTML =
+                    `<span class="bg-red-700/90 text-white text-xs px-3 py-1.5 rounded-full">❌ ${err.message}</span>`;
+            }
+        }
+
+        function switchQRCamera() {
+            _qrFacingBack = !_qrFacingBack;
+            startQRCamera(_qrFacingBack);
+        }
+
+        function _tickQR() {
+            const video  = document.getElementById('qr-video');
+            const canvas = document.getElementById('qr-canvas');
+            if (!video || !canvas) return;
+
+            if (video.readyState >= 2 && video.videoWidth > 0) {
+                canvas.width  = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                try {
+                    const code = jsQR(imgData.data, imgData.width, imgData.height, {
+                        inversionAttempts: 'dontInvert'
+                    });
+                    if (code && code.data && code.data.trim().length > 0) {
+                        stopQRCamera();
+                        _handleQRResult(code.data.trim());
+                        return;
+                    }
+                } catch (_) { /* jsQR belum siap, lanjut */ }
+            }
+            _qrRAF = requestAnimationFrame(_tickQR);
+        }
+
+        function stopQRCamera() {
+            if (_qrRAF)    { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+            const modal = document.getElementById('qr-camera-modal');
+            const video = document.getElementById('qr-video');
+            if (modal) modal.classList.add('hidden');
+            if (video) { video.pause(); video.srcObject = null; }
+            document.body.style.overflow = '';
+        }
+
+        /**
+         * Proses hasil teks QR Code dari Request Order NOD.
+         * Format QR:
+         *   === REQUEST ORDER ===
+         *   No. PO: OT-15062026-1
+         *   Tanggal: 14 Juni 2026
+         *   Ordered By: Herfian Juliansyah
+         *   Phone: 081212345678
+         *   Kategori: Outlet
+         *   Ship To: NOD Astha
+         *   Alamat: Jl. Panjang Arteri ...
+         *   Shipping Date: 16 Juni 2026
+         */
+        // =========================================================================
+        // SCAN SUCCESS — Bunyi beep + pop-up toast
+        // =========================================================================
+
+        /** Bunyi beep sukses via Web Audio API (tidak perlu file audio eksternal) */
+        function playScanBeep() {
+            try {
+                const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+                const gain = ctx.createGain();
+                gain.connect(ctx.destination);
+
+                // Beep pertama — nada tinggi
+                const o1 = ctx.createOscillator();
+                o1.type = 'sine';
+                o1.frequency.setValueAtTime(1046, ctx.currentTime);          // C6
+                o1.frequency.setValueAtTime(1318, ctx.currentTime + 0.08);   // E6
+                gain.gain.setValueAtTime(0.35, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+                o1.connect(gain);
+                o1.start(ctx.currentTime);
+                o1.stop(ctx.currentTime + 0.22);
+
+                // Beep kedua — sedikit lebih tinggi (konfirmasi)
+                const gain2 = ctx.createGain();
+                gain2.connect(ctx.destination);
+                const o2 = ctx.createOscillator();
+                o2.type = 'sine';
+                o2.frequency.setValueAtTime(1568, ctx.currentTime + 0.15);   // G6
+                gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.15);
+                gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
+                o2.connect(gain2);
+                o2.start(ctx.currentTime + 0.15);
+                o2.stop(ctx.currentTime + 0.38);
+
+                setTimeout(() => ctx.close(), 600);
+            } catch (_) { /* browser tidak mendukung Web Audio */ }
+        }
+
+        /**
+         * Tampilkan pop-up toast sukses di tengah layar.
+         * @param {string} title   — Judul toast
+         * @param {string} message — Isi pesan singkat
+         */
+        function showScanSuccessToast(title, message) {
+            // Hapus toast lama jika masih ada
+            const old = document.getElementById('scan-success-toast');
+            if (old) old.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'scan-success-toast';
+            toast.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) scale(0.85);
+                z-index: 99999;
+                background: #fff;
+                border-radius: 20px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 4px 16px rgba(0,0,0,0.12);
+                padding: 28px 36px;
+                text-align: center;
+                min-width: 240px;
+                max-width: 320px;
+                opacity: 0;
+                transition: opacity 0.2s ease, transform 0.2s ease;
+                pointer-events: none;
+            `;
+            toast.innerHTML = `
+                <div style="
+                    width: 60px; height: 60px;
+                    background: linear-gradient(135deg, #f59e0b, #d97706);
+                    border-radius: 50%;
+                    display: flex; align-items: center; justify-content: center;
+                    margin: 0 auto 14px;
+                    box-shadow: 0 4px 16px rgba(245,158,11,0.4);
+                ">
+                    <svg width="30" height="30" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div style="font-size:16px; font-weight:700; color:#1f2937; margin-bottom:6px;">${title}</div>
+                <div style="font-size:13px; color:#6b7280; line-height:1.5;">${message}</div>
+            `;
+
+            document.body.appendChild(toast);
+
+            // Animasi masuk
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    toast.style.opacity = '1';
+                    toast.style.transform = 'translate(-50%, -50%) scale(1)';
+                });
+            });
+
+            // Animasi keluar & hapus
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, -50%) scale(0.85)';
+                setTimeout(() => toast.remove(), 250);
+            }, 2000);
+        }
+
+        function _handleQRResult(raw) {
+            const statusEl = document.getElementById('do-scan-status');
+
+            // Parse baris per baris
+            const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+            const get = (key) => {
+                for (const ln of lines) {
+                    const re = new RegExp('^' + key + '\\s*[:\\-]\\s*(.+)$', 'i');
+                    const m = ln.match(re);
+                    if (m) return m[1].trim();
+                }
+                return '';
+            };
+
+            const noPO         = get('No\\.?\\s*PO');
+            const orderedBy    = get('Ordered By');
+            const shipTo       = get('Ship To');
+            const alamat       = get('Alamat');
+            const phone        = get('Phone').replace(/\s+/g,'');
+            const shippingRaw  = get('Shipping Date');
+            const shippingDate = _parseShippingDateToInput(shippingRaw);
+
+            // Isi form
+            const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+            set('do-no-po',        noPO);
+            set('do-ordered-by',   orderedBy);
+            set('do-ship-to',      shipTo);
+            set('do-alamat',       alamat);
+            set('do-phone',        phone);
+            set('do-shipping-date', shippingDate);
+
+            const filled = [noPO, orderedBy, shipTo, alamat, shippingDate].filter(Boolean).length;
+            if (filled > 0) {
+                // ✅ Bunyi + pop-up sukses
+                playScanBeep();
+                showScanSuccessToast(
+                    'QR Code Terbaca!',
+                    `No. PO: <strong>${noPO || '-'}</strong><br>${shipTo || orderedBy || ''}`
+                );
+                if (statusEl) {
+                    statusEl.textContent = `✅ QR berhasil — ${filled} field terisi otomatis.`;
+                    statusEl.className   = 'text-xs text-center text-green-600 mb-4 font-semibold';
+                }
+            } else {
+                if (statusEl) {
+                    statusEl.textContent = '⚠️ QR terbaca tapi tidak ada data yang cocok. Isi manual.';
+                    statusEl.className   = 'text-xs text-center text-orange-500 mb-4 italic';
+                }
+            }
+        }
+
+        /**
+         * Konversi "16 Juni 2026" → "2026-06-16" untuk input type=date.
+         * Juga menangani format dd/mm/yyyy dan yyyy-mm-dd.
+         */
+        function _parseShippingDateToInput(raw) {
+            if (!raw) return '';
+            const BULAN = { januari:1,februari:2,maret:3,april:4,mei:5,juni:6,juli:7,agustus:8,september:9,oktober:10,november:11,desember:12,
+                            january:1,february:2,march:3,may:5,june:6,july:7,august:8,october:10,december:12 };
+            // "16 Juni 2026"
+            const m1 = raw.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+            if (m1) {
+                const mon = BULAN[m1[2].toLowerCase()];
+                if (mon) return `${m1[3]}-${String(mon).padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+            }
+            // "2026-06-16"
+            if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+            // "16/06/2026" or "16-06-2026"
+            const m2 = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+            if (m2) return `${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
+            return '';
+        }
+
+        // ─── SCAN PDF Delivery Order / Request Order (koordinat-aware) ───────────
+        async function scanDOPdf() {
+            const fileInput = document.getElementById('do-pdf-file');
+            const statusEl  = document.getElementById('do-scan-status');
+            if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+                showAlert('warning', 'File Belum Dipilih', 'Pilih file PDF Request Order terlebih dahulu.');
+                return;
+            }
+
+            statusEl.textContent = '⏳ Membaca PDF...';
+            statusEl.className = 'text-xs text-center text-amber-500 mb-4 italic';
+
+            try {
+                const file        = fileInput.files[0];
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf         = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                // Kumpulkan semua token dengan posisi X,Y dari seluruh halaman
+                const allTokens = [];   // { str, x, y }
+                for (let p = 1; p <= pdf.numPages; p++) {
+                    const page = await pdf.getPage(p);
+                    const tc   = await page.getTextContent();
+                    const vp   = page.getViewport({ scale: 1 });
+                    for (const item of tc.items) {
+                        if (!item.str || !item.str.trim()) continue;
+                        allTokens.push({
+                            str: item.str.trim(),
+                            x  : Math.round(item.transform[4]),
+                            y  : Math.round(vp.height - item.transform[5])  // flip Y → top-down
+                        });
+                    }
+                }
+
+                const parsed = parseDOFromTokens(allTokens);
+
+                const setField = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el && val) el.value = val;
+                };
+                setField('do-no-po',         parsed.noPO);
+                setField('do-ordered-by',    parsed.orderedBy);
+                setField('do-ship-to',       parsed.shipTo);
+                setField('do-shipping-date', parsed.shippingDate);
+                setField('do-alamat',        parsed.alamat);
+                setField('do-phone',         parsed.phone);
+
+                const filled = Object.values(parsed).filter(Boolean).length;
+                statusEl.textContent = filled > 0
+                    ? `✅ Berhasil membaca ${filled} field dari PDF.`
+                    : '⚠️ Tidak ada data yang terbaca. Coba scan QR Code atau isi manual.';
+                statusEl.className = filled > 0
+                    ? 'text-xs text-center text-green-600 mb-4 font-semibold'
+                    : 'text-xs text-center text-orange-500 mb-4 italic';
+
+            } catch (err) {
+                statusEl.textContent = '❌ Gagal membaca PDF: ' + err.message;
+                statusEl.className   = 'text-xs text-center text-red-500 mb-4';
+            }
+        }
+
+        /**
+         * Parser utama berbasis koordinat X,Y — disesuaikan dengan struktur
+         * token PDF Request Order NOD yang SESUNGGUHNYA:
+         *
+         * Struktur token PDF:
+         *   y= 94  x= 40   | 'Tanggal'            y= 94  x=119  | ': 14 Juni 2026'
+         *   y=111  x= 40   | 'No. PO'              y=111  x=119  | ': OT-15062026-1'
+         *   y=111  x=309   | 'Ship To'             y=111  x=388  | ': NOD Astha'
+         *   y=128  x= 40   | 'Ordered By'          y=128  x=119  | ': Herfian Juliansyah'
+         *   y=128  x=309   | 'Alamat'              y=128  x=388  | ': Jl. Panjang Arteri...'
+         *   y=140  x=397   | 'RT.1/RW.3, ...'     ← lanjutan Alamat (TIDAK ADA label)
+         *   y=145  x= 40   | 'Phone'               y=145  x=119  | ': 081212345678'
+         *   y=151  x=397   | 'Jeruk, Kota ...'    ← lanjutan Alamat
+         *   y=163  x=397   | 'Khusus Ibukota ...' ← lanjutan Alamat
+         *   y=196  x=309   | 'Shipping Date'       y=196  x=388  | ': 16 Juni 2026'
+         */
+        function parseDOFromTokens(tokens) {
+            const result = { noPO:'', orderedBy:'', phone:'', shipTo:'', alamat:'', shippingDate:'' };
+            if (!tokens.length) return result;
+
+            // ── 1. Kelompokkan per baris — Y bucket KECIL (4px) agar baris berdekatan
+            //       tidak bercampur (misal y=140 dan y=145 harus beda bucket) ──
+            const rowMap = new Map();
+            for (const tk of tokens) {
+                const bucket = Math.round(tk.y / 4) * 4;
+                if (!rowMap.has(bucket)) rowMap.set(bucket, []);
+                rowMap.get(bucket).push(tk);
+            }
+            const rows = Array.from(rowMap.entries())
+                .sort((a, b) => a[0] - b[0])
+                .map(([y, tks]) => ({ y, tokens: tks.sort((a, b) => a.x - b.x) }));
+
+            // ── 2. LABEL_MAP: token label → key result ──
+            const LABEL_MAP = {
+                'No. PO'       : 'noPO',
+                'No.PO'        : 'noPO',
+                'Ordered By'   : 'orderedBy',
+                'Phone'        : 'phone',
+                'Ship To'      : 'shipTo',
+                'Alamat'       : 'alamat',
+                'Shipping Date': 'shippingDate',
+                'Tanggal'      : '_tanggal',
+                'Kategori'     : '_kategori',
+            };
+
+            const stripColon = s => s.replace(/^\s*:\s*/, '').trim();
+
+            let alamatRowY = -1;
+
+            // ── 3. Pass pertama: scan setiap baris, pasangkan label → nilai ──
+            for (const row of rows) {
+                let currentLabel = null;
+                for (const tk of row.tokens) {
+                    const s = tk.str;
+
+                    // Token adalah label yang dikenal?
+                    const key = LABEL_MAP[s];
+                    if (key) {
+                        currentLabel = key;
+                        if (key === 'alamat') alamatRowY = row.y;
+                        continue;
+                    }
+
+                    // Token adalah nilai (dimulai ':') → pasangkan ke label aktif
+                    if (s.startsWith(':') && currentLabel) {
+                        const val = stripColon(s);
+                        if (val && !result[currentLabel] && !currentLabel.startsWith('_')) {
+                            result[currentLabel] = val;
+                        }
+                        currentLabel = null;
+                        continue;
+                    }
+
+                    // Nilai tanpa ':' (fallback untuk format berbeda)
+                    if (currentLabel && !s.startsWith(':') && !LABEL_MAP[s]) {
+                        const looksLikeValue = /\d/.test(s) || /[,.\-\/]/.test(s);
+                        if (looksLikeValue && !result[currentLabel] && !currentLabel.startsWith('_')) {
+                            result[currentLabel] = s;
+                        }
+                        currentLabel = null;
+                    }
+                }
+            }
+
+            // ── 4. Kumpulkan baris lanjutan Alamat ──
+            // Lanjutan Alamat = baris di BAWAH baris Alamat pertama,
+            // token berada di kolom KANAN (x > 280), TIDAK dimulai ':'
+            // BERHENTI di baris tabel item (ada token "No" + "Item"/"Qty")
+            if (alamatRowY >= 0) {
+                // Cari Y tabel item
+                let tableY = 9999;
+                for (const row of rows) {
+                    const texts = row.tokens.map(t => t.str);
+                    if (texts.some(t => /^No\.?$/i.test(t)) && texts.some(t => /^(Item|Qty)$/i.test(t))) {
+                        tableY = row.y;
+                        break;
+                    }
+                }
+
+                for (const row of rows) {
+                    if (row.y <= alamatRowY) continue;   // hanya baris DI BAWAH Alamat
+                    if (row.y >= tableY)    break;        // stop di tabel item
+
+                    // Ambil token kolom kanan yang BUKAN label dan BUKAN nilai ber-':'
+                    const rightTokens = row.tokens.filter(tk =>
+                        tk.x > 280 &&
+                        !tk.str.startsWith(':') &&
+                        !LABEL_MAP[tk.str]
+                    );
+                    if (rightTokens.length > 0) {
+                        const cont = rightTokens.map(t => t.str).join(' ').trim();
+                        if (cont.length > 2) {
+                            result.alamat = (result.alamat + ' ' + cont).trim();
+                        }
+                    }
+                }
+            }
+
+            // ── 5. Fallback No. PO dari header jika belum terisi ──
+            if (!result.noPO) {
+                // Cari token seperti "No. PO: OT-15062026-1" dalam satu string
+                for (const row of rows) {
+                    for (const tk of row.tokens) {
+                        const m = tk.str.match(/No\.?\s*PO\s*[:\-]\s*([A-Z0-9\-\/]+)/i);
+                        if (m) { result.noPO = m[1]; break; }
+                    }
+                    if (result.noPO) break;
+                }
+            }
+            if (!result.noPO) {
+                const allText = rows.flatMap(r => r.tokens.map(t => t.str)).join(' ');
+                const m = allText.match(/\b([A-Z]{1,5}-\d{5,}[-\d]*)\b/);
+                if (m) result.noPO = m[1];
+            }
+
+            // ── 6. Bersihkan ──
+            if (result.noPO)        result.noPO        = result.noPO.split(/\s+/)[0];
+            if (result.phone)       result.phone       = result.phone.replace(/[^\d+]/g, '');
+            if (result.shippingDate) result.shippingDate = _parseShippingDateToInput(result.shippingDate);
+            if (result.alamat)      result.alamat      = result.alamat.replace(/\s*(?:Shipping\s*Date|Phone|Telp)\s*:.*/i, '').trim();
+
+            return result;
+        }
+
+        /** Cek apakah string kemungkinan adalah nilai (bukan label) */
+        function val_looks_like_value(s) {
+            return /\d/.test(s) || /[,.\-\/]/.test(s) || s.split(/\s+/).length > 3;
+        }
+
+        // ─── Load data DO berdasarkan No. PO dari GAS ─────────────────────────────
+        async function loadDOByPO() {
+            const poInput = document.getElementById('do-manual-po');
+            const noPO = poInput ? poInput.value.trim() : '';
+            if (!noPO) {
+                showAlert('warning', 'No. PO Kosong', 'Masukkan No. PO terlebih dahulu.');
+                return;
+            }
+
+            const statusEl = document.getElementById('do-scan-status');
+            statusEl.textContent = '⏳ Mencari data PO...';
+            statusEl.className = 'text-xs text-amber-500 mt-2 italic';
+
+            try {
+                const res = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                const raw = await res.json();
+                const data = Array.isArray(raw) ? raw : [];
+
+                // Cari row dengan No. PO yang cocok (kolom index 1)
+                const found = data.slice(1).find(row => String(row[1] || '').trim().toUpperCase() === noPO.toUpperCase());
+
+                if (found) {
+                    document.getElementById('do-no-po').value      = String(found[1] || '').trim();
+                    document.getElementById('do-ordered-by').value = String(found[2] || '').trim();
+                    document.getElementById('do-ship-to').value    = String(found[3] || '').trim();
+                    statusEl.textContent = `✅ Data PO ditemukan.`;
+                    statusEl.className = 'text-xs text-green-600 mt-2 font-semibold';
+                } else {
+                    document.getElementById('do-no-po').value = noPO;
+                    statusEl.textContent = '⚠️ PO tidak ditemukan di database. Isi field lainnya secara manual.';
+                    statusEl.className = 'text-xs text-orange-500 mt-2 italic';
+                }
+            } catch (err) {
+                statusEl.textContent = '❌ Gagal mengambil data: ' + err.message;
+                statusEl.className = 'text-xs text-red-500 mt-2';
+            }
+        }
+
+        // ─── Submit Delivery Done ──────────────────────────────────────────────────
+        async function submitDeliveryDone() {
+            const noPO          = document.getElementById('do-no-po')?.value?.trim();
+            const orderedBy     = document.getElementById('do-ordered-by')?.value?.trim();
+            const shipTo        = document.getElementById('do-ship-to')?.value?.trim();
+            const shippingDate  = document.getElementById('do-shipping-date')?.value?.trim();
+            const alamat        = document.getElementById('do-alamat')?.value?.trim();
+            const phone         = document.getElementById('do-phone')?.value?.trim();
+            const tglKonfirmasi = document.getElementById('do-tgl-konfirmasi')?.value || new Date().toISOString().split('T')[0];
+
+            // ── Validasi semua field wajib ──
+            const missing = [];
+            if (!noPO)         missing.push('No. PO');
+            if (!orderedBy)    missing.push('Ordered By');
+            if (!shipTo)       missing.push('Ship To');
+            if (!shippingDate) missing.push('Shipping Date');
+            if (!alamat)       missing.push('Alamat');
+            if (!phone)        missing.push('Phone');
+
+            if (missing.length > 0) {
+                showAlert('warning', 'Data Belum Lengkap', `Field berikut masih kosong: ${missing.join(', ')}`);
+                return;
+            }
+
+            const ok = await showConfirm(
+                'Konfirmasi Selesai Pengantaran?',
+                `PO <b>${noPO}</b> akan ditandai <b>Done</b>.<br>Status di PO_Data dan Report Status juga akan berubah menjadi Done.`
+            );
+            if (!ok) return;
+
+            // ── Loading di tombol ──
+            const btn = document.querySelector('button[onclick="submitDeliveryDone()"]');
+            const origHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Menyimpan...`;
+            }
+
+            const payload = {
+                action: 'deliveryDone',
+                noPO,
+                orderedBy,
+                shipTo,
+                shippingDate,
+                alamat,
+                phone,
+                tglKonfirmasi,
+                driver: currentUserRole === 'DRIVER' ? 'DRIVER' : 'ADMIN'
+            };
+
+            try {
+                const res = await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    // Update badge di DOM Report Status jika sedang terbuka
+                    const statusCell = document.getElementById(`status-${noPO}`);
+                    if (statusCell) {
+                        statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Done</span>`;
+                    }
+                    const rowEl = document.getElementById(`row-${noPO}`);
+                    if (rowEl) {
+                        rowEl.classList.remove('hover:bg-amber-50');
+                        rowEl.classList.add('bg-green-50', 'opacity-70');
+                    }
+
+                    showAlert('success', '✅ Pengantaran Selesai!',
+                        `PO <b>${noPO}</b> berhasil dicatat ke Delivery_Log.<br>Status PO_Data & Report Status telah diubah menjadi <b>Done</b>.`);
+
+                    // Reset form setelah sukses
+                    setTimeout(() => {
+                        document.getElementById('do-no-po').value         = '';
+                        document.getElementById('do-ordered-by').value    = '';
+                        document.getElementById('do-ship-to').value       = '';
+                        document.getElementById('do-shipping-date').value = '';
+                        document.getElementById('do-alamat').value        = '';
+                        document.getElementById('do-phone').value         = '';
+                        document.getElementById('do-manual-po').value     = '';
+                        const pdfIn = document.getElementById('do-pdf-file');
+                        if (pdfIn) pdfIn.value = '';
+                        const st = document.getElementById('do-scan-status');
+                        if (st) { st.textContent = 'Tekan tombol di atas untuk membuka kamera dan scan QR Code dari lembar Request Order'; st.className = 'text-xs text-center text-gray-400 mb-4 italic'; }
+                    }, 1200);
+                } else {
+                    showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan di server. Periksa GAS log.');
+                }
+            } catch (err) {
+                showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+            }
+        }
+
+        // =========================================================================
+        // HALAMAN: TEAM DELIVERY → REPORT FINISH
+        // Akses: ADMIN & DRIVER
+        // =========================================================================
+        async function showTeamDeliveryReportFinish() {
+            document.getElementById('content-area').innerHTML = `
+            <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Report Finish</h1>
+            <p class="text-sm text-gray-500 mb-6">Laporan rute pengantaran yang sudah selesai.</p>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col items-center justify-center text-center gap-3">
+                <div class="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center">
+                    <svg class="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold text-gray-700">Halaman Report Finish</h2>
+                <p class="text-sm text-gray-500 max-w-md">
+                    Halaman ini akan menampilkan laporan rute pengantaran yang telah diselesaikan oleh Driver,
+                    lengkap dengan waktu selesai dan status pengantaran. Fitur sedang dalam pengembangan.
+                </p>
+            </div>`;
         }
 
         // =========================================================================
@@ -1619,6 +2504,19 @@
             const poLabel = resolvedPONumber || (noPO && noPO !== 'Pilih kategori untuk melihat preview No. PO' ? noPO : '-');
             doc.text('No. PO: ' + poLabel, pageWidth - marginX, 22, { align: 'right' });
 
+            // ── Generate QR Code (berisi seluruh isi Request Order) ──
+            const roQR = await generateROQRCodeDataURL({
+                poLabel,
+                today,
+                orderedBy,
+                phone,
+                category: categoryEl ? categoryEl.value : '',
+                allocatedTo,
+                alamat,
+                shippingDate,
+                items
+            });
+
             // Garis pemisah
             doc.setDrawColor(229, 231, 235);
             doc.setLineWidth(0.4);
@@ -1716,6 +2614,28 @@
                 doc.setFont('helvetica', 'bold');
                 doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
             });
+
+            // ── QR Code (kanan bawah halaman) — berisi seluruh isi Request Order ──
+            if (roQR && roQR.dataUrl) {
+                const qrSize = 22;
+                const qrX = pageWidth - marginX - qrSize;
+                const qrY = pageHeight - 30 - 4 - qrSize; // 4mm di atas footer
+                try {
+                    doc.addImage(roQR.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(107, 114, 128);
+                    doc.text('Scan untuk lihat detail lengkap', qrX + qrSize / 2, qrY - 2, { align: 'center' });
+                    if (roQR.truncated) {
+                        doc.setFontSize(5.5);
+                        doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
+                    }
+                } catch (errQr) {
+                    console.error('[RO QR] Gagal menambahkan QR Code ke PDF:', errQr);
+                }
+            } else {
+                console.warn('[RO QR] QR Code tidak dibuat (roQR kosong/null).');
+            }
 
             // ── Footer (background pola gelombang + teks vektor tajam) ──
             const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
@@ -2843,6 +3763,81 @@
             }
         }
 
+        /**
+         * Susun teks ringkasan SELURUH ISI Request Order (header + daftar item)
+         * untuk disimpan ke dalam QR Code. Saat QR ini di-scan, seluruh isi
+         * dokumen akan tampil sebagai teks.
+         */
+        function buildRequestOrderQRText({ poLabel, today, orderedBy, phone, category, allocatedTo, alamat, shippingDate, items }) {
+            const lines = [];
+            lines.push('=== REQUEST ORDER ===');
+            lines.push('No. PO: ' + (poLabel || '-'));
+            lines.push('Tanggal: ' + formatTanggalIndo(today));
+            lines.push('Ordered By: ' + (orderedBy || '-'));
+            lines.push('Phone: ' + (phone || '-'));
+            lines.push('Kategori: ' + (category || '-'));
+            lines.push('Ship To: ' + (allocatedTo || '-'));
+            lines.push('Alamat: ' + (alamat || '-'));
+            lines.push('Shipping Date: ' + (shippingDate || '-'));
+            lines.push('');
+            lines.push('=== DAFTAR ITEM ===');
+            items.forEach((it, idx) => {
+                lines.push(
+                    `${idx + 1}. ${it.nama} | Qty: ${it.qty || '-'} | UOM: ${it.uom || '-'} | Desc: ${it.description || '-'}` +
+                    (it.note ? ` | Note: ${it.note}` : '')
+                );
+            });
+            return lines.join('\n');
+        }
+
+        /**
+         * Generate QR Code (PNG data URL) dari sebuah teks menggunakan library
+         * `qrcode`. Jika teks terlalu panjang untuk ditampung QR Code (kapasitas
+         * maksimum Model 2 Versi 40), fungsi ini akan otomatis memotong daftar
+         * item secara bertahap sampai berhasil. Mengembalikan { dataUrl, truncated }
+         * atau null jika library tidak tersedia / gagal total.
+         */
+        async function generateROQRCodeDataURL(roData) {
+            if (typeof QRCode === 'undefined') {
+                console.warn('[RO QR] Library QRCode tidak termuat — QR Code dilewati.');
+                return null;
+            }
+
+            const qrOptions = {
+                errorCorrectionLevel: 'L',
+                margin: 1,
+                color: { dark: '#111827', light: '#FFFFFF' }
+            };
+
+            let items = roData.items;
+            let truncated = false;
+
+            // Coba dengan seluruh item, lalu kurangi bertahap jika kapasitas tidak cukup
+            while (true) {
+                const text = buildRequestOrderQRText({ ...roData, items });
+                try {
+                    const dataUrl = await QRCode.toDataURL(text, qrOptions);
+                    return { dataUrl, truncated };
+                } catch (err) {
+                    // Kapasitas tidak cukup → potong item paling bawah
+                    if (items.length <= 1) {
+                        // Bahkan 1 item pun tidak cukup → kirim ringkasan header saja
+                        try {
+                            const headerOnlyText = buildRequestOrderQRText({ ...roData, items: [] }) +
+                                '\n(Daftar item terlalu banyak untuk QR Code,\nlihat dokumen PDF untuk detail lengkap)';
+                            const dataUrl = await QRCode.toDataURL(headerOnlyText, qrOptions);
+                            return { dataUrl, truncated: true };
+                        } catch (err2) {
+                            console.error('[RO QR] Gagal generate QR Code:', err2);
+                            return null;
+                        }
+                    }
+                    items = items.slice(0, items.length - 1);
+                    truncated = true;
+                }
+            }
+        }
+
         /** Format tanggal YYYY-MM-DD → DD Bulan YYYY (Indonesia) */
         function formatTanggalIndo(dateStr) {
             if (!dateStr) return '-';
@@ -3329,6 +4324,15 @@
 
             const namaBarang = matched || raw;
             tambahBarisInbound(namaBarang);
+
+            // ✅ Bunyi + pop-up sukses
+            playScanBeep();
+            showScanSuccessToast(
+                'Item Terdeteksi!',
+                matched
+                    ? `<strong>${namaBarang}</strong><br>Ditambahkan ke tabel inbound.`
+                    : `<strong>${namaBarang}</strong><br>Item baru ditambahkan.`
+            );
 
             if (statusEl) {
                 statusEl.textContent = matched
@@ -3827,6 +4831,83 @@
         // Konfigurasi wajib untuk pdf.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
+
+    <!-- ═══ MODAL KAMERA QR — PERMANEN (tidak ikut innerHTML) ═══ -->
+    <div id="qr-camera-modal" class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01
+                               M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z
+                               m12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1z
+                               M5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                    </svg>
+                    <span class="font-bold text-gray-700 text-sm">Scan QR Code</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="qr-switch-btn" onclick="switchQRCamera()" title="Ganti kamera"
+                        class="hidden text-gray-500 hover:text-amber-600 transition p-1.5 rounded-lg hover:bg-amber-50 border border-gray-200">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581
+                                   m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </button>
+                    <button onclick="stopQRCamera()" title="Tutup"
+                        class="text-gray-400 hover:text-red-500 transition p-1 rounded-lg hover:bg-gray-100">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Area video -->
+            <div class="relative bg-black" style="aspect-ratio:1/1; max-height:70vh;">
+                <video id="qr-video" autoplay playsinline muted
+                    class="w-full h-full object-cover"></video>
+                <canvas id="qr-canvas" class="hidden absolute top-0 left-0"></canvas>
+
+                <!-- Viewfinder -->
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="relative w-56 h-56">
+                        <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-amber-400 rounded-tl-lg"></div>
+                        <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-amber-400 rounded-tr-lg"></div>
+                        <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-amber-400 rounded-bl-lg"></div>
+                        <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-amber-400 rounded-br-lg"></div>
+                        <!-- Garis scan animasi -->
+                        <div class="absolute left-1 right-1 h-0.5 bg-amber-400/90 rounded-full"
+                            style="top:0; animation: qrScanLine 2s ease-in-out infinite;"></div>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div id="qr-cam-status" class="absolute bottom-3 inset-x-0 flex justify-center">
+                    <span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">
+                        Arahkan kamera ke QR Code...
+                    </span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-5 py-3 bg-gray-50 text-center">
+                <p class="text-xs text-gray-400">Posisikan QR Code di dalam bingkai kuning</p>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes qrScanLine {
+            0%   { top: 4px;   opacity: 1; }
+            45%  { opacity: 1; }
+            50%  { top: calc(100% - 4px); opacity: 0.5; }
+            55%  { opacity: 1; }
+            100% { top: 4px;   opacity: 1; }
+        }
+    </style>
 
 </body>
 
