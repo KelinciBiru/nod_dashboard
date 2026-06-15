@@ -965,177 +965,166 @@
         }
 
         // =========================================================================
-        // SCAN QR VIA KAMERA — fix blank black screen
+        // SCAN QR VIA KAMERA — unified untuk Route & Inbound
         // =========================================================================
         let _qrStream     = null;
         let _qrRAF        = null;
         let _qrFacingBack = true;
+        let _qrCallback   = null;   // callback(decodedText) — null = pakai _handleQRResult (Route)
 
-        async function startQRCamera(forceBack) {
+        async function startQRCamera(forceBack, callback) {
             if (typeof forceBack === 'boolean') _qrFacingBack = forceBack;
+            _qrCallback = (typeof callback === 'function') ? callback : null;
 
             const modal     = document.getElementById('qr-camera-modal');
             const video     = document.getElementById('qr-video');
             const camStat   = document.getElementById('qr-cam-status');
             const switchBtn = document.getElementById('qr-switch-btn');
+            if (!modal || !video) { alert('Refresh halaman terlebih dahulu.'); return; }
 
-            if (!modal || !video) {
-                alert('Elemen kamera tidak ditemukan. Refresh halaman.');
-                return;
-            }
-
-            // Stop stream lama dulu sebelum buka baru
-            _stopAllTracks();
-            if (_qrRAF) { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+            // Bersihkan state lama
+            if (_qrRAF)    { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+            video.srcObject = null;
 
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
 
             const setStatus = (html) => {
                 if (camStat) camStat.innerHTML =
-                    `<span class="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full">${html}</span>`;
+                    `<span style="background:rgba(0,0,0,0.65);color:#fff;font-size:12px;padding:6px 14px;border-radius:999px;">${html}</span>`;
             };
 
-            // ── 1. Load jsQR ──
+            // ── Load jsQR ──
             if (typeof jsQR === 'undefined') {
                 setStatus('⏳ Memuat library...');
-                await new Promise((resolve) => {
+                await new Promise(res => {
                     const s = document.createElement('script');
                     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
-                    s.onload  = resolve;
-                    s.onerror = resolve; // tetap lanjut walau gagal, _tickQR yang handle
+                    s.onload = res; s.onerror = res;
                     document.head.appendChild(s);
                 });
             }
 
-            // ── 2. Minta izin & buka stream ──
             setStatus('⏳ Membuka kamera...');
+
+            // ── Buka stream ──
             try {
-                const constraints = {
-                    video: {
-                        facingMode: { ideal: _qrFacingBack ? 'environment' : 'user' },
-                        width:  { ideal: 640 },
-                        height: { ideal: 480 }
-                    }
-                };
                 try {
-                    _qrStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    _qrStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: _qrFacingBack ? 'environment' : 'user' } }
+                    });
                 } catch (_) {
-                    // fallback: kamera default tanpa constraint
                     _qrStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 }
             } catch (err) {
-                let msg = err.message;
-                if (err.name === 'NotAllowedError')  msg = 'Izin kamera ditolak. Izinkan di browser lalu coba lagi.';
-                if (err.name === 'NotFoundError')    msg = 'Tidak ada kamera yang ditemukan.';
-                if (err.name === 'NotReadableError') msg = 'Kamera digunakan aplikasi lain.';
+                const msg =
+                    err.name === 'NotAllowedError'  ? 'Izin kamera ditolak — izinkan di browser.' :
+                    err.name === 'NotFoundError'    ? 'Tidak ada kamera ditemukan.' :
+                    err.name === 'NotReadableError' ? 'Kamera dipakai aplikasi lain.' : (err.message || 'Gagal membuka kamera.');
                 setStatus('❌ ' + msg);
                 return;
             }
 
-            // ── 3. Hubungkan stream ke <video> ──
-            // Reset video element dulu agar tidak ada state lama
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
-
+            // ── Hubungkan ke <video> ──
             video.srcObject = _qrStream;
-            video.muted     = true;
-            video.playsInline = true;
+            video.muted = true;
+            try { await video.play(); } catch(_) {}
 
-            // ── 4. Tunggu video siap dengan Promise race (timeout 8 detik) ──
-            const videoReady = new Promise((resolve, reject) => {
-                const onCanPlay = () => {
-                    video.removeEventListener('canplay',   onCanPlay);
-                    video.removeEventListener('loadeddata', onCanPlay);
-                    resolve();
-                };
-                video.addEventListener('canplay',    onCanPlay);
-                video.addEventListener('loadeddata', onCanPlay);
-                setTimeout(() => reject(new Error('timeout')), 8000);
+            // Tunggu videoWidth tersedia (polling, max 8 detik)
+            await new Promise(res => {
+                if (video.videoWidth > 0) { res(); return; }
+                const t = setInterval(() => { if (video.videoWidth > 0) { clearInterval(t); res(); } }, 80);
+                setTimeout(() => { clearInterval(t); res(); }, 8000);
             });
-
-            try {
-                await video.play();
-                await videoReady;
-            } catch (_) {
-                // Beberapa browser tidak butuh play() sebelum canplay
-                // Coba tunggu sedikit lalu paksa mulai tick
-                await new Promise(r => setTimeout(r, 800));
-            }
 
             setStatus('📷 Arahkan ke QR Code...');
 
-            // ── 5. Tombol ganti kamera ──
+            // Tombol ganti kamera
             if (switchBtn) {
                 try {
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const count   = devices.filter(d => d.kind === 'videoinput').length;
-                    switchBtn.classList.toggle('hidden', count < 2);
-                } catch (_) { switchBtn.classList.add('hidden'); }
+                    const devs = await navigator.mediaDevices.enumerateDevices();
+                    switchBtn.classList.toggle('hidden', devs.filter(d => d.kind === 'videoinput').length < 2);
+                } catch(_) { switchBtn.classList.add('hidden'); }
             }
 
-            // ── 6. Mulai deteksi QR ──
+            _qrFrameCount = 0;
             _tickQR();
-        }
-
-        function _stopAllTracks() {
-            if (_qrStream) {
-                _qrStream.getTracks().forEach(t => { try { t.stop(); } catch(_){} });
-                _qrStream = null;
-            }
         }
 
         function switchQRCamera() {
             _qrFacingBack = !_qrFacingBack;
-            startQRCamera(_qrFacingBack);
+            startQRCamera(_qrFacingBack, _qrCallback);
         }
 
+        let _qrFrameCount = 0;
+        let _qrLastFrameTime = 0;
+
         function _tickQR() {
-            const video   = document.getElementById('qr-video');
-            const canvas  = document.getElementById('qr-canvas');
-            const camStat = document.getElementById('qr-cam-status');
+            if (!_qrStream) return;
 
-            if (!_qrStream || !video || !canvas) return;
+            const video  = document.getElementById('qr-video');
+            const canvas = document.getElementById('qr-canvas');
+            const debug  = document.getElementById('qr-debug');
+            if (!video || !canvas) return;
 
-            // Video belum punya frame — tunggu
-            if (video.videoWidth === 0 || video.videoHeight === 0 || video.paused) {
-                // Coba play lagi kalau pause
-                if (video.paused && _qrStream) {
-                    video.play().catch(() => {});
-                }
+            // Throttle ke ~15fps agar jsQR punya cukup waktu
+            const now = performance.now();
+            if (now - _qrLastFrameTime < 66) {
+                _qrRAF = requestAnimationFrame(_tickQR);
+                return;
+            }
+            _qrLastFrameTime = now;
+            _qrFrameCount++;
+
+            if (video.readyState < 2 || video.videoWidth === 0) {
+                if (debug && _qrFrameCount % 15 === 0)
+                    debug.textContent = `menunggu video... state=${video.readyState}`;
                 _qrRAF = requestAnimationFrame(_tickQR);
                 return;
             }
 
-            // Gambar frame
             try {
                 canvas.width  = video.videoWidth;
                 canvas.height = video.videoHeight;
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0);
+                const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                if (typeof jsQR === 'function') {
-                    const code = jsQR(imgData.data, imgData.width, imgData.height, {
-                        inversionAttempts: 'dontInvert'
-                    });
-                    if (code && code.data && code.data.trim().length > 0) {
+                if (debug && _qrFrameCount % 15 === 0)
+                    debug.textContent = `frame ${_qrFrameCount} | ${canvas.width}×${canvas.height} | jsQR=${typeof jsQR}`;
+
+                if (typeof jsQR !== 'undefined') {
+                    // Coba normal dulu, lalu invert
+                    let result = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+                    if (!result) result = jsQR(img.data, img.width, img.height, { inversionAttempts: 'onlyInvert' });
+
+                    if (result && result.data && result.data.trim()) {
+                        if (debug) debug.textContent = '✅ QR terbaca: ' + result.data.slice(0, 30);
+                        const decoded = result.data.trim();
                         stopQRCamera();
-                        _handleQRResult(code.data.trim());
+                        if (_qrCallback) {
+                            _qrCallback(decoded);
+                        } else {
+                            _handleQRResult(decoded);
+                        }
                         return;
                     }
+                } else {
+                    if (debug && _qrFrameCount % 15 === 0) debug.textContent = '⚠️ jsQR belum tersedia';
                 }
-            } catch (_) {}
+            } catch(e) {
+                if (debug && _qrFrameCount % 15 === 0) debug.textContent = 'err: ' + e.message;
+            }
 
             _qrRAF = requestAnimationFrame(_tickQR);
         }
 
         function stopQRCamera() {
-            if (_qrRAF)  { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
-            _stopAllTracks();
-            const modal = document.getElementById('qr-camera-modal');
+            if (_qrRAF) { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
             const video = document.getElementById('qr-video');
+            const modal = document.getElementById('qr-camera-modal');
             if (video) { try { video.pause(); } catch(_){} video.srcObject = null; }
             if (modal) modal.classList.add('hidden');
             document.body.style.overflow = '';
@@ -4328,50 +4317,46 @@
         }
 
         // =========================================================================
-        // SCAN QR CODE (html5-qrcode)
+        // SCAN QR CODE — Inbound pakai modal kamera yang sama dengan Route
         // =========================================================================
         let _inboundHtml5QrCode = null;
         let _inboundScannerActive = false;
-        let _inboundLastScan = '';       // teks QR terakhir yang diproses
-        let _inboundCooldown = false;    // flag cooldown aktif
+        let _inboundLastScan = '';
+        let _inboundCooldown = false;
+
+        function _inboundQrCallback(decodedText) {
+            onInboundQrScanSuccess(decodedText).then(() => {
+                // Setelah 1.8 detik cooldown, buka kamera lagi untuk item berikutnya
+                setTimeout(() => {
+                    if (_inboundScannerActive && document.getElementById('inb-scan-status')) {
+                        _inboundLastScan = '';
+                        _inboundCooldown = false;
+                        startQRCamera(undefined, _inboundQrCallback);
+                    }
+                }, 1800);
+            });
+        }
 
         async function toggleInboundScanner() {
-            const container = document.getElementById('inb-qr-reader-container');
-            const btn = document.getElementById('inb-scan-btn');
             const statusEl = document.getElementById('inb-scan-status');
+            const btn      = document.getElementById('inb-scan-btn');
 
             if (_inboundScannerActive) {
-                try { await _inboundHtml5QrCode.stop(); _inboundHtml5QrCode.clear(); } catch (_) { }
                 _inboundScannerActive = false;
-                _inboundLastScan = '';
-                _inboundCooldown = false;
-                container.classList.add('hidden');
-                btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/></svg> Scan QR Code`;
-                if (statusEl) statusEl.textContent = '';
+                stopQRCamera();
+                if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400'; }
+                if (btn) btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/></svg> Scan QR Code`;
                 return;
             }
 
-            container.classList.remove('hidden');
-            statusEl.textContent = 'Mengaktifkan kamera...';
-            statusEl.className = 'text-xs text-blue-500';
+            _inboundScannerActive = true;
+            _inboundLastScan = '';
+            _inboundCooldown = false;
 
-            try {
-                _inboundHtml5QrCode = new Html5Qrcode('inb-qr-reader');
-                await _inboundHtml5QrCode.start(
-                    { facingMode: { ideal: 'environment' } },
-                    { fps: 10, qrbox: { width: 220, height: 220 } },
-                    onInboundQrScanSuccess,
-                    () => { /* abaikan error per-frame */ }
-                );
-                _inboundScannerActive = true;
-                btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Tutup Scanner`;
-                statusEl.textContent = 'Arahkan kamera ke QR Code barang.';
-                statusEl.className = 'text-xs text-gray-400';
-            } catch (err) {
-                statusEl.textContent = '❌ Gagal mengaktifkan kamera: ' + err.message;
-                statusEl.className = 'text-xs text-red-500';
-                container.classList.add('hidden');
-            }
+            if (btn) btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Tutup Scanner`;
+            if (statusEl) { statusEl.textContent = 'Membuka kamera...'; statusEl.className = 'text-xs text-blue-500'; }
+
+            await startQRCamera(undefined, _inboundQrCallback);
         }
 
         /** Callback ketika QR code berhasil di-scan — dengan cooldown 2 detik agar tidak duplikat */
@@ -4978,6 +4963,7 @@
             <!-- Footer -->
             <div class="px-5 py-3 bg-gray-50 text-center">
                 <p class="text-xs text-gray-400">Posisikan QR Code di dalam bingkai kuning</p>
+                <p id="qr-debug" class="text-xs text-gray-300 mt-1 font-mono"></p>
             </div>
         </div>
     </div>
