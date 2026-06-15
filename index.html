@@ -4571,7 +4571,7 @@
                 allRows.forEach(row => {
                     const noPO = row[1] || '-';
                     const nama = row[2] || '-';
-                    const kat = row[3] || '-';
+                    const shipTo = row[6] || '-';
                     const status = row[4];
                     const link = row[5];
                     const statusStr = status ? status.toString().trim() : '';
@@ -4617,7 +4617,7 @@
                     <tr id="row-${noPO}" class="${isClosed ? 'bg-gray-50 opacity-60' : isDone ? 'bg-emerald-50' : isReady ? 'bg-blue-50' : 'hover:bg-amber-50'}">
                         <td class="p-3 border-b font-mono">${noPO}</td>
                         <td class="p-3 border-b">${nama}</td>
-                        <td class="p-3 border-b">${kat}</td>
+                        <td class="p-3 border-b">${shipTo}</td>
                         <td class="p-3 border-b" id="status-${noPO}">${statusBadge}</td>
                         ${isAdmin ? `<td class="p-3 border-b">${linkCell}</td>` : ''}
                         ${aksiCell}
@@ -4641,7 +4641,7 @@
                             <tr class="bg-gray-800 text-white">
                                 <th class="p-3">No. PO</th>
                                 <th class="p-3">Nama</th>
-                                <th class="p-3">Kategori</th>
+                                <th class="p-3">Ship To</th>
                                 <th class="p-3">Status</th>
                                 ${isAdmin ? '<th class="p-3">Link</th><th class="p-3">Aksi</th>' : ''}
                             </tr>
