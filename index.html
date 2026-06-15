@@ -965,7 +965,7 @@
         }
 
         // =========================================================================
-        // SCAN QR VIA KAMERA — Modal permanen di body, bukan di innerHTML
+        // SCAN QR VIA KAMERA — fix blank black screen
         // =========================================================================
         let _qrStream     = null;
         let _qrRAF        = null;
@@ -980,65 +980,109 @@
             const switchBtn = document.getElementById('qr-switch-btn');
 
             if (!modal || !video) {
-                alert('Error: Elemen kamera tidak ditemukan. Silakan refresh halaman.');
+                alert('Elemen kamera tidak ditemukan. Refresh halaman.');
                 return;
             }
 
-            // Tampilkan modal dulu
+            // Stop stream lama dulu sebelum buka baru
+            _stopAllTracks();
+            if (_qrRAF) { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
 
-            // Hentikan stream lama
-            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
-            if (_qrRAF)    { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+            const setStatus = (html) => {
+                if (camStat) camStat.innerHTML =
+                    `<span class="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full">${html}</span>`;
+            };
 
-            // Set status awal
-            if (camStat) camStat.innerHTML = `<span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">⏳ Memuat...</span>`;
-
-            // Muat jsQR jika belum ada
+            // ── 1. Load jsQR ──
             if (typeof jsQR === 'undefined') {
-                await new Promise((res, rej) => {
+                setStatus('⏳ Memuat library...');
+                await new Promise((resolve) => {
                     const s = document.createElement('script');
                     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
-                    s.onload = res;
-                    s.onerror = () => rej(new Error('Gagal memuat library jsQR'));
+                    s.onload  = resolve;
+                    s.onerror = resolve; // tetap lanjut walau gagal, _tickQR yang handle
                     document.head.appendChild(s);
-                }).catch(err => { throw err; });
+                });
             }
 
-            if (camStat) camStat.innerHTML = `<span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">⏳ Membuka kamera...</span>`;
-
+            // ── 2. Minta izin & buka stream ──
+            setStatus('⏳ Membuka kamera...');
             try {
-                // Coba kamera environment (belakang) atau user (depan/webcam)
-                const preferred = _qrFacingBack ? 'environment' : 'user';
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: _qrFacingBack ? 'environment' : 'user' },
+                        width:  { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                };
                 try {
-                    _qrStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: preferred }, width: { ideal: 1280 }, height: { ideal: 720 } }
-                    });
+                    _qrStream = await navigator.mediaDevices.getUserMedia(constraints);
                 } catch (_) {
-                    // Fallback: kamera apapun
+                    // fallback: kamera default tanpa constraint
                     _qrStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 }
-
-                video.srcObject = _qrStream;
-                video.onloadedmetadata = () => {
-                    video.play();
-                    _tickQR();
-                    if (camStat) camStat.innerHTML = `<span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">📷 Arahkan ke QR Code...</span>`;
-                };
-
-                // Tampilkan tombol ganti kamera jika >1 kamera
-                if (switchBtn) {
-                    try {
-                        const devices = await navigator.mediaDevices.enumerateDevices();
-                        const count   = devices.filter(d => d.kind === 'videoinput').length;
-                        switchBtn.classList.toggle('hidden', count < 2);
-                    } catch (_) { switchBtn.classList.add('hidden'); }
-                }
-
             } catch (err) {
-                if (camStat) camStat.innerHTML =
-                    `<span class="bg-red-700/90 text-white text-xs px-3 py-1.5 rounded-full">❌ ${err.message}</span>`;
+                let msg = err.message;
+                if (err.name === 'NotAllowedError')  msg = 'Izin kamera ditolak. Izinkan di browser lalu coba lagi.';
+                if (err.name === 'NotFoundError')    msg = 'Tidak ada kamera yang ditemukan.';
+                if (err.name === 'NotReadableError') msg = 'Kamera digunakan aplikasi lain.';
+                setStatus('❌ ' + msg);
+                return;
+            }
+
+            // ── 3. Hubungkan stream ke <video> ──
+            // Reset video element dulu agar tidak ada state lama
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+
+            video.srcObject = _qrStream;
+            video.muted     = true;
+            video.playsInline = true;
+
+            // ── 4. Tunggu video siap dengan Promise race (timeout 8 detik) ──
+            const videoReady = new Promise((resolve, reject) => {
+                const onCanPlay = () => {
+                    video.removeEventListener('canplay',   onCanPlay);
+                    video.removeEventListener('loadeddata', onCanPlay);
+                    resolve();
+                };
+                video.addEventListener('canplay',    onCanPlay);
+                video.addEventListener('loadeddata', onCanPlay);
+                setTimeout(() => reject(new Error('timeout')), 8000);
+            });
+
+            try {
+                await video.play();
+                await videoReady;
+            } catch (_) {
+                // Beberapa browser tidak butuh play() sebelum canplay
+                // Coba tunggu sedikit lalu paksa mulai tick
+                await new Promise(r => setTimeout(r, 800));
+            }
+
+            setStatus('📷 Arahkan ke QR Code...');
+
+            // ── 5. Tombol ganti kamera ──
+            if (switchBtn) {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const count   = devices.filter(d => d.kind === 'videoinput').length;
+                    switchBtn.classList.toggle('hidden', count < 2);
+                } catch (_) { switchBtn.classList.add('hidden'); }
+            }
+
+            // ── 6. Mulai deteksi QR ──
+            _tickQR();
+        }
+
+        function _stopAllTracks() {
+            if (_qrStream) {
+                _qrStream.getTracks().forEach(t => { try { t.stop(); } catch(_){} });
+                _qrStream = null;
             }
         }
 
@@ -1048,18 +1092,31 @@
         }
 
         function _tickQR() {
-            const video  = document.getElementById('qr-video');
-            const canvas = document.getElementById('qr-canvas');
-            if (!video || !canvas) return;
+            const video   = document.getElementById('qr-video');
+            const canvas  = document.getElementById('qr-canvas');
+            const camStat = document.getElementById('qr-cam-status');
 
-            if (video.readyState >= 2 && video.videoWidth > 0) {
+            if (!_qrStream || !video || !canvas) return;
+
+            // Video belum punya frame — tunggu
+            if (video.videoWidth === 0 || video.videoHeight === 0 || video.paused) {
+                // Coba play lagi kalau pause
+                if (video.paused && _qrStream) {
+                    video.play().catch(() => {});
+                }
+                _qrRAF = requestAnimationFrame(_tickQR);
+                return;
+            }
+
+            // Gambar frame
+            try {
                 canvas.width  = video.videoWidth;
                 canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                try {
+                if (typeof jsQR === 'function') {
                     const code = jsQR(imgData.data, imgData.width, imgData.height, {
                         inversionAttempts: 'dontInvert'
                     });
@@ -1068,18 +1125,19 @@
                         _handleQRResult(code.data.trim());
                         return;
                     }
-                } catch (_) { /* jsQR belum siap, lanjut */ }
-            }
+                }
+            } catch (_) {}
+
             _qrRAF = requestAnimationFrame(_tickQR);
         }
 
         function stopQRCamera() {
-            if (_qrRAF)    { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
-            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
+            if (_qrRAF)  { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
+            _stopAllTracks();
             const modal = document.getElementById('qr-camera-modal');
             const video = document.getElementById('qr-video');
+            if (video) { try { video.pause(); } catch(_){} video.srcObject = null; }
             if (modal) modal.classList.add('hidden');
-            if (video) { video.pause(); video.srcObject = null; }
             document.body.style.overflow = '';
         }
 
@@ -4274,6 +4332,8 @@
         // =========================================================================
         let _inboundHtml5QrCode = null;
         let _inboundScannerActive = false;
+        let _inboundLastScan = '';       // teks QR terakhir yang diproses
+        let _inboundCooldown = false;    // flag cooldown aktif
 
         async function toggleInboundScanner() {
             const container = document.getElementById('inb-qr-reader-container');
@@ -4283,6 +4343,8 @@
             if (_inboundScannerActive) {
                 try { await _inboundHtml5QrCode.stop(); _inboundHtml5QrCode.clear(); } catch (_) { }
                 _inboundScannerActive = false;
+                _inboundLastScan = '';
+                _inboundCooldown = false;
                 container.classList.add('hidden');
                 btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/></svg> Scan QR Code`;
                 if (statusEl) statusEl.textContent = '';
@@ -4296,10 +4358,10 @@
             try {
                 _inboundHtml5QrCode = new Html5Qrcode('inb-qr-reader');
                 await _inboundHtml5QrCode.start(
-                    { facingMode: 'environment' },
-                    { fps: 10, qrbox: 220 },
+                    { facingMode: { ideal: 'environment' } },
+                    { fps: 10, qrbox: { width: 220, height: 220 } },
                     onInboundQrScanSuccess,
-                    () => { /* ignore per-frame errors */ }
+                    () => { /* abaikan error per-frame */ }
                 );
                 _inboundScannerActive = true;
                 btn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Tutup Scanner`;
@@ -4312,15 +4374,35 @@
             }
         }
 
-        /** Callback ketika QR code berhasil di-scan: cocokkan ke Source Items lalu isi ke tabel */
+        /** Callback ketika QR code berhasil di-scan — dengan cooldown 2 detik agar tidak duplikat */
         async function onInboundQrScanSuccess(decodedText) {
             const statusEl = document.getElementById('inb-scan-status');
+            const raw = decodedText.trim();
+
+            // ── Proteksi duplikat: abaikan jika sama dengan scan terakhir ATAU cooldown aktif ──
+            if (_inboundCooldown || raw === _inboundLastScan) return;
+
+            _inboundCooldown = true;
+            _inboundLastScan = raw;
+
+            // Cooldown 2 detik — setelah itu reset agar QR yang SAMA bisa scan lagi
+            setTimeout(() => {
+                _inboundCooldown = false;
+                _inboundLastScan = '';
+                if (statusEl && statusEl.textContent.startsWith('✅')) {
+                    statusEl.textContent = 'Arahkan kamera ke QR Code barang.';
+                    statusEl.className = 'text-xs text-gray-400';
+                }
+            }, 2000);
+
             const items = await getSourceItems();
 
-            const raw = decodedText.trim();
             // Cocokkan: exact match dulu, lalu partial/contains
             let matched = items.find(i => i.toLowerCase() === raw.toLowerCase());
-            if (!matched) matched = items.find(i => i.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(i.toLowerCase()));
+            if (!matched) matched = items.find(i =>
+                i.toLowerCase().includes(raw.toLowerCase()) ||
+                raw.toLowerCase().includes(i.toLowerCase())
+            );
 
             const namaBarang = matched || raw;
             tambahBarisInbound(namaBarang);
@@ -4336,9 +4418,9 @@
 
             if (statusEl) {
                 statusEl.textContent = matched
-                    ? `✅ Terdeteksi: "${namaBarang}" — ditambahkan ke tabel.`
-                    : `⚠️ "${raw}" tidak ditemukan di daftar item, ditambahkan apa adanya.`;
-                statusEl.className = matched ? 'text-xs text-green-600' : 'text-xs text-amber-600';
+                    ? `✅ "${namaBarang}" ditambahkan. Scan item berikutnya...`
+                    : `⚠️ "${raw}" tidak ditemukan, ditambahkan apa adanya.`;
+                statusEl.className = matched ? 'text-xs text-green-600 font-semibold' : 'text-xs text-amber-600';
             }
         }
 
@@ -4868,7 +4950,8 @@
             <!-- Area video -->
             <div class="relative bg-black" style="aspect-ratio:1/1; max-height:70vh;">
                 <video id="qr-video" autoplay playsinline muted
-                    class="w-full h-full object-cover"></video>
+                    style="width:100%;height:100%;object-fit:cover;display:block;background:#000;"
+                    webkit-playsinline="true"></video>
                 <canvas id="qr-canvas" class="hidden absolute top-0 left-0"></canvas>
 
                 <!-- Viewfinder -->
