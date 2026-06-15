@@ -967,8 +967,7 @@
         // =========================================================================
         // SCAN QR VIA KAMERA — unified untuk Route & Inbound
         // =========================================================================
-        let _qrStream     = null;
-        let _qrRAF        = null;
+        let _html5QrCode  = null;
         let _qrFacingBack = true;
         let _qrCallback   = null;   // callback(decodedText) — null = pakai _handleQRResult (Route)
 
@@ -977,15 +976,9 @@
             _qrCallback = (typeof callback === 'function') ? callback : null;
 
             const modal     = document.getElementById('qr-camera-modal');
-            const video     = document.getElementById('qr-video');
             const camStat   = document.getElementById('qr-cam-status');
             const switchBtn = document.getElementById('qr-switch-btn');
-            if (!modal || !video) { alert('Refresh halaman terlebih dahulu.'); return; }
-
-            // Bersihkan state lama
-            if (_qrRAF)    { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
-            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
-            video.srcObject = null;
+            if (!modal) { alert('Refresh halaman terlebih dahulu.'); return; }
 
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
@@ -995,61 +988,54 @@
                     `<span style="background:rgba(0,0,0,0.65);color:#fff;font-size:12px;padding:6px 14px;border-radius:999px;">${html}</span>`;
             };
 
-            // ── Load jsQR ──
-            if (typeof jsQR === 'undefined') {
-                setStatus('⏳ Memuat library...');
-                await new Promise(res => {
-                    const s = document.createElement('script');
-                    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
-                    s.onload = res; s.onerror = res;
-                    document.head.appendChild(s);
-                });
-            }
-
             setStatus('⏳ Membuka kamera...');
 
-            // ── Buka stream ──
-            try {
-                try {
-                    _qrStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: _qrFacingBack ? 'environment' : 'user' } }
-                    });
-                } catch (_) {
-                    _qrStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                }
-            } catch (err) {
-                const msg =
-                    err.name === 'NotAllowedError'  ? 'Izin kamera ditolak — izinkan di browser.' :
-                    err.name === 'NotFoundError'    ? 'Tidak ada kamera ditemukan.' :
-                    err.name === 'NotReadableError' ? 'Kamera dipakai aplikasi lain.' : (err.message || 'Gagal membuka kamera.');
-                setStatus('❌ ' + msg);
+            // Hentikan instance sebelumnya jika ada
+            if (_html5QrCode) {
+                try { await _html5QrCode.stop(); } catch (_) {}
+                try { _html5QrCode.clear(); } catch (_) {}
+                _html5QrCode = null;
+            }
+
+            if (typeof Html5Qrcode === 'undefined') {
+                setStatus('❌ Library QR Code gagal dimuat. Periksa koneksi internet.');
                 return;
             }
 
-            // ── Hubungkan ke <video> ──
-            video.srcObject = _qrStream;
-            video.muted = true;
-            try { await video.play(); } catch(_) {}
+            _html5QrCode = new Html5Qrcode('qr-reader');
 
-            // Tunggu videoWidth tersedia (polling, max 8 detik)
-            await new Promise(res => {
-                if (video.videoWidth > 0) { res(); return; }
-                const t = setInterval(() => { if (video.videoWidth > 0) { clearInterval(t); res(); } }, 80);
-                setTimeout(() => { clearInterval(t); res(); }, 8000);
-            });
+            const config       = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 };
+            const cameraConfig = { facingMode: _qrFacingBack ? 'environment' : 'user' };
 
-            setStatus('📷 Arahkan ke QR Code...');
+            try {
+                await _html5QrCode.start(
+                    cameraConfig,
+                    config,
+                    (decodedText) => {
+                        setStatus('✅ QR terbaca!');
+                        const decoded = decodedText.trim();
+                        const cb = _qrCallback;
+                        stopQRCamera();
+                        if (cb) {
+                            cb(decoded);
+                        } else {
+                            _handleQRResult(decoded);
+                        }
+                    },
+                    () => { /* abaikan error 'not found' per-frame */ }
+                );
+                setStatus('📷 Arahkan ke QR Code...');
 
-            // Tombol ganti kamera
-            if (switchBtn) {
-                try {
-                    const devs = await navigator.mediaDevices.enumerateDevices();
-                    switchBtn.classList.toggle('hidden', devs.filter(d => d.kind === 'videoinput').length < 2);
-                } catch(_) { switchBtn.classList.add('hidden'); }
+                // Tombol ganti kamera
+                if (switchBtn) {
+                    try {
+                        const cams = await Html5Qrcode.getCameras();
+                        switchBtn.classList.toggle('hidden', !(cams && cams.length > 1));
+                    } catch (_) { switchBtn.classList.add('hidden'); }
+                }
+            } catch (err) {
+                setStatus('❌ ' + (err && err.toString ? err.toString() : 'Gagal membuka kamera.'));
             }
-
-            _qrFrameCount = 0;
-            _tickQR();
         }
 
         function switchQRCamera() {
@@ -1057,75 +1043,13 @@
             startQRCamera(_qrFacingBack, _qrCallback);
         }
 
-        let _qrFrameCount = 0;
-        let _qrLastFrameTime = 0;
-
-        function _tickQR() {
-            if (!_qrStream) return;
-
-            const video  = document.getElementById('qr-video');
-            const canvas = document.getElementById('qr-canvas');
-            const debug  = document.getElementById('qr-debug');
-            if (!video || !canvas) return;
-
-            // Throttle ke ~15fps agar jsQR punya cukup waktu
-            const now = performance.now();
-            if (now - _qrLastFrameTime < 66) {
-                _qrRAF = requestAnimationFrame(_tickQR);
-                return;
-            }
-            _qrLastFrameTime = now;
-            _qrFrameCount++;
-
-            if (video.readyState < 2 || video.videoWidth === 0) {
-                if (debug && _qrFrameCount % 15 === 0)
-                    debug.textContent = `menunggu video... state=${video.readyState}`;
-                _qrRAF = requestAnimationFrame(_tickQR);
-                return;
-            }
-
-            try {
-                canvas.width  = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                ctx.drawImage(video, 0, 0);
-                const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-                if (debug && _qrFrameCount % 15 === 0)
-                    debug.textContent = `frame ${_qrFrameCount} | ${canvas.width}×${canvas.height} | jsQR=${typeof jsQR}`;
-
-                if (typeof jsQR !== 'undefined') {
-                    // Coba normal dulu, lalu invert
-                    let result = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-                    if (!result) result = jsQR(img.data, img.width, img.height, { inversionAttempts: 'onlyInvert' });
-
-                    if (result && result.data && result.data.trim()) {
-                        if (debug) debug.textContent = '✅ QR terbaca: ' + result.data.slice(0, 30);
-                        const decoded = result.data.trim();
-                        stopQRCamera();
-                        if (_qrCallback) {
-                            _qrCallback(decoded);
-                        } else {
-                            _handleQRResult(decoded);
-                        }
-                        return;
-                    }
-                } else {
-                    if (debug && _qrFrameCount % 15 === 0) debug.textContent = '⚠️ jsQR belum tersedia';
-                }
-            } catch(e) {
-                if (debug && _qrFrameCount % 15 === 0) debug.textContent = 'err: ' + e.message;
-            }
-
-            _qrRAF = requestAnimationFrame(_tickQR);
-        }
-
         function stopQRCamera() {
-            if (_qrRAF) { cancelAnimationFrame(_qrRAF); _qrRAF = null; }
-            if (_qrStream) { _qrStream.getTracks().forEach(t => t.stop()); _qrStream = null; }
-            const video = document.getElementById('qr-video');
             const modal = document.getElementById('qr-camera-modal');
-            if (video) { try { video.pause(); } catch(_){} video.srcObject = null; }
+            if (_html5QrCode) {
+                const inst = _html5QrCode;
+                _html5QrCode = null;
+                inst.stop().then(() => { try { inst.clear(); } catch (_) {} }).catch(() => {});
+            }
             if (modal) modal.classList.add('hidden');
             document.body.style.overflow = '';
         }
@@ -4934,26 +4858,10 @@
 
             <!-- Area video -->
             <div class="relative bg-black" style="aspect-ratio:1/1; max-height:70vh;">
-                <video id="qr-video" autoplay playsinline muted
-                    style="width:100%;height:100%;object-fit:cover;display:block;background:#000;"
-                    webkit-playsinline="true"></video>
-                <canvas id="qr-canvas" class="hidden absolute top-0 left-0"></canvas>
-
-                <!-- Viewfinder -->
-                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div class="relative w-56 h-56">
-                        <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-amber-400 rounded-tl-lg"></div>
-                        <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-amber-400 rounded-tr-lg"></div>
-                        <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-amber-400 rounded-bl-lg"></div>
-                        <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-amber-400 rounded-br-lg"></div>
-                        <!-- Garis scan animasi -->
-                        <div class="absolute left-1 right-1 h-0.5 bg-amber-400/90 rounded-full"
-                            style="top:0; animation: qrScanLine 2s ease-in-out infinite;"></div>
-                    </div>
-                </div>
+                <div id="qr-reader" style="width:100%;height:100%;"></div>
 
                 <!-- Status -->
-                <div id="qr-cam-status" class="absolute bottom-3 inset-x-0 flex justify-center">
+                <div id="qr-cam-status" class="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none">
                     <span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">
                         Arahkan kamera ke QR Code...
                     </span>
@@ -4963,7 +4871,6 @@
             <!-- Footer -->
             <div class="px-5 py-3 bg-gray-50 text-center">
                 <p class="text-xs text-gray-400">Posisikan QR Code di dalam bingkai kuning</p>
-                <p id="qr-debug" class="text-xs text-gray-300 mt-1 font-mono"></p>
             </div>
         </div>
     </div>
