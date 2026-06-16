@@ -4620,7 +4620,7 @@
                 allRows.forEach(row => {
                     const noPO      = row[1] || '-';
                     const orderedBy = row[2] || '-';   // kolom C
-                    const shipTo    = row[3] || '-';   // kolom D
+                    const shipTo    = row[6] || '-';   // kolom D
                     const status    = row[4];
                     const link      = row[5];          // kolom F
                     const statusStr = status ? status.toString().trim() : '';
