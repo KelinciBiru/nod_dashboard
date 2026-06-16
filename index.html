@@ -341,7 +341,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwORUg6QEW7i_3WatFBThyyyHmBD3bU3qXd0oxkdlesEa-dCX1XW6tUhMU_26BnVMpg/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzHCVryx9HSMhAOtNxV3d4p2ICvU9CNyT16tH-4OhPIzOaxIBSeiI6-1i1Ln_lBUm_S/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -2221,10 +2221,13 @@
             const btn = document.getElementById('submitBtn');
             const btnLabel = document.getElementById('submitBtnLabel');
 
-            if (!namaEl.value) { alert('Pilih nama pemohon terlebih dahulu.'); return; }
-            if (!categoryEl.value) { alert('Pilih kategori terlebih dahulu.'); return; }
+            if (!namaEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon terlebih dahulu.'); return; }
+            if (!categoryEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih kategori terlebih dahulu.'); return; }
+            if (!allocatedToEl || !allocatedToEl.value.trim()) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
+            const shippingDateVal = document.getElementById('po-shipping-date')?.value || '';
+            if (!shippingDateVal) { showAlert('warning', 'Belum Lengkap', 'Isi Shipping Date terlebih dahulu.'); return; }
             const file = fileInput.files[0];
-            if (!file) { alert('Pilih file PDF terlebih dahulu.'); return; }
+            if (!file) { showAlert('warning', 'Belum Lengkap', 'Pilih file PDF terlebih dahulu.'); return; }
 
             const setSubmitLoading = (loading) => {
                 btn.disabled = loading;
@@ -2271,10 +2274,10 @@
                         body: JSON.stringify(payload)
                     });
                     const result = await response.json();
-                    alert('Berhasil! No. PO: ' + result.po);
+                    showAlert('success', 'PO Berhasil Dikirim!', 'No. PO: ' + result.po);
                     resetFormPO();
                 } catch (err) {
-                    alert('Gagal kirim: ' + err.message);
+                    showAlert('error', 'Gagal Mengirim PO', err.message);
                 } finally {
                     setSubmitLoading(false);
                 }
@@ -4620,7 +4623,7 @@
                 allRows.forEach(row => {
                     const noPO      = row[1] || '-';
                     const orderedBy = row[2] || '-';   // kolom C
-                    const shipTo    = row[6] || '-';   // kolom D
+                    const shipTo    = row[3] || '-';   // kolom D
                     const status    = row[4];
                     const link      = row[5];          // kolom F
                     const statusStr = status ? status.toString().trim() : '';
