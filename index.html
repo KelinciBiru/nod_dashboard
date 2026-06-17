@@ -341,7 +341,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxTJeNt1-4freA_r0wfkd25VqVVtgWmjCVluiy-b8rtbNNohj4bZGr9JwY32c4pygv6/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwIaAY_FTrPMm7dfY-sYc4jHc4fmEbKHYvqN2FlNZ4puu1MOYxgP_I_1bRFdec-EG4r/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -826,152 +826,309 @@
 
         async function showTeamDeliveryRoute() {
             const contentArea = document.getElementById('content-area');
+
+            // ── Skeleton loading ──
             contentArea.innerHTML = `
-            <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Route</h1>
-            <p class="text-sm text-gray-500 mb-6">Scan QR Code dari lembar Request Order untuk mengisi data pengantaran secara otomatis.</p>
-
-            <!-- Panel Scan QR -->
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-5">
-                <h2 class="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
-                    <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Route</h1>
+                    <p class="text-sm text-gray-500">Daftar pengiriman aktif hari ini. Klik <b>Start</b> untuk memulai, <b>Delivered</b> setelah sampai tujuan.</p>
+                </div>
+                <button onclick="showTeamDeliveryRoute()"
+                    class="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg border border-amber-200 transition">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
-                    Scan QR Code Request Order
-                </h2>
-
-                <!-- Tombol Scan Kamera — utama & menonjol -->
-                <button onclick="startQRCamera()"
-                    class="w-full flex items-center justify-center gap-3 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold py-4 rounded-xl shadow-md transition text-base mb-4">
-                    <svg class="h-6 w-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                    Buka Kamera &amp; Scan QR Code
+                    Refresh
                 </button>
-
-                <p id="do-scan-status" class="text-xs text-center text-gray-400 mb-4 italic">Tekan tombol di atas untuk membuka kamera dan scan QR Code dari lembar Request Order</p>
-
-                <!-- Divider -->
-                <div class="flex items-center gap-3 mb-4">
-                    <div class="flex-1 h-px bg-gray-200"></div>
-                    <span class="text-xs text-gray-400 font-medium">atau</span>
-                    <div class="flex-1 h-px bg-gray-200"></div>
-                </div>
-
-                <div class="flex flex-col sm:flex-row gap-4 items-start">
-                    <!-- Upload PDF -->
-                    <div class="flex-1">
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Upload File PDF Delivery Order</label>
-                        <div class="flex gap-2 items-center">
-                            <input type="file" id="do-pdf-file" accept="application/pdf"
-                                class="block w-full text-xs text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 border border-gray-200 rounded-lg cursor-pointer" />
-                            <button onclick="scanDOPdf()"
-                                class="whitespace-nowrap px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1">
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                                Import
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Input manual No. PO -->
-                    <div class="sm:w-56">
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Input No. PO Manual</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="do-manual-po" placeholder="Contoh: OT-001"
-                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                            <button onclick="loadDOByPO()"
-                                class="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold rounded-lg transition">
-                                Cari
-                            </button>
-                        </div>
-                    </div>
-                </div>
             </div>
-
-            <!-- Form Data Delivery -->
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-5">
-                <h2 class="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
-                    <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    Data Delivery Order
-                </h2>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <!-- No. PO -->
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">No. PO <span class="text-red-500">*</span></label>
-                        <input type="text" id="do-no-po" placeholder="Otomatis dari scan / isi manual"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-amber-50" readonly />
-                    </div>
-
-                    <!-- Ordered By -->
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Ordered By <span class="text-red-500">*</span></label>
-                        <input type="text" id="do-ordered-by" placeholder="Nama pemesan"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                    </div>
-
-                    <!-- Ship To -->
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Ship To <span class="text-red-500">*</span></label>
-                        <input type="text" id="do-ship-to" placeholder="Tujuan pengiriman"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                    </div>
-
-                    <!-- Shipping Date -->
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Shipping Date <span class="text-red-500">*</span></label>
-                        <input type="date" id="do-shipping-date"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                    </div>
-
-                    <!-- Alamat -->
-                    <div class="sm:col-span-2">
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Alamat <span class="text-red-500">*</span></label>
-                        <textarea id="do-alamat" rows="2" placeholder="Alamat lengkap tujuan pengiriman"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"></textarea>
-                    </div>
-
-                    <!-- Phone -->
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Phone <span class="text-red-500">*</span></label>
-                        <input type="text" id="do-phone" placeholder="Nomor telepon tujuan"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                    </div>
-
-                    <!-- Nama Driver -->
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Nama Driver <span class="text-red-500">*</span></label>
-                        <input type="text" id="do-nama-driver" placeholder="Nama driver yang mengantar"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                    </div>
-
-                    <!-- Tanggal Proses (otomatis) -->
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Konfirmasi</label>
-                        <input type="date" id="do-tgl-konfirmasi"
-                            value="${new Date().toISOString().split('T')[0]}"
-                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-                    </div>
+            <div id="route-card-area">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${[1,2,3].map(() => `
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 animate-pulse">
+                        <div class="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
+                        <div class="h-3 bg-gray-100 rounded w-1/2 mb-2"></div>
+                        <div class="h-3 bg-gray-100 rounded w-2/3 mb-4"></div>
+                        <div class="flex gap-2 mt-4">
+                            <div class="h-9 bg-gray-200 rounded-lg flex-1"></div>
+                            <div class="h-9 bg-gray-200 rounded-lg w-10"></div>
+                        </div>
+                    </div>`).join('')}
                 </div>
-            </div>
-
-            <!-- Tombol Done -->
-            <div class="flex justify-end">
-                <button onclick="submitDeliveryDone()"
-                    class="flex items-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow transition text-sm">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    Done
-                </button>
             </div>`;
+
+            // ── Ambil data dari sheet Plan Driver via GAS ──
+            try {
+                const res = await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver');
+                const raw = await res.json();
+
+                // raw = array of rows (dengan header di index 0)
+                // Kolom yang diharapkan dari sheet "Plan Driver":
+                // [0]=No.PO [1]=Customer/Ship To [2]=Alamat [3]=Zona [4]=SLA_Status [5]=Status [6]=Jam Berangkat [7]=Maps URL
+                const rows = Array.isArray(raw) ? raw : (raw.data || []);
+                const header = rows[0] || [];
+                const dataRows = rows.slice(1);
+
+                // Hanya tampilkan yang statusnya "Ready To Ship" atau "On-Delivery"
+                const activeRows = dataRows.filter(r => {
+                    const st = String(r[5] || '').trim();
+                    return st === 'Ready To Ship' || st === 'On-Delivery';
+                });
+
+                const cardArea = document.getElementById('route-card-area');
+
+                if (activeRows.length === 0) {
+                    cardArea.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-20 text-center">
+                        <svg class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2.5 1.5M13 16H4m9 0l2.5 1.5M13 16V9h3l3 3v4h-3"/>
+                        </svg>
+                        <p class="text-lg font-semibold text-gray-400">Tidak ada pengiriman aktif</p>
+                        <p class="text-sm text-gray-400 mt-1">Semua PO sudah selesai atau belum ada yang siap dikirim.</p>
+                    </div>`;
+                    return;
+                }
+
+                // Render cards
+                cardArea.innerHTML = `
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="route-cards-grid">
+                    ${activeRows.map((r, idx) => _buildRouteCard(r, idx)).join('')}
+                </div>`;
+
+            } catch (err) {
+                document.getElementById('route-card-area').innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+                    <p class="text-red-600 font-semibold mb-1">❌ Gagal memuat data Route</p>
+                    <p class="text-xs text-red-400">${err.message}</p>
+                    <p class="text-xs text-gray-500 mt-2">Pastikan GAS sudah mendukung <code>action=getPlanDriver</code> dan sheet "Plan Driver" tersedia.</p>
+                </div>`;
+            }
+        }
+
+        /**
+         * Bangun HTML satu card PO untuk halaman Route.
+         * r = array row dari sheet Plan Driver:
+         *   [0]=No.PO  [1]=Customer/Ship To  [2]=Alamat  [3]=Zona  [4]=SLA_Status  [5]=Status  [6]=Jam Berangkat  [7]=Maps URL
+         */
+        function _buildRouteCard(r, idx) {
+            const noPO       = String(r[0] || '').trim();
+            const customer   = String(r[1] || '').trim();
+            const alamat     = String(r[2] || '').trim();
+            const zona       = String(r[3] || '').trim();
+            const slaStatus  = String(r[4] || '').trim();
+            const status     = String(r[5] || '').trim();
+            const jamBrgkt   = String(r[6] || '').trim();
+            const mapsUrl    = String(r[7] || '').trim();
+
+            const isOnDelivery = status === 'On-Delivery';
+
+            // Warna SLA badge
+            const slaBadgeClass = slaStatus.toLowerCase().includes('late') || slaStatus.toLowerCase().includes('overdue')
+                ? 'bg-red-100 text-red-700'
+                : slaStatus.toLowerCase().includes('warning') || slaStatus.toLowerCase().includes('at risk')
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-green-100 text-green-700';
+
+            // Status badge
+            const statusBadgeClass = isOnDelivery ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700';
+            const statusLabel      = isOnDelivery ? 'On-Delivery' : 'Ready To Ship';
+
+            // Tombol aksi
+            const actionBtn = isOnDelivery
+                ? `<button onclick="routeMarkDelivered('${noPO}', ${idx})"
+                        id="route-btn-${idx}"
+                        class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-bold rounded-xl shadow transition">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Delivered
+                   </button>`
+                : `<button onclick="routeStartDelivery('${noPO}', ${idx})"
+                        id="route-btn-${idx}"
+                        class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-bold rounded-xl shadow transition">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Start
+                   </button>`;
+
+            // Tombol Google Maps
+            const mapsBtn = (mapsUrl || alamat)
+                ? `<a href="${mapsUrl || 'https://maps.google.com/?q=' + encodeURIComponent(alamat)}" target="_blank" rel="noopener"
+                        class="flex items-center justify-center w-11 h-full min-h-[42px] bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl border border-blue-200 transition" title="Buka Google Maps">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                   </a>`
+                : '';
+
+            return `
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3 hover:shadow-md transition" id="route-card-${idx}">
+                <!-- Header: Customer + Status badge -->
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-base font-bold text-gray-800 truncate" title="${customer}">${customer || '-'}</p>
+                        ${alamat ? `<p class="text-xs text-gray-400 truncate mt-0.5" title="${alamat}">${alamat}</p>` : ''}
+                    </div>
+                    <span class="flex-shrink-0 inline-block px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass}">${statusLabel}</span>
+                </div>
+
+                <!-- Info: No PO | Zona | SLA -->
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 border-t border-gray-50 pt-2">
+                    <span class="font-semibold text-gray-700">${noPO || '-'}</span>
+                    ${zona ? `<span class="flex items-center gap-1"><svg class="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>${zona}</span>` : ''}
+                    ${slaStatus ? `<span class="inline-block px-2 py-0.5 rounded-full font-semibold ${slaBadgeClass}">${slaStatus}</span>` : ''}
+                    ${isOnDelivery && jamBrgkt ? `<span class="text-gray-400">⏱ Berangkat: ${jamBrgkt}</span>` : ''}
+                </div>
+
+                <!-- Action buttons -->
+                <div class="flex gap-2 items-stretch mt-1">
+                    ${actionBtn}
+                    ${mapsBtn}
+                </div>
+            </div>`;
+        }
+
+        /**
+         * Klik tombol "Start" pada sebuah card → ubah status ke "On-Delivery" + catat jam berangkat
+         */
+        async function routeStartDelivery(noPO, idx) {
+            const btn = document.getElementById(`route-btn-${idx}`);
+            if (!btn) return;
+
+            // Loading state
+            const origHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Memulai...`;
+
+            const jamBerangkat = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            try {
+                const res = await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'startDelivery',
+                        noPO: noPO,
+                        jamBerangkat: jamBerangkat
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    // Update card UI tanpa reload penuh
+                    const card = document.getElementById(`route-card-${idx}`);
+                    if (card) {
+                        // Ganti status badge
+                        const statusBadge = card.querySelector('.flex-shrink-0.inline-block');
+                        if (statusBadge) {
+                            statusBadge.className = 'flex-shrink-0 inline-block px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700';
+                            statusBadge.textContent = 'On-Delivery';
+                        }
+                        // Ganti tombol Start → Delivered
+                        btn.id = `route-btn-${idx}`;
+                        btn.className = 'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-bold rounded-xl shadow transition';
+                        btn.disabled = false;
+                        btn.innerHTML = `
+                            <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Delivered`;
+                        btn.setAttribute('onclick', `routeMarkDelivered('${noPO}', ${idx})`);
+
+                        // Tambah info jam berangkat di info row
+                        const infoRow = card.querySelector('.flex.flex-wrap');
+                        if (infoRow && jamBerangkat) {
+                            const jamSpan = document.createElement('span');
+                            jamSpan.className = 'text-gray-400';
+                            jamSpan.textContent = `⏱ Berangkat: ${jamBerangkat}`;
+                            infoRow.appendChild(jamSpan);
+                        }
+                    }
+                    showAlert('success', '🚚 Pengiriman Dimulai!', `PO <b>${noPO}</b> status berubah ke <b>On-Delivery</b>.<br>Jam berangkat: <b>${jamBerangkat}</b>`);
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = origHTML;
+                    showAlert('error', 'Gagal', result.message || 'Terjadi kesalahan di server.');
+                }
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = origHTML;
+                showAlert('error', 'Koneksi Error', 'Tidak dapat terhubung ke server: ' + err.message);
+            }
+        }
+
+        /**
+         * Klik tombol "Delivered" pada sebuah card → ubah status ke "Done", sembunyikan card
+         */
+        async function routeMarkDelivered(noPO, idx) {
+            const ok = await showConfirm(
+                'Konfirmasi Pengantaran Selesai?',
+                `PO <b>${noPO}</b> akan ditandai <b>Done</b>.<br>Status di sheet Plan Driver dan PO Data akan diperbarui.`
+            );
+            if (!ok) return;
+
+            const btn = document.getElementById(`route-btn-${idx}`);
+            const origHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Menyimpan...`;
+            }
+
+            const tglKonfirmasi = new Date().toISOString().split('T')[0];
+
+            try {
+                const res = await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'deliveryDone',
+                        noPO: noPO,
+                        tglKonfirmasi: tglKonfirmasi
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    // Animasi keluar → sembunyikan card
+                    const card = document.getElementById(`route-card-${idx}`);
+                    if (card) {
+                        card.style.transition = 'opacity 0.4s, transform 0.4s';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.95)';
+                        setTimeout(() => card.remove(), 420);
+                    }
+                    showAlert('success', '✅ Pengantaran Selesai!',
+                        `PO <b>${noPO}</b> telah dicatat sebagai <b>Done</b>.`);
+
+                    // Jika tidak ada card lagi, tampilkan empty state
+                    setTimeout(() => {
+                        const grid = document.getElementById('route-cards-grid');
+                        if (grid && grid.children.length === 0) {
+                            document.getElementById('route-card-area').innerHTML = `
+                            <div class="flex flex-col items-center justify-center py-20 text-center">
+                                <svg class="h-16 w-16 text-green-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <p class="text-lg font-semibold text-gray-400">Semua pengiriman selesai! 🎉</p>
+                            </div>`;
+                        }
+                    }, 500);
+                } else {
+                    if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+                    showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan di server.');
+                }
+            } catch (err) {
+                if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+                showAlert('error', 'Koneksi Error', 'Tidak dapat terhubung ke server: ' + err.message);
+            }
         }
 
         // =========================================================================
