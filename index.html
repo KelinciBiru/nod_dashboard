@@ -341,7 +341,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwIaAY_FTrPMm7dfY-sYc4jHc4fmEbKHYvqN2FlNZ4puu1MOYxgP_I_1bRFdec-EG4r/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxsaI1LZqVmtRokZgLyzfyew1vAR0Fp1MqLgqXJsOWpeZPQpPwqxhjkr1WWIYNOJo8h/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -824,6 +824,163 @@
         // =========================================================================
         const DELIVERY_GAS_URL = PO_GAS_URL; // Gunakan GAS yang sama (akan handle action deliveryDone)
 
+        /**
+         * Mengembalikan jam WIB format "HH:MM" yang aman lintas browser/environment.
+         * Menghindari bug toLocaleTimeString yang kadang return tanggal di beberapa engine.
+         */
+        function getJamWIB() {
+            const now = new Date();
+            // Offset WIB = UTC+7
+            const wibMs  = now.getTime() + (7 * 60 * 60 * 1000);
+            const wibDate = new Date(wibMs);
+            const hh = String(wibDate.getUTCHours()).padStart(2, '0');
+            const mm = String(wibDate.getUTCMinutes()).padStart(2, '0');
+            return `${hh}:${mm}`;
+        }
+
+        /**
+         * Mengembalikan tanggal hari ini format "DD/MM/YYYY" (WIB).
+         */
+        function getTanggalWIB() {
+            const now     = new Date();
+            const wibMs   = now.getTime() + (7 * 60 * 60 * 1000);
+            const wibDate = new Date(wibMs);
+            const dd   = String(wibDate.getUTCDate()).padStart(2, '0');
+            const mm   = String(wibDate.getUTCMonth() + 1).padStart(2, '0');
+            const yyyy = wibDate.getUTCFullYear();
+            return `${dd}/${mm}/${yyyy}`;
+        }
+
+        /**
+         * Tampilkan popup Cancel dengan textarea alasan.
+         * Mengembalikan Promise<string|null> — null = batal, string = alasan yang diisi.
+         */
+        function routeShowCancelModal(noPO) {
+            return new Promise(resolve => {
+                // Hapus modal lama jika ada
+                const old = document.getElementById('route-cancel-modal');
+                if (old) old.remove();
+
+                const modal = document.createElement('div');
+                modal.id = 'route-cancel-modal';
+                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm';
+                modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">❌</span>
+                        <div>
+                            <p class="font-bold text-gray-800 text-base">Cancel Pengiriman</p>
+                            <p class="text-xs text-gray-400">PO: <b>${noPO}</b></p>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Masukan Alasan <span class="text-red-500">*</span></label>
+                        <textarea id="route-cancel-reason"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
+                            rows="3" placeholder="Tulis alasan pembatalan..."></textarea>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="route-cancel-submit"
+                            class="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-xl transition">
+                            Konfirmasi Cancel
+                        </button>
+                        <button id="route-cancel-close"
+                            class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition">
+                            Kembali
+                        </button>
+                    </div>
+                </div>`;
+
+                document.body.appendChild(modal);
+
+                document.getElementById('route-cancel-submit').onclick = () => {
+                    const alasan = document.getElementById('route-cancel-reason').value.trim();
+                    if (!alasan) {
+                        document.getElementById('route-cancel-reason').classList.add('border-red-400', 'ring-2', 'ring-red-200');
+                        document.getElementById('route-cancel-reason').placeholder = '⚠ Alasan wajib diisi!';
+                        return;
+                    }
+                    modal.remove();
+                    resolve(alasan);
+                };
+                document.getElementById('route-cancel-close').onclick = () => {
+                    modal.remove();
+                    resolve(null);
+                };
+                modal.addEventListener('click', e => { if (e.target === modal) { modal.remove(); resolve(null); } });
+            });
+        }
+
+        /**
+         * Tampilkan modal isian Nama Pengirim & Tanggal Diterima sebelum Delivered.
+         * Mengembalikan Promise<{namaPengirim, tglDiterima}|null>
+         */
+        function routeShowDeliveredModal(noPO) {
+            return new Promise(resolve => {
+                const old = document.getElementById('route-delivered-modal');
+                if (old) old.remove();
+
+                const today = getTanggalWIB();
+
+                const modal = document.createElement('div');
+                modal.id = 'route-delivered-modal';
+                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm';
+                modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">✅</span>
+                        <div>
+                            <p class="font-bold text-gray-800 text-base">Konfirmasi Terima Barang</p>
+                            <p class="text-xs text-gray-400">PO: <b>${noPO}</b></p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nama Pengirim <span class="text-red-500">*</span></label>
+                            <input id="route-delivered-pengirim" type="text"
+                                class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-300"
+                                placeholder="Nama driver / kurir pengirim..." />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Tanggal Diterima</label>
+                            <input id="route-delivered-tgl" type="text"
+                                class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-300"
+                                value="${today}" placeholder="DD/MM/YYYY" />
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="route-delivered-submit"
+                            class="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl transition">
+                            ✅ Delivered
+                        </button>
+                        <button id="route-delivered-close"
+                            class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition">
+                            Batal
+                        </button>
+                    </div>
+                </div>`;
+
+                document.body.appendChild(modal);
+
+                document.getElementById('route-delivered-submit').onclick = () => {
+                    const namaPengirim = document.getElementById('route-delivered-pengirim').value.trim();
+                    const tglDiterima  = document.getElementById('route-delivered-tgl').value.trim();
+                    if (!namaPengirim) {
+                        document.getElementById('route-delivered-pengirim').classList.add('border-red-400');
+                        document.getElementById('route-delivered-pengirim').placeholder = '⚠ Nama pengirim wajib diisi!';
+                        return;
+                    }
+                    modal.remove();
+                    resolve({ namaPengirim, tglDiterima });
+                };
+                document.getElementById('route-delivered-close').onclick = () => {
+                    modal.remove();
+                    resolve(null);
+                };
+                modal.addEventListener('click', e => { if (e.target === modal) { modal.remove(); resolve(null); } });
+            });
+        }
+
         async function showTeamDeliveryRoute() {
             const contentArea = document.getElementById('content-area');
 
@@ -863,8 +1020,9 @@
                 const raw = await res.json();
 
                 // raw = array of rows (dengan header di index 0)
-                // Kolom yang diharapkan dari sheet "Plan Driver":
-                // [0]=No.PO [1]=Customer/Ship To [2]=Alamat [3]=Zona [4]=SLA_Status [5]=Status [6]=Jam Berangkat [7]=Maps URL
+                // Kolom yang dikembalikan GAS dari PO_Data:
+                // [0]=No.PO  [1]=Ship To  [2]=Alamat  [3]=Zona  [4]=SLA_Status  [5]=Status
+                // [6]=OrderedBy  [7]=Phone  [8]=ShippingDate  [9]=Driver/PIC  [10]=Maps URL
                 const rows = Array.isArray(raw) ? raw : (raw.data || []);
                 const header = rows[0] || [];
                 const dataRows = rows.slice(1);
@@ -910,18 +1068,22 @@
 
         /**
          * Bangun HTML satu card PO untuk halaman Route.
-         * r = array row dari sheet Plan Driver:
-         *   [0]=No.PO  [1]=Customer/Ship To  [2]=Alamat  [3]=Zona  [4]=SLA_Status  [5]=Status  [6]=Jam Berangkat  [7]=Maps URL
+         * r = array row dari GAS (baca PO_Data):
+         *   [0]=No.PO   [1]=Ship To    [2]=Alamat      [3]=Zona       [4]=SLA_Status
+         *   [5]=Status  [6]=OrderedBy  [7]=Phone       [8]=ShippingDate  [9]=Driver/PIC  [10]=Maps URL
          */
         function _buildRouteCard(r, idx) {
-            const noPO       = String(r[0] || '').trim();
-            const customer   = String(r[1] || '').trim();
-            const alamat     = String(r[2] || '').trim();
-            const zona       = String(r[3] || '').trim();
-            const slaStatus  = String(r[4] || '').trim();
-            const status     = String(r[5] || '').trim();
-            const jamBrgkt   = String(r[6] || '').trim();
-            const mapsUrl    = String(r[7] || '').trim();
+            const noPO         = String(r[0]  || '').trim();
+            const customer     = String(r[1]  || '').trim();
+            const alamat       = String(r[2]  || '').trim();
+            const zona         = String(r[3]  || '').trim();
+            const slaStatus    = String(r[4]  || '').trim();
+            const status       = String(r[5]  || '').trim();
+            const orderedBy    = String(r[6]  || '').trim();
+            const phone        = String(r[7]  || '').trim();
+            const shippingDate = String(r[8]  || '').trim();
+            const driver       = String(r[9]  || '').trim();
+            const mapsUrl      = String(r[10] || '').trim();
 
             const isOnDelivery = status === 'On-Delivery';
 
@@ -936,7 +1098,28 @@
             const statusBadgeClass = isOnDelivery ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700';
             const statusLabel      = isOnDelivery ? 'On-Delivery' : 'Ready To Ship';
 
+            // Encode data lengkap ke atribut data-* agar bisa diambil saat Start/Delivered
+            const dataAttrs = `
+                data-no-po="${noPO}"
+                data-ordered-by="${orderedBy.replace(/"/g,'&quot;')}"
+                data-ship-to="${customer.replace(/"/g,'&quot;')}"
+                data-alamat="${alamat.replace(/"/g,'&quot;')}"
+                data-phone="${phone}"
+                data-shipping-date="${shippingDate}"
+                data-driver="${driver.replace(/"/g,'&quot;')}"`;
+
             // Tombol aksi
+            // Tombol Cancel (muncul di semua state, sejajar dengan Start atau Delivered)
+            const cancelBtnHtml = `
+                   <button onclick="routeCancelDelivery('${noPO}', ${idx})"
+                        id="route-cancel-btn-${idx}"
+                        class="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 text-sm font-bold rounded-xl border border-red-200 transition">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        Cancel
+                   </button>`;
+
             const actionBtn = isOnDelivery
                 ? `<button onclick="routeMarkDelivered('${noPO}', ${idx})"
                         id="route-btn-${idx}"
@@ -945,7 +1128,8 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                         </svg>
                         Delivered
-                   </button>`
+                   </button>
+                   ${cancelBtnHtml}`
                 : `<button onclick="routeStartDelivery('${noPO}', ${idx})"
                         id="route-btn-${idx}"
                         class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-bold rounded-xl shadow transition">
@@ -955,7 +1139,8 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         Start
-                   </button>`;
+                   </button>
+                   ${cancelBtnHtml}`;
 
             // Tombol Google Maps
             const mapsBtn = (mapsUrl || alamat)
@@ -970,22 +1155,52 @@
                 : '';
 
             return `
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3 hover:shadow-md transition" id="route-card-${idx}">
-                <!-- Header: Customer + Status badge -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3 hover:shadow-md transition" id="route-card-${idx}" ${dataAttrs}>
+
+                <!-- Header: Ship To + Status badge -->
                 <div class="flex items-start justify-between gap-2">
                     <div class="flex-1 min-w-0">
                         <p class="text-base font-bold text-gray-800 truncate" title="${customer}">${customer || '-'}</p>
-                        ${alamat ? `<p class="text-xs text-gray-400 truncate mt-0.5" title="${alamat}">${alamat}</p>` : ''}
+                        <p class="text-xs text-gray-400 mt-0.5 truncate" title="${alamat}">${alamat || '-'}</p>
                     </div>
-                    <span class="flex-shrink-0 inline-block px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass}">${statusLabel}</span>
+                    <span class="flex-shrink-0 inline-block px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass}" id="route-status-badge-${idx}">${statusLabel}</span>
                 </div>
 
-                <!-- Info: No PO | Zona | SLA -->
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 border-t border-gray-50 pt-2">
-                    <span class="font-semibold text-gray-700">${noPO || '-'}</span>
-                    ${zona ? `<span class="flex items-center gap-1"><svg class="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>${zona}</span>` : ''}
-                    ${slaStatus ? `<span class="inline-block px-2 py-0.5 rounded-full font-semibold ${slaBadgeClass}">${slaStatus}</span>` : ''}
-                    ${isOnDelivery && jamBrgkt ? `<span class="text-gray-400">⏱ Berangkat: ${jamBrgkt}</span>` : ''}
+                <!-- Detail PO: grid 2 kolom -->
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs border-t border-gray-100 pt-3">
+                    <div>
+                        <p class="text-gray-400 font-medium">No. PO</p>
+                        <p class="text-gray-800 font-bold">${noPO || '-'}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 font-medium">Ordered By</p>
+                        <p class="text-gray-700 truncate" title="${orderedBy}">${orderedBy || '-'}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 font-medium">Phone</p>
+                        <p class="text-gray-700">${phone || '-'}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 font-medium">Shipping Date</p>
+                        <p class="text-gray-700">${shippingDate || '-'}</p>
+                    </div>
+                    ${driver ? `<div class="col-span-2">
+                        <p class="text-gray-400 font-medium">Driver / PIC</p>
+                        <p class="text-gray-700">${driver}</p>
+                    </div>` : ''}
+                    ${zona ? `<div>
+                        <p class="text-gray-400 font-medium">Zona</p>
+                        <p class="text-gray-700">${zona}</p>
+                    </div>` : ''}
+                    ${slaStatus ? `<div>
+                        <p class="text-gray-400 font-medium">SLA</p>
+                        <span class="inline-block px-2 py-0.5 rounded-full font-semibold ${slaBadgeClass}">${slaStatus}</span>
+                    </div>` : ''}
+                </div>
+
+                <!-- Info jam (muncul setelah Start) -->
+                <div id="route-jam-info-${idx}" class="text-xs text-gray-400 ${isOnDelivery ? '' : 'hidden'}">
+                    ${isOnDelivery ? '🚚 Sedang dalam perjalanan...' : ''}
                 </div>
 
                 <!-- Action buttons -->
@@ -997,118 +1212,151 @@
         }
 
         /**
-         * Klik tombol "Start" pada sebuah card → ubah status ke "On-Delivery" + catat jam berangkat
+         * Klik tombol "Start" → ubah status ke "On-Delivery" + catat ke Delivery_Log dengan jam berangkat
          */
         async function routeStartDelivery(noPO, idx) {
-            const btn = document.getElementById(`route-btn-${idx}`);
+            const btn  = document.getElementById(`route-btn-${idx}`);
+            const card = document.getElementById(`route-card-${idx}`);
             if (!btn) return;
 
+            // Ambil data lengkap dari atribut card
+            const orderedBy    = card?.dataset.orderedBy    || '';
+            const shipTo       = card?.dataset.shipTo       || '';
+            const alamat       = card?.dataset.alamat       || '';
+            const phone        = card?.dataset.phone        || '';
+            const shippingDate = card?.dataset.shippingDate || '';
+            const driver       = card?.dataset.driver       || '';
+
             // Loading state
-            const origHTML = btn.innerHTML;
+            const origHTML       = btn.innerHTML;
+            const cancelBtn      = document.getElementById(`route-cancel-btn-${idx}`);
+            const origCancelHTML = cancelBtn ? cancelBtn.innerHTML : '';
             btn.disabled = true;
+            if (cancelBtn) cancelBtn.disabled = true;
             btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Memulai...`;
 
-            const jamBerangkat = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            // Format jam WIB yang aman: "HH:MM"
+            const jamBerangkat = getJamWIB();
 
             try {
                 const res = await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({
-                        action: 'startDelivery',
-                        noPO: noPO,
-                        jamBerangkat: jamBerangkat
+                        action      : 'startDelivery',
+                        noPO,
+                        jamBerangkat,
+                        orderedBy,
+                        shipTo,
+                        alamat,
+                        phone,
+                        shippingDate,
+                        driver
                     })
                 });
                 const result = await res.json();
 
                 if (result.success) {
-                    // Update card UI tanpa reload penuh
-                    const card = document.getElementById(`route-card-${idx}`);
-                    if (card) {
-                        // Ganti status badge
-                        const statusBadge = card.querySelector('.flex-shrink-0.inline-block');
-                        if (statusBadge) {
-                            statusBadge.className = 'flex-shrink-0 inline-block px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700';
-                            statusBadge.textContent = 'On-Delivery';
-                        }
-                        // Ganti tombol Start → Delivered
-                        btn.id = `route-btn-${idx}`;
-                        btn.className = 'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-bold rounded-xl shadow transition';
-                        btn.disabled = false;
-                        btn.innerHTML = `
-                            <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            Delivered`;
-                        btn.setAttribute('onclick', `routeMarkDelivered('${noPO}', ${idx})`);
-
-                        // Tambah info jam berangkat di info row
-                        const infoRow = card.querySelector('.flex.flex-wrap');
-                        if (infoRow && jamBerangkat) {
-                            const jamSpan = document.createElement('span');
-                            jamSpan.className = 'text-gray-400';
-                            jamSpan.textContent = `⏱ Berangkat: ${jamBerangkat}`;
-                            infoRow.appendChild(jamSpan);
-                        }
+                    // ── Update UI card tanpa reload ──
+                    // Ganti status badge
+                    const badge = document.getElementById(`route-status-badge-${idx}`);
+                    if (badge) {
+                        badge.className   = 'flex-shrink-0 inline-block px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700';
+                        badge.textContent = 'On-Delivery';
                     }
-                    showAlert('success', '🚚 Pengiriman Dimulai!', `PO <b>${noPO}</b> status berubah ke <b>On-Delivery</b>.<br>Jam berangkat: <b>${jamBerangkat}</b>`);
+                    // Tampilkan info jam berangkat
+                    const jamInfo = document.getElementById(`route-jam-info-${idx}`);
+                    if (jamInfo) {
+                        jamInfo.textContent = `⏱ Berangkat: ${jamBerangkat}`;
+                        jamInfo.classList.remove('hidden');
+                    }
+                    // Ganti tombol Start → Delivered (Cancel tetap ada di sebelahnya)
+                    btn.className = 'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-bold rounded-xl shadow transition';
+                    btn.disabled  = false;
+                    btn.innerHTML = `<svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                                     </svg> Delivered`;
+                    btn.setAttribute('onclick', `routeMarkDelivered('${noPO}', ${idx})`);
+                    // Re-enable tombol Cancel
+                    if (cancelBtn) cancelBtn.disabled = false;
+
+                    showAlert('success', '🚚 Pengiriman Dimulai!',
+                        `PO ${noPO} → On-Delivery\nJam berangkat: ${jamBerangkat}\nData dicatat ke Delivery_Log.`);
                 } else {
                     btn.disabled = false;
                     btn.innerHTML = origHTML;
+                    if (cancelBtn) { cancelBtn.disabled = false; cancelBtn.innerHTML = origCancelHTML; }
                     showAlert('error', 'Gagal', result.message || 'Terjadi kesalahan di server.');
                 }
             } catch (err) {
                 btn.disabled = false;
                 btn.innerHTML = origHTML;
+                if (cancelBtn) { cancelBtn.disabled = false; cancelBtn.innerHTML = origCancelHTML; }
                 showAlert('error', 'Koneksi Error', 'Tidak dapat terhubung ke server: ' + err.message);
             }
         }
 
         /**
-         * Klik tombol "Delivered" pada sebuah card → ubah status ke "Done", sembunyikan card
+         * Klik tombol "Delivered" → tampilkan modal isian → catat jam tiba + Nama Pengirim + Tgl Diterima
          */
         async function routeMarkDelivered(noPO, idx) {
-            const ok = await showConfirm(
-                'Konfirmasi Pengantaran Selesai?',
-                `PO <b>${noPO}</b> akan ditandai <b>Done</b>.<br>Status di sheet Plan Driver dan PO Data akan diperbarui.`
-            );
-            if (!ok) return;
+            // Tampilkan modal isian Nama Pengirim & Tanggal Diterima
+            const formData = await routeShowDeliveredModal(noPO);
+            if (!formData) return; // user klik Batal
 
-            const btn = document.getElementById(`route-btn-${idx}`);
+            const { namaPengirim, tglDiterima } = formData;
+
+            const btn  = document.getElementById(`route-btn-${idx}`);
+            const card = document.getElementById(`route-card-${idx}`);
             const origHTML = btn ? btn.innerHTML : '';
             if (btn) {
-                btn.disabled = true;
+                btn.disabled  = true;
                 btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Menyimpan...`;
             }
 
-            const tglKonfirmasi = new Date().toISOString().split('T')[0];
+            // Ambil data lengkap dari atribut card
+            const orderedBy    = card?.dataset.orderedBy    || '';
+            const shipTo       = card?.dataset.shipTo       || '';
+            const alamat       = card?.dataset.alamat       || '';
+            const phone        = card?.dataset.phone        || '';
+            const shippingDate = card?.dataset.shippingDate || '';
+            const driver       = card?.dataset.driver       || '';
+
+            // Format jam WIB yang aman: "HH:MM"
+            const jamTiba      = getJamWIB();
+            const tglKonfirmasi = tglDiterima || getTanggalWIB();
 
             try {
                 const res = await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({
-                        action: 'deliveryDone',
-                        noPO: noPO,
-                        tglKonfirmasi: tglKonfirmasi
+                        action      : 'deliveryDone',
+                        noPO,
+                        orderedBy,
+                        shipTo,
+                        alamat,
+                        phone,
+                        shippingDate,
+                        driver,
+                        namaPengirim,
+                        tglKonfirmasi,
+                        jamTiba
                     })
                 });
                 const result = await res.json();
 
                 if (result.success) {
                     // Animasi keluar → sembunyikan card
-                    const card = document.getElementById(`route-card-${idx}`);
                     if (card) {
                         card.style.transition = 'opacity 0.4s, transform 0.4s';
-                        card.style.opacity = '0';
-                        card.style.transform = 'scale(0.95)';
+                        card.style.opacity    = '0';
+                        card.style.transform  = 'scale(0.95)';
                         setTimeout(() => card.remove(), 420);
                     }
                     showAlert('success', '✅ Pengantaran Selesai!',
-                        `PO <b>${noPO}</b> telah dicatat sebagai <b>Done</b>.`);
+                        `PO ${noPO} dicatat Done.\nNama Pengirim: ${namaPengirim}\nTgl Diterima: ${tglKonfirmasi} | Jam Tiba: ${jamTiba}`);
 
-                    // Jika tidak ada card lagi, tampilkan empty state
                     setTimeout(() => {
                         const grid = document.getElementById('route-cards-grid');
                         if (grid && grid.children.length === 0) {
@@ -1127,6 +1375,66 @@
                 }
             } catch (err) {
                 if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
+                showAlert('error', 'Koneksi Error', 'Tidak dapat terhubung ke server: ' + err.message);
+            }
+        }
+
+        /**
+         * Klik tombol "Cancel" → tampilkan popup alasan → kirim cancelDelivery ke GAS
+         */
+        async function routeCancelDelivery(noPO, idx) {
+            const alasan = await routeShowCancelModal(noPO);
+            if (!alasan) return; // user klik Kembali
+
+            const btn       = document.getElementById(`route-btn-${idx}`);
+            const cancelBtn = document.getElementById(`route-cancel-btn-${idx}`);
+            const card      = document.getElementById(`route-card-${idx}`);
+            if (cancelBtn) { cancelBtn.disabled = true; cancelBtn.innerHTML = `<span class="inline-block w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></span>`; }
+            if (btn)       { btn.disabled = true; }
+
+            try {
+                const res = await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action : 'cancelDelivery',
+                        noPO,
+                        alasan
+                    })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    if (card) {
+                        card.style.transition = 'opacity 0.4s, transform 0.4s';
+                        card.style.opacity    = '0';
+                        card.style.transform  = 'scale(0.95)';
+                        setTimeout(() => card.remove(), 420);
+                    }
+                    showAlert('info', 'Pengiriman Dibatalkan',
+                        `PO ${noPO} dibatalkan.\nAlasan: ${alasan}`);
+
+                    setTimeout(() => {
+                        const grid = document.getElementById('route-cards-grid');
+                        if (grid && grid.children.length === 0) {
+                            document.getElementById('route-card-area').innerHTML = `
+                            <div class="flex flex-col items-center justify-center py-20 text-center">
+                                <svg class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2.5 1.5M13 16H4m9 0l2.5 1.5M13 16V9h3l3 3v4h-3"/>
+                                </svg>
+                                <p class="text-lg font-semibold text-gray-400">Tidak ada pengiriman aktif</p>
+                            </div>`;
+                        }
+                    }, 500);
+                } else {
+                    if (btn)       { btn.disabled = false; }
+                    if (cancelBtn) { cancelBtn.disabled = false; cancelBtn.innerHTML = `<svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg> Cancel`; }
+                    showAlert('error', 'Gagal', result.message || 'Terjadi kesalahan di server.');
+                }
+            } catch (err) {
+                if (btn)       { btn.disabled = false; }
+                if (cancelBtn) { cancelBtn.disabled = false; cancelBtn.innerHTML = `<svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg> Cancel`; }
                 showAlert('error', 'Koneksi Error', 'Tidak dapat terhubung ke server: ' + err.message);
             }
         }
@@ -1817,14 +2125,9 @@
 
                     rows_html += `
                     <tr class="hover:bg-amber-50">
-                        <td class="p-3 border-b">${waktu}</td>
                         <td class="p-3 border-b font-mono">${noPO}</td>
                         <td class="p-3 border-b">${orderedBy}</td>
                         <td class="p-3 border-b">${shipTo}</td>
-                        <td class="p-3 border-b">${shippingDate}</td>
-                        <td class="p-3 border-b">${alamat}</td>
-                        <td class="p-3 border-b">${phone}</td>
-                        <td class="p-3 border-b">${pic}</td>
                         <td class="p-3 border-b">
                             <span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Done</span>
                         </td>
@@ -1839,14 +2142,9 @@
                     <table class="w-full text-xs text-center border-collapse">
                         <thead>
                             <tr class="bg-gray-800 text-white">
-                                <th class="p-3">Waktu</th>
                                 <th class="p-3">No. PO</th>
                                 <th class="p-3">Ordered By</th>
                                 <th class="p-3">Ship To</th>
-                                <th class="p-3">Shipping Date</th>
-                                <th class="p-3">Alamat</th>
-                                <th class="p-3">Phone</th>
-                                <th class="p-3">Driver</th>
                                 <th class="p-3">Status</th>
                             </tr>
                         </thead>
@@ -4343,7 +4641,7 @@
         // =========================================================================
         // HALAMAN: PROCESS INBOUND
         // =========================================================================
-        const INBOUND_CATEGORY_OPTIONS = ['Event', 'Outlet', 'B2B', 'B2C', 'KOL', 'Stock Selling', 'Display', 'Need Repair', 'Box Damaged'];
+        const INBOUND_CATEGORY_OPTIONS = ['Event', 'Outlet', 'B2B', 'B2C', 'KOL', 'Need Repair', 'Box Damaged'];
         const INBOUND_CREW_OPTIONS = ['Adam', 'Rizal', 'Helmi', 'Raka'];
 
         async function showProcessInbound() {
@@ -4786,7 +5084,6 @@
                     const statusStr = status ? status.toString().trim() : '';
                     const isClosed  = statusStr === 'Closed';
                     const isReady   = statusStr === 'Ready To Ship';
-                    const isOnDelivery = statusStr === 'On-Delivery'
                     const isDone    = statusStr === 'Done';
 
                     const statusBadge = isClosed
@@ -4795,9 +5092,7 @@
                             ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Done</span>`
                             : isReady
                                 ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Ready To Ship</span>`
-                                : isOnDelivery
-                                    ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700">On-Delivery</span>`
-                                    : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Open</span>`;
+                                : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Open</span>`;
 
                     const linkCell = (link && link !== '')
                         ? `<a href="${link}" target="_blank"
@@ -4826,7 +5121,6 @@
                     const rowBg = isClosed ? 'bg-gray-50 opacity-60'
                                 : isDone   ? 'bg-emerald-50'
                                 : isReady  ? 'bg-blue-50'
-                                : isOnDelivery ? 'bg-orange-50'
                                            : 'hover:bg-amber-50';
 
                     rows_html += `
