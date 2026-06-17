@@ -4786,6 +4786,7 @@
                     const statusStr = status ? status.toString().trim() : '';
                     const isClosed  = statusStr === 'Closed';
                     const isReady   = statusStr === 'Ready To Ship';
+                    const isOnDelivery = statusStr === 'On-Delivery'
                     const isDone    = statusStr === 'Done';
 
                     const statusBadge = isClosed
@@ -4794,7 +4795,9 @@
                             ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Done</span>`
                             : isReady
                                 ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Ready To Ship</span>`
-                                : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Open</span>`;
+                                : isOnDelivery
+                                    ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700">On-Delivery</span>`
+                                    : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Open</span>`;
 
                     const linkCell = (link && link !== '')
                         ? `<a href="${link}" target="_blank"
@@ -4823,6 +4826,7 @@
                     const rowBg = isClosed ? 'bg-gray-50 opacity-60'
                                 : isDone   ? 'bg-emerald-50'
                                 : isReady  ? 'bg-blue-50'
+                                : isOnDelivery ? 'bg-orange-50'
                                            : 'hover:bg-amber-50';
 
                     rows_html += `
