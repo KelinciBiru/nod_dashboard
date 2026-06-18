@@ -4631,10 +4631,11 @@
             const rowId = 'row-' + Date.now();
             tr.setAttribute('data-rowid', rowId);
             tr.innerHTML = `
-                <td class="p-2 font-medium relative">
+                <td class="p-2 font-medium relative" style="min-width:180px">
                     <div class="relative">
                         <input type="text"
                             class="nama-barang-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                            style="min-width:160px"
                             placeholder="Ketik nama barang..."
                             autocomplete="off">
                         <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
@@ -4789,7 +4790,7 @@
                 <table class="w-full text-xs border-collapse">
                     <thead>
                         <tr class="bg-gray-800 text-white">
-                            <th class="p-2 text-left rounded-tl-lg">Nama Barang</th>
+                            <th class="p-2 text-left rounded-tl-lg" style="min-width:180px">Nama Barang</th>
                             <th class="p-2 text-center">Qty</th>
                             <th class="p-2 text-left">Serial Number</th>
                             <th class="p-2 text-left">Remark</th>
@@ -4847,10 +4848,11 @@
             const tr = document.createElement('tr');
             tr.className = `${bg} border-b border-gray-100`;
             tr.innerHTML = `
-                <td class="p-2 font-medium relative">
+                <td class="p-2 font-medium relative" style="min-width:180px">
                     <div class="relative">
                         <input type="text" value="${prefillName.replace(/"/g, '&quot;')}"
                             class="nama-barang-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                            style="min-width:160px"
                             placeholder="Ketik nama barang..." autocomplete="off">
                         <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
                     </div>
