@@ -341,7 +341,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxsaI1LZqVmtRokZgLyzfyew1vAR0Fp1MqLgqXJsOWpeZPQpPwqxhjkr1WWIYNOJo8h/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzHCVryx9HSMhAOtNxV3d4p2ICvU9CNyT16tH-4OhPIzOaxIBSeiI6-1i1Ln_lBUm_S/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -1444,13 +1444,18 @@
         // =========================================================================
         let _html5QrCode = null;
         let _qrFacingBack = true;
-        let _qrCallback = null;   // callback(decodedText) — null = pakai _handleQRResult (Route)
+        let _qrCallback = null;
+        let _qrCameraList = [];
+        let _qrCameraIdx  = 0;
+
+        // Deteksi iOS
+        const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
         async function startQRCamera(forceBack, callback) {
             if (typeof forceBack === 'boolean') _qrFacingBack = forceBack;
             _qrCallback = (typeof callback === 'function') ? callback : null;
 
-            const modal = document.getElementById('qr-camera-modal');
+            const modal   = document.getElementById('qr-camera-modal');
             const camStat = document.getElementById('qr-cam-status');
             const switchBtn = document.getElementById('qr-switch-btn');
             if (!modal) { alert('Refresh halaman terlebih dahulu.'); return; }
@@ -1465,7 +1470,6 @@
 
             setStatus('⏳ Membuka kamera...');
 
-            // Hentikan instance sebelumnya jika ada
             if (_html5QrCode) {
                 try { await _html5QrCode.stop(); } catch (_) { }
                 try { _html5QrCode.clear(); } catch (_) { }
@@ -1478,44 +1482,93 @@
             }
 
             _html5QrCode = new Html5Qrcode('qr-reader');
-
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 };
-            const cameraConfig = { facingMode: _qrFacingBack ? 'environment' : 'user' };
+
+            const onSuccess = (decodedText) => {
+                setStatus('✅ QR terbaca!');
+                const decoded = decodedText.trim();
+                const cb = _qrCallback;
+                stopQRCamera();
+                if (cb) { cb(decoded); } else { _handleQRResult(decoded); }
+            };
+            const onError = () => {};
 
             try {
-                await _html5QrCode.start(
-                    cameraConfig,
-                    config,
-                    (decodedText) => {
-                        setStatus('✅ QR terbaca!');
-                        const decoded = decodedText.trim();
-                        const cb = _qrCallback;
-                        stopQRCamera();
-                        if (cb) {
-                            cb(decoded);
-                        } else {
-                            _handleQRResult(decoded);
-                        }
-                    },
-                    () => { /* abaikan error 'not found' per-frame */ }
-                );
-                setStatus('📷 Arahkan ke QR Code...');
+                if (_isIOS) {
+                    // iOS Safari: coba exact dulu, fallback tanpa exact
+                    const fm = _qrFacingBack ? 'environment' : 'user';
+                    try {
+                        await _html5QrCode.start({ facingMode: { exact: fm } }, config, onSuccess, onError);
+                    } catch (_) {
+                        await _html5QrCode.start({ facingMode: fm }, config, onSuccess, onError);
+                    }
+                } else {
+                    // Android/Desktop: gunakan deviceId jika bisa
+                    try { _qrCameraList = await Html5Qrcode.getCameras() || []; } catch (_) { _qrCameraList = []; }
 
-                // Tombol ganti kamera
+                    if (_qrCameraList.length > 0) {
+                        let idx = _qrFacingBack
+                            ? _qrCameraList.findIndex(c => /back|rear|environment/i.test(c.label || ''))
+                            : _qrCameraList.findIndex(c => /front|user|face/i.test(c.label || ''));
+                        if (idx < 0) idx = _qrFacingBack ? _qrCameraList.length - 1 : 0;
+                        _qrCameraIdx = Math.max(0, idx);
+                        await _html5QrCode.start(_qrCameraList[_qrCameraIdx].id, config, onSuccess, onError);
+                    } else {
+                        await _html5QrCode.start(
+                            { facingMode: _qrFacingBack ? 'environment' : 'user' }, config, onSuccess, onError
+                        );
+                    }
+                }
+                setStatus('📷 Arahkan ke QR Code...');
                 if (switchBtn) {
                     try {
-                        const cams = await Html5Qrcode.getCameras();
-                        switchBtn.classList.toggle('hidden', !(cams && cams.length > 1));
-                    } catch (_) { switchBtn.classList.add('hidden'); }
+                        if (_qrCameraList.length === 0) _qrCameraList = await Html5Qrcode.getCameras() || [];
+                    } catch (_) {}
+                    switchBtn.classList.toggle('hidden', _qrCameraList.length <= 1);
                 }
             } catch (err) {
-                setStatus('❌ ' + (err && err.toString ? err.toString() : 'Gagal membuka kamera.'));
+                setStatus('❌ ' + (err && err.message ? err.message : 'Gagal membuka kamera. Pastikan izin kamera sudah diberikan.'));
             }
         }
 
-        function switchQRCamera() {
+        async function switchQRCamera() {
+            if (_isIOS) {
+                _qrFacingBack = !_qrFacingBack;
+                startQRCamera(_qrFacingBack, _qrCallback);
+                return;
+            }
+            if (_qrCameraList.length <= 1) {
+                _qrFacingBack = !_qrFacingBack;
+                startQRCamera(_qrFacingBack, _qrCallback);
+                return;
+            }
+            _qrCameraIdx = (_qrCameraIdx + 1) % _qrCameraList.length;
             _qrFacingBack = !_qrFacingBack;
-            startQRCamera(_qrFacingBack, _qrCallback);
+            if (_html5QrCode) {
+                try { await _html5QrCode.stop(); } catch (_) {}
+                try { _html5QrCode.clear(); } catch (_) {}
+                _html5QrCode = null;
+            }
+            _html5QrCode = new Html5Qrcode('qr-reader');
+            const camStat = document.getElementById('qr-cam-status');
+            const setStatus = (html) => {
+                if (camStat) camStat.innerHTML =
+                    `<span style="background:rgba(0,0,0,0.65);color:#fff;font-size:12px;padding:6px 14px;border-radius:999px;">${html}</span>`;
+            };
+            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 };
+            const onSuccess = (decodedText) => {
+                setStatus('✅ QR terbaca!');
+                const decoded = decodedText.trim();
+                const cb = _qrCallback;
+                stopQRCamera();
+                if (cb) { cb(decoded); } else { _handleQRResult(decoded); }
+            };
+            try {
+                await _html5QrCode.start(_qrCameraList[_qrCameraIdx].id, config, onSuccess, () => {});
+                setStatus('📷 Arahkan ke QR Code...');
+            } catch (err) {
+                setStatus('❌ Gagal ganti kamera.');
+            }
         }
 
         function stopQRCamera() {
@@ -2125,9 +2178,14 @@
 
                     rows_html += `
                     <tr class="hover:bg-amber-50">
+                        <td class="p-3 border-b">${waktu}</td>
                         <td class="p-3 border-b font-mono">${noPO}</td>
                         <td class="p-3 border-b">${orderedBy}</td>
                         <td class="p-3 border-b">${shipTo}</td>
+                        <td class="p-3 border-b">${shippingDate}</td>
+                        <td class="p-3 border-b">${alamat}</td>
+                        <td class="p-3 border-b">${phone}</td>
+                        <td class="p-3 border-b">${pic}</td>
                         <td class="p-3 border-b">
                             <span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Done</span>
                         </td>
@@ -2142,9 +2200,14 @@
                     <table class="w-full text-xs text-center border-collapse">
                         <thead>
                             <tr class="bg-gray-800 text-white">
+                                <th class="p-3">Waktu</th>
                                 <th class="p-3">No. PO</th>
                                 <th class="p-3">Ordered By</th>
                                 <th class="p-3">Ship To</th>
+                                <th class="p-3">Shipping Date</th>
+                                <th class="p-3">Alamat</th>
+                                <th class="p-3">Phone</th>
+                                <th class="p-3">Driver</th>
                                 <th class="p-3">Status</th>
                             </tr>
                         </thead>
@@ -4887,210 +4950,43 @@
             _inboundCooldown = true;
             _inboundLastScan = raw;
 
-            // Pause scanner sementara popup tampil
-            _inboundScannerActive = false;
-            stopQRCamera();
-            const scanBtn = document.getElementById('inb-scan-btn');
-            if (scanBtn) scanBtn.innerHTML = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/></svg> Scan QR Code`;
-
-            if (statusEl) {
-                statusEl.textContent = '⏸ Scanner dijeda. Pilih item dari popup...';
-                statusEl.className = 'text-xs text-amber-500';
-            }
-
-            const sourceItems = await getSourceItems();
-
-            // ── Parse QR: coba JSON array, JSON object dengan items, atau teks biasa ──
-            let qrItems = [];
-            try {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                    // Format: ["Item A", "Item B", ...]
-                    qrItems = parsed.map(i => String(i).trim()).filter(Boolean);
-                } else if (parsed && typeof parsed === 'object') {
-                    // Format: { items: [...] } atau { nama_barang: "...", ... }
-                    if (Array.isArray(parsed.items)) {
-                        qrItems = parsed.items.map(i =>
-                            typeof i === 'object' ? (i.nama_barang || i.nama || i.name || String(i)) : String(i)
-                        ).filter(Boolean);
-                    } else if (parsed.nama_barang || parsed.nama || parsed.name) {
-                        qrItems = [parsed.nama_barang || parsed.nama || parsed.name];
-                    } else {
-                        qrItems = [raw];
-                    }
-                } else {
-                    qrItems = [raw];
-                }
-            } catch (_) {
-                // Teks biasa — bisa dipisah newline atau koma
-                if (raw.includes('\n')) {
-                    qrItems = raw.split('\n').map(s => s.trim()).filter(Boolean);
-                } else if (raw.includes('|')) {
-                    qrItems = raw.split('|').map(s => s.trim()).filter(Boolean);
-                } else {
-                    qrItems = [raw];
-                }
-            }
-
-            // ── Cocokkan setiap item QR ke source items (stock master) ──
-            const resolvedItems = qrItems.map(q => {
-                let matched = sourceItems.find(i => i.toLowerCase() === q.toLowerCase());
-                if (!matched) matched = sourceItems.find(i =>
-                    i.toLowerCase().includes(q.toLowerCase()) ||
-                    q.toLowerCase().includes(i.toLowerCase())
-                );
-                return { label: matched || q, matched: !!matched, original: q };
-            });
-
-            playScanBeep();
-
-            // ── Tampilkan popup checkbox ──
-            const selectedItems = await showInboundItemSelectPopup(resolvedItems);
-
-            // Reset cooldown setelah popup ditutup
-            _inboundCooldown = false;
-            _inboundLastScan = '';
-
-            if (!selectedItems || selectedItems.length === 0) {
-                if (statusEl) {
-                    statusEl.textContent = 'Scan dibatalkan. Klik tombol Scan untuk mencoba lagi.';
+            // Cooldown 2 detik — setelah itu reset agar QR yang SAMA bisa scan lagi
+            setTimeout(() => {
+                _inboundCooldown = false;
+                _inboundLastScan = '';
+                if (statusEl && statusEl.textContent.startsWith('✅')) {
+                    statusEl.textContent = 'Arahkan kamera ke QR Code barang.';
                     statusEl.className = 'text-xs text-gray-400';
                 }
-                return;
-            }
+            }, 2000);
 
-            // ── Tambahkan item yang dipilih ke tabel ──
-            selectedItems.forEach(nama => tambahBarisInbound(nama));
+            const items = await getSourceItems();
+
+            // Cocokkan: exact match dulu, lalu partial/contains
+            let matched = items.find(i => i.toLowerCase() === raw.toLowerCase());
+            if (!matched) matched = items.find(i =>
+                i.toLowerCase().includes(raw.toLowerCase()) ||
+                raw.toLowerCase().includes(i.toLowerCase())
+            );
+
+            const namaBarang = matched || raw;
+            tambahBarisInbound(namaBarang);
+
+            // ✅ Bunyi + pop-up sukses
+            playScanBeep();
+            showScanSuccessToast(
+                'Item Terdeteksi!',
+                matched
+                    ? `<strong>${namaBarang}</strong><br>Ditambahkan ke tabel inbound.`
+                    : `<strong>${namaBarang}</strong><br>Item baru ditambahkan.`
+            );
 
             if (statusEl) {
-                statusEl.textContent = `✅ ${selectedItems.length} item ditambahkan ke tabel. Klik Scan untuk lanjut.`;
-                statusEl.className = 'text-xs text-green-600 font-semibold';
+                statusEl.textContent = matched
+                    ? `✅ "${namaBarang}" ditambahkan. Scan item berikutnya...`
+                    : `⚠️ "${raw}" tidak ditemukan, ditambahkan apa adanya.`;
+                statusEl.className = matched ? 'text-xs text-green-600 font-semibold' : 'text-xs text-amber-600';
             }
-
-            showScanSuccessToast(
-                'Item Ditambahkan!',
-                `<strong>${selectedItems.length} item</strong> berhasil ditambahkan ke tabel inbound.`
-            );
-        }
-
-        /**
-         * Tampilkan popup checkbox untuk memilih item hasil scan QR.
-         * @param {Array<{label:string, matched:boolean, original:string}>} resolvedItems
-         * @returns {Promise<string[]>} - array nama barang yang dipilih, atau [] jika batal
-         */
-        function showInboundItemSelectPopup(resolvedItems) {
-            return new Promise(resolve => {
-                // Hapus popup lama jika ada
-                const old = document.getElementById('inb-item-select-modal');
-                if (old) old.remove();
-
-                const modal = document.createElement('div');
-                modal.id = 'inb-item-select-modal';
-                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
-
-                const checkboxRows = resolvedItems.map((item, idx) => `
-                    <label class="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:bg-amber-50 transition group border border-transparent hover:border-amber-200"
-                        for="inb-item-cb-${idx}">
-                        <input type="checkbox" id="inb-item-cb-${idx}" value="${item.label.replace(/"/g, '&quot;')}"
-                            class="mt-0.5 w-4 h-4 rounded accent-amber-500 flex-shrink-0 cursor-pointer" checked>
-                        <div class="flex-1 min-w-0">
-                            <span class="block text-sm font-semibold text-gray-800 leading-tight">${item.label}</span>
-                            ${!item.matched ? `<span class="text-[10px] text-amber-500 font-medium">⚠ Item tidak ditemukan di Stock Master — akan ditambahkan apa adanya</span>` : `<span class="text-[10px] text-green-600">✓ Terdeteksi dari Stock Master</span>`}
-                        </div>
-                    </label>`).join('');
-
-                modal.innerHTML = `
-                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 flex flex-col overflow-hidden" style="max-height:90vh;">
-                    <!-- Header -->
-                    <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                        <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                            <svg class="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <p class="font-bold text-gray-800 text-sm">Pilih Item dari QR Code</p>
-                            <p class="text-[11px] text-gray-400">${resolvedItems.length} item terdeteksi — centang yang ingin ditambahkan</p>
-                        </div>
-                    </div>
-
-                    <!-- Tombol Pilih Semua / Hapus Semua -->
-                    <div class="flex gap-2 px-5 py-2.5 border-b border-gray-100 flex-shrink-0">
-                        <button id="inb-select-all-btn"
-                            class="text-[11px] font-semibold text-amber-600 hover:text-amber-700 underline underline-offset-2 transition">
-                            Pilih Semua
-                        </button>
-                        <span class="text-gray-300 text-xs">|</span>
-                        <button id="inb-deselect-all-btn"
-                            class="text-[11px] font-semibold text-gray-400 hover:text-gray-600 underline underline-offset-2 transition">
-                            Hapus Semua
-                        </button>
-                        <span id="inb-selected-count" class="ml-auto text-[11px] text-gray-400 font-medium">${resolvedItems.length} dipilih</span>
-                    </div>
-
-                    <!-- Daftar Checkbox -->
-                    <div class="overflow-y-auto flex-1 px-4 py-3 flex flex-col gap-1">
-                        ${checkboxRows}
-                    </div>
-
-                    <!-- Footer Tombol -->
-                    <div class="flex gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
-                        <button id="inb-item-confirm-btn"
-                            class="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-bold rounded-xl transition shadow-sm">
-                            Tambahkan ke Tabel
-                        </button>
-                        <button id="inb-item-cancel-btn"
-                            class="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-xl transition">
-                            Batal
-                        </button>
-                    </div>
-                </div>`;
-
-                document.body.appendChild(modal);
-
-                // ── Update counter ──
-                function updateCount() {
-                    const checked = modal.querySelectorAll('input[type="checkbox"]:checked').length;
-                    const countEl = document.getElementById('inb-selected-count');
-                    if (countEl) countEl.textContent = `${checked} dipilih`;
-                    const confirmBtn = document.getElementById('inb-item-confirm-btn');
-                    if (confirmBtn) {
-                        confirmBtn.disabled = checked === 0;
-                        confirmBtn.className = checked === 0
-                            ? 'flex-1 py-2.5 bg-gray-300 text-gray-400 text-sm font-bold rounded-xl cursor-not-allowed'
-                            : 'flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white text-sm font-bold rounded-xl transition shadow-sm';
-                    }
-                }
-
-                modal.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener('change', updateCount));
-
-                document.getElementById('inb-select-all-btn').onclick = () => {
-                    modal.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-                    updateCount();
-                };
-                document.getElementById('inb-deselect-all-btn').onclick = () => {
-                    modal.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    updateCount();
-                };
-
-                document.getElementById('inb-item-confirm-btn').onclick = () => {
-                    const selected = [...modal.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value);
-                    modal.remove();
-                    resolve(selected);
-                };
-
-                document.getElementById('inb-item-cancel-btn').onclick = () => {
-                    modal.remove();
-                    resolve([]);
-                };
-
-                // Klik di luar modal = batal
-                modal.addEventListener('click', e => {
-                    if (e.target === modal) { modal.remove(); resolve([]); }
-                });
-
-                updateCount();
-            });
         }
 
         // =========================================================================
