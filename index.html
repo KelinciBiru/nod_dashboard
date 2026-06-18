@@ -1445,6 +1445,14 @@
         let _html5QrCode = null;
         let _qrFacingBack = true;
         let _qrCallback = null;   // callback(decodedText) — null = pakai _handleQRResult (Route)
+        let _qrCameraList = [];   // daftar kamera yang tersedia
+        let _qrCameraIndex = -1; // indeks kamera yang sedang aktif (-1 = belum tahu)
+
+        /** Deteksi apakah device adalah iOS (iPhone / iPad) */
+        function _isIOS() {
+            return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
 
         async function startQRCamera(forceBack, callback) {
             if (typeof forceBack === 'boolean') _qrFacingBack = forceBack;
@@ -1480,41 +1488,109 @@
             _html5QrCode = new Html5Qrcode('qr-reader');
 
             const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 };
-            const cameraConfig = { facingMode: _qrFacingBack ? 'environment' : 'user' };
 
+            const onScanSuccess = (decodedText) => {
+                setStatus('✅ QR terbaca!');
+                const decoded = decodedText.trim();
+                const cb = _qrCallback;
+                stopQRCamera();
+                if (cb) {
+                    cb(decoded);
+                } else {
+                    _handleQRResult(decoded);
+                }
+            };
+            const onScanError = () => { /* abaikan error 'not found' per-frame */ };
+
+            /**
+             * Strategi buka kamera:
+             * 1. Ambil daftar kamera dengan getCameras().
+             * 2. Di iOS, gunakan deviceId kamera belakang (label mengandung "back" / "rear" /
+             *    posisi terakhir dalam daftar), karena facingMode: 'environment' sering gagal.
+             * 3. Di Android / Desktop, gunakan facingMode seperti biasa sebagai fallback jika
+             *    tidak ada deviceId yang cocok.
+             */
             try {
-                await _html5QrCode.start(
-                    cameraConfig,
-                    config,
-                    (decodedText) => {
-                        setStatus('✅ QR terbaca!');
-                        const decoded = decodedText.trim();
-                        const cb = _qrCallback;
-                        stopQRCamera();
-                        if (cb) {
-                            cb(decoded);
+                // Dapatkan daftar kamera
+                let cams = [];
+                try { cams = await Html5Qrcode.getCameras(); } catch (_) { }
+                _qrCameraList = cams || [];
+
+                // Tampilkan/sembunyikan tombol switch
+                if (switchBtn) {
+                    switchBtn.classList.toggle('hidden', _qrCameraList.length <= 1);
+                }
+
+                let cameraArg;
+
+                if (_qrCameraList.length > 0) {
+                    // Tentukan indeks kamera yang akan dipakai
+                    if (_qrCameraIndex < 0 || _qrCameraIndex >= _qrCameraList.length) {
+                        // Pertama kali: cari kamera belakang berdasarkan label
+                        const backIdx = _qrCameraList.findIndex(c =>
+                            /back|rear|environment|belakang/i.test(c.label || '')
+                        );
+                        if (backIdx >= 0 && _qrFacingBack) {
+                            _qrCameraIndex = backIdx;
+                        } else if (!_qrFacingBack) {
+                            // Cari kamera depan
+                            const frontIdx = _qrCameraList.findIndex(c =>
+                                /front|face|user|depan/i.test(c.label || '')
+                            );
+                            _qrCameraIndex = frontIdx >= 0 ? frontIdx : 0;
                         } else {
-                            _handleQRResult(decoded);
+                            // Tidak ada label yang cocok — di iOS kamera belakang biasanya
+                            // ada di indeks terakhir; di Android biasanya indeks 0
+                            _qrCameraIndex = _isIOS()
+                                ? _qrCameraList.length - 1  // iOS: kamera belakang = terakhir
+                                : 0;
                         }
-                    },
-                    () => { /* abaikan error 'not found' per-frame */ }
-                );
+                    }
+                    cameraArg = { deviceId: { exact: _qrCameraList[_qrCameraIndex].id } };
+                } else {
+                    // Tidak berhasil mendapatkan daftar kamera — fallback ke facingMode
+                    // (bekerja di sebagian besar Android; di iOS mungkin hanya kamera depan)
+                    cameraArg = { facingMode: _qrFacingBack ? 'environment' : 'user' };
+                }
+
+                await _html5QrCode.start(cameraArg, config, onScanSuccess, onScanError);
                 setStatus('📷 Arahkan ke QR Code...');
 
-                // Tombol ganti kamera
-                if (switchBtn) {
-                    try {
-                        const cams = await Html5Qrcode.getCameras();
-                        switchBtn.classList.toggle('hidden', !(cams && cams.length > 1));
-                    } catch (_) { switchBtn.classList.add('hidden'); }
-                }
             } catch (err) {
-                setStatus('❌ ' + (err && err.toString ? err.toString() : 'Gagal membuka kamera.'));
+                // ── Fallback 1: coba facingMode ──
+                try {
+                    const fallbackConfig = { facingMode: _qrFacingBack ? 'environment' : 'user' };
+                    await _html5QrCode.start(fallbackConfig, config, onScanSuccess, onScanError);
+                    setStatus('📷 Arahkan ke QR Code...');
+                } catch (err2) {
+                    // ── Fallback 2 (iOS khusus): coba kamera pertama yang tersedia ──
+                    if (_qrCameraList.length > 0) {
+                        try {
+                            const firstCam = { deviceId: { exact: _qrCameraList[0].id } };
+                            await _html5QrCode.start(firstCam, config, onScanSuccess, onScanError);
+                            setStatus('📷 Arahkan ke QR Code...');
+                        } catch (err3) {
+                            setStatus('❌ ' + (err3 && err3.toString ? err3.toString() : 'Gagal membuka kamera.'));
+                        }
+                    } else {
+                        setStatus('❌ ' + (err2 && err2.toString ? err2.toString() : 'Gagal membuka kamera.'));
+                    }
+                }
             }
         }
 
         function switchQRCamera() {
-            _qrFacingBack = !_qrFacingBack;
+            // Geser ke kamera berikutnya dalam daftar (cycling)
+            if (_qrCameraList.length > 1) {
+                _qrCameraIndex = (_qrCameraIndex + 1) % _qrCameraList.length;
+                // Tentukan apakah kamera baru ini adalah kamera belakang
+                const label = (_qrCameraList[_qrCameraIndex].label || '').toLowerCase();
+                _qrFacingBack = /back|rear|environment|belakang/i.test(label) ||
+                    (!(/front|face|user|depan/i.test(label)) && _qrCameraIndex > 0);
+            } else {
+                _qrFacingBack = !_qrFacingBack;
+                _qrCameraIndex = -1; // reset agar dipilih ulang oleh startQRCamera
+            }
             startQRCamera(_qrFacingBack, _qrCallback);
         }
 
