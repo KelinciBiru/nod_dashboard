@@ -3507,11 +3507,12 @@
                     data = Array.isArray(raw2) ? raw2 : [];
                 }
 
-                // Filter hanya yang status PERSIS "Open" (Ready To Ship, On-Delivery, Done, Closed, dll TIDAK ditampilkan)
+                // Filter hanya yang status "Open" — kolom status KOSONG juga dianggap "Open"
+                // (Ready To Ship, On-Delivery, Done, Closed, dll TIDAK ditampilkan)
                 const openPOs = data.slice(1).filter(row => {
                     const noPO = String(row[1] || '').trim();
                     const status = String(row[4] || '').trim().toLowerCase();
-                    return noPO !== '' && status === 'open';
+                    return noPO !== '' && (status === '' || status === 'open');
                 });
 
                 const currentVal = sel.value;
