@@ -3418,7 +3418,8 @@
                     doc.setFont('helvetica', 'normal');
                     doc.setFontSize(6.5);
                     doc.setTextColor(107, 114, 128);
-                    doc.text('📍 Scan untuk buka lokasi Maps', qrX + qrSize / 2, qrY - 2, { align: 'center' });
+                    // Rata kanan ke tepi QR (= margin kertas) supaya tidak mepet/terpotong di ujung kertas
+                    doc.text('Scan untuk buka lokasi Maps', qrX + qrSize, qrY - 2, { align: 'right' });
                     if (roQR.truncated) {
                         doc.setFontSize(5.5);
                         doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
@@ -4464,7 +4465,8 @@
                     doc.setFont('helvetica', 'normal');
                     doc.setFontSize(6.5);
                     doc.setTextColor(107, 114, 128);
-                    doc.text('📍 Scan untuk buka lokasi Maps', qrX + qrSize / 2, qrY - 2, { align: 'center' });
+                    // Rata kanan ke tepi QR (= margin kertas) supaya tidak mepet/terpotong di ujung kertas
+                    doc.text('Scan untuk buka lokasi Maps', qrX + qrSize, qrY - 2, { align: 'right' });
                     if (doQR.truncated) {
                         doc.setFontSize(5.5);
                         doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
