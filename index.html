@@ -341,7 +341,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxsaI1LZqVmtRokZgLyzfyew1vAR0Fp1MqLgqXJsOWpeZPQpPwqxhjkr1WWIYNOJo8h/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwkXQvUShYOlmSLUw3-a-T93fwg3L57XaBEI8-gnA0fQnw0TucUOGgEAh1pxysSp0YK/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -912,8 +912,12 @@
         }
 
         /**
-         * Tampilkan modal isian Nama Pengirim & Tanggal Diterima sebelum Delivered.
-         * Mengembalikan Promise<{namaPengirim, tglDiterima}|null>
+         * Tampilkan modal isian Nama Pengirim, Nama Penerima, Tanggal Diterima,
+         * dan fitur Scan QR Code sebelum Delivered.
+         * Saat modal dibuka, otomatis mengambil titik koordinat GPS driver
+         * (lokasi saat ini = lokasi tiba di alamat PO) untuk dicatat ke Delivery_Log
+         * dan disisipkan ke dalam QR Code hasil PDF.
+         * Mengembalikan Promise<{namaPengirim, namaPenerima, tglDiterima, lat, lng, mapsUrl}|null>
          */
         function routeShowDeliveredModal(noPO) {
             return new Promise(resolve => {
@@ -926,7 +930,7 @@
                 modal.id = 'route-delivered-modal';
                 modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm';
                 modal.innerHTML = `
-                <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4">
+                <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
                     <div class="flex items-center gap-3">
                         <span class="text-2xl">✅</span>
                         <div>
@@ -934,6 +938,14 @@
                             <p class="text-xs text-gray-400">PO: <b>${noPO}</b></p>
                         </div>
                     </div>
+
+                    <!-- Status lokasi GPS -->
+                    <div id="route-delivered-gps-box"
+                        class="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                        <span class="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></span>
+                        <span id="route-delivered-gps-text">Mengambil titik lokasi GPS...</span>
+                    </div>
+
                     <div class="flex flex-col gap-3">
                         <div>
                             <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nama Pengirim <span class="text-red-500">*</span></label>
@@ -942,10 +954,27 @@
                                 placeholder="Nama driver / kurir pengirim..." />
                         </div>
                         <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nama Penerima <span class="text-red-500">*</span></label>
+                            <input id="route-delivered-penerima" type="text"
+                                class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-300"
+                                placeholder="Nama yang menerima barang..." />
+                        </div>
+                        <div>
                             <label class="block text-xs font-semibold text-gray-600 mb-1.5">Tanggal Diterima</label>
                             <input id="route-delivered-tgl" type="text"
                                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-300"
                                 value="${today}" placeholder="DD/MM/YYYY" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Scan QR Code (opsional)</label>
+                            <button type="button" id="route-delivered-scan-btn"
+                                class="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:border-green-300 hover:text-green-600 transition">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/>
+                                </svg>
+                                <span id="route-delivered-scan-label">Scan QR Code</span>
+                            </button>
+                            <p id="route-delivered-scan-result" class="text-[11px] text-gray-400 mt-1 italic hidden"></p>
                         </div>
                     </div>
                     <div class="flex gap-2">
@@ -962,16 +991,84 @@
 
                 document.body.appendChild(modal);
 
+                // ── State titik lokasi GPS saat tiba ──
+                let gpsCoords = null; // { lat, lng }
+
+                const gpsBox  = document.getElementById('route-delivered-gps-box');
+                const gpsText = document.getElementById('route-delivered-gps-text');
+
+                const setGpsStatus = (type, html) => {
+                    if (!gpsBox || !gpsText) return;
+                    const styles = {
+                        loading: 'bg-amber-50 border-amber-200 text-amber-700',
+                        success: 'bg-green-50 border-green-200 text-green-700',
+                        error:   'bg-red-50 border-red-200 text-red-600',
+                    };
+                    gpsBox.className = `flex items-center gap-2 px-3 py-2 rounded-xl border text-xs ${styles[type] || styles.loading}`;
+                    gpsText.innerHTML = html;
+                };
+
+                // ── Ambil titik koordinat GPS driver (lokasi saat ini = lokasi tiba) ──
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            gpsCoords = {
+                                lat: pos.coords.latitude,
+                                lng: pos.coords.longitude
+                            };
+                            setGpsStatus('success',
+                                `📍 Lokasi tiba terkunci: <b>${gpsCoords.lat.toFixed(6)}, ${gpsCoords.lng.toFixed(6)}</b>`);
+                        },
+                        (err) => {
+                            setGpsStatus('error',
+                                '⚠ Gagal mengambil lokasi GPS (' + (err.message || 'izin ditolak') + '). PDF & Delivery_Log akan tetap tersimpan tanpa titik koordinat.');
+                        },
+                        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+                    );
+                } else {
+                    setGpsStatus('error', '⚠ Perangkat/browser tidak mendukung GPS.');
+                }
+
+                // ── Tombol Scan QR Code (opsional, untuk verifikasi tambahan) ──
+                document.getElementById('route-delivered-scan-btn').onclick = () => {
+                    startQRCamera(true, (decodedText) => {
+                        const resultEl = document.getElementById('route-delivered-scan-result');
+                        const labelEl  = document.getElementById('route-delivered-scan-label');
+                        if (resultEl) {
+                            resultEl.textContent = `✅ QR terbaca: ${decodedText}`;
+                            resultEl.classList.remove('hidden');
+                        }
+                        if (labelEl) labelEl.textContent = 'QR Code Terverifikasi ✓';
+                        playScanBeep();
+                    });
+                };
+
                 document.getElementById('route-delivered-submit').onclick = () => {
                     const namaPengirim = document.getElementById('route-delivered-pengirim').value.trim();
+                    const namaPenerima = document.getElementById('route-delivered-penerima').value.trim();
                     const tglDiterima  = document.getElementById('route-delivered-tgl').value.trim();
                     if (!namaPengirim) {
                         document.getElementById('route-delivered-pengirim').classList.add('border-red-400');
                         document.getElementById('route-delivered-pengirim').placeholder = '⚠ Nama pengirim wajib diisi!';
                         return;
                     }
+                    if (!namaPenerima) {
+                        document.getElementById('route-delivered-penerima').classList.add('border-red-400');
+                        document.getElementById('route-delivered-penerima').placeholder = '⚠ Nama penerima wajib diisi!';
+                        return;
+                    }
+                    const mapsUrl = gpsCoords
+                        ? `https://www.google.com/maps?q=${gpsCoords.lat},${gpsCoords.lng}`
+                        : '';
                     modal.remove();
-                    resolve({ namaPengirim, tglDiterima });
+                    resolve({
+                        namaPengirim,
+                        namaPenerima,
+                        tglDiterima,
+                        lat: gpsCoords ? gpsCoords.lat : '',
+                        lng: gpsCoords ? gpsCoords.lng : '',
+                        mapsUrl
+                    });
                 };
                 document.getElementById('route-delivered-close').onclick = () => {
                     modal.remove();
@@ -1300,11 +1397,12 @@
          * Klik tombol "Delivered" → tampilkan modal isian → catat jam tiba + Nama Pengirim + Tgl Diterima
          */
         async function routeMarkDelivered(noPO, idx) {
-            // Tampilkan modal isian Nama Pengirim & Tanggal Diterima
+            // Tampilkan modal isian Nama Pengirim, Nama Penerima & Tanggal Diterima
+            // (modal ini juga otomatis mengambil titik koordinat GPS lokasi tiba)
             const formData = await routeShowDeliveredModal(noPO);
             if (!formData) return; // user klik Batal
 
-            const { namaPengirim, tglDiterima } = formData;
+            const { namaPengirim, namaPenerima, tglDiterima, lat, lng, mapsUrl } = formData;
 
             const btn  = document.getElementById(`route-btn-${idx}`);
             const card = document.getElementById(`route-card-${idx}`);
@@ -1340,8 +1438,12 @@
                         shippingDate,
                         driver,
                         namaPengirim,
+                        namaPenerima,
                         tglKonfirmasi,
-                        jamTiba
+                        jamTiba,
+                        lokasiTibaLat : lat,
+                        lokasiTibaLng : lng,
+                        lokasiTibaMapsUrl : mapsUrl
                     })
                 });
                 const result = await res.json();
@@ -1354,8 +1456,9 @@
                         card.style.transform  = 'scale(0.95)';
                         setTimeout(() => card.remove(), 420);
                     }
+                    const lokasiInfo = mapsUrl ? `\nLokasi Tiba: ${mapsUrl}` : '';
                     showAlert('success', '✅ Pengantaran Selesai!',
-                        `PO ${noPO} dicatat Done.\nNama Pengirim: ${namaPengirim}\nTgl Diterima: ${tglKonfirmasi} | Jam Tiba: ${jamTiba}`);
+                        `PO ${noPO} dicatat Done.\nNama Pengirim: ${namaPengirim}\nNama Penerima: ${namaPenerima}\nTgl Diterima: ${tglKonfirmasi} | Jam Tiba: ${jamTiba}${lokasiInfo}`);
 
                     setTimeout(() => {
                         const grid = document.getElementById('route-cards-grid');
@@ -3265,7 +3368,7 @@
                     doc.setFont('helvetica', 'normal');
                     doc.setFontSize(6.5);
                     doc.setTextColor(107, 114, 128);
-                    doc.text('Scan untuk lihat detail lengkap', qrX + qrSize / 2, qrY - 2, { align: 'center' });
+                    doc.text('📍 Scan untuk buka lokasi Maps', qrX + qrSize / 2, qrY - 2, { align: 'center' });
                     if (roQR.truncated) {
                         doc.setFontSize(5.5);
                         doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
@@ -3995,6 +4098,8 @@
                 document.getElementById('proc-ship').value = parsed.ship_to || '';
                 document.getElementById('proc-shipping-date').value = parsed.shipping_date || '';
                 document.getElementById('proc-ordered-by').dataset.nopo = parsed.no_po || '';
+                document.getElementById('proc-ordered-by').dataset.alamat = parsed.alamat || '';
+                document.getElementById('proc-ordered-by').dataset.mapsurl = parsed.mapsUrl || '';
 
                 // ── Isi tabel items ──
                 const tbody = document.getElementById('proc-table-body');
@@ -4146,9 +4251,14 @@
                 if (doLabel) doLabel.textContent = 'Delivery Order';
             };
 
-            // ── Generate QR Code (berisi seluruh isi Delivery Order) ──
+            // Ambil alamat dari dataset proc-ordered-by (diisi saat load PO)
+            const alamatDO = document.getElementById('proc-ordered-by')?.dataset?.alamat || shipTo;
+            const mapsUrlDO = document.getElementById('proc-ordered-by')?.dataset?.mapsurl || '';
+
+            // ── Generate QR Code (berisi Google Maps URL lokasi alamat PO) ──
             const doQR = await generateDOQRCodeDataURL({
-                noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items
+                noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items,
+                alamat: alamatDO, mapsUrl: mapsUrlDO
             });
 
 
@@ -4304,7 +4414,7 @@
                     doc.setFont('helvetica', 'normal');
                     doc.setFontSize(6.5);
                     doc.setTextColor(107, 114, 128);
-                    doc.text('Scan untuk lihat detail lengkap', qrX + qrSize / 2, qrY - 2, { align: 'center' });
+                    doc.text('📍 Scan untuk buka lokasi Maps', qrX + qrSize / 2, qrY - 2, { align: 'center' });
                     if (doQR.truncated) {
                         doc.setFontSize(5.5);
                         doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
@@ -4331,28 +4441,14 @@
         }
 
         /**
-         * Susun teks ringkasan SELURUH ISI Delivery Order (header + daftar item)
-         * untuk disimpan ke dalam QR Code. Saat QR ini di-scan, seluruh isi
-         * dokumen akan tampil sebagai teks.
+         * Menghasilkan Google Maps URL berdasarkan alamat PO untuk Delivery Order.
+         * Driver men-scan QR ini saat tiba di lokasi → membuka Maps ke titik tujuan.
          */
-        function buildDeliveryOrderQRText({ noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items }) {
-            const lines = [];
-            lines.push('=== DELIVERY ORDER ===');
-            lines.push('No. PO: ' + (noPO || '-'));
-            lines.push('Tanggal Proses PO: ' + formatTanggalIndo(tglProses));
-            lines.push('Crew Packing: ' + (crewPacking || '-'));
-            lines.push('Ordered By: ' + (orderedBy || '-'));
-            lines.push('Ship To: ' + (shipTo || '-'));
-            lines.push('Shipping Date: ' + (shippingDate || '-'));
-            lines.push('');
-            lines.push('=== DAFTAR ITEM ===');
-            items.forEach((it, idx) => {
-                lines.push(
-                    `${idx + 1}. ${it.nama} | Qty: ${it.qty || '-'} | UOM: ${it.uom || '-'} | Desc: ${it.description || '-'}` +
-                    (it.remark ? ` | Remark: ${it.remark}` : '')
-                );
-            });
-            return lines.join('\n');
+        function buildDeliveryOrderQRText({ noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items, alamat, mapsUrl }) {
+            if (mapsUrl && mapsUrl.startsWith('http')) return mapsUrl;
+            if (alamat) return 'https://maps.google.com/?q=' + encodeURIComponent(alamat);
+            if (shipTo) return 'https://maps.google.com/?q=' + encodeURIComponent(shipTo);
+            return 'https://maps.google.com/';
         }
 
         /**
@@ -4374,60 +4470,28 @@
                 color: { dark: '#111827', light: '#FFFFFF' }
             };
 
-            let items = doData.items;
-            let truncated = false;
-
-            // Coba dengan seluruh item, lalu kurangi bertahap jika kapasitas tidak cukup
-            while (true) {
-                const text = buildDeliveryOrderQRText({ ...doData, items });
-                try {
-                    const dataUrl = await QRCode.toDataURL(text, qrOptions);
-                    return { dataUrl, truncated };
-                } catch (err) {
-                    // Kapasitas tidak cukup → potong item paling bawah
-                    if (items.length <= 1) {
-                        // Bahkan 1 item pun tidak cukup → kirim ringkasan header saja
-                        try {
-                            const headerOnlyText = buildDeliveryOrderQRText({ ...doData, items: [] }) +
-                                '\n(Daftar item terlalu banyak untuk QR Code,\nlihat dokumen PDF untuk detail lengkap)';
-                            const dataUrl = await QRCode.toDataURL(headerOnlyText, qrOptions);
-                            return { dataUrl, truncated: true };
-                        } catch (err2) {
-                            console.error('[DO QR] Gagal generate QR Code:', err2);
-                            return null;
-                        }
-                    }
-                    items = items.slice(0, items.length - 1);
-                    truncated = true;
-                }
+            // QR Code berisi Google Maps URL ke alamat PO
+            const text = buildDeliveryOrderQRText(doData);
+            try {
+                const dataUrl = await QRCode.toDataURL(text, qrOptions);
+                return { dataUrl, truncated: false };
+            } catch (err) {
+                console.error('[DO QR] Gagal generate QR Code:', err);
+                return null;
             }
         }
 
         /**
-         * Susun teks ringkasan SELURUH ISI Request Order (header + daftar item)
-         * untuk disimpan ke dalam QR Code. Saat QR ini di-scan, seluruh isi
-         * dokumen akan tampil sebagai teks.
+         * Menghasilkan Google Maps URL berdasarkan alamat PO.
+         * QR Code ini — ketika di-scan driver saat tiba di lokasi —
+         * akan membuka Google Maps ke titik alamat tujuan PO.
          */
-        function buildRequestOrderQRText({ poLabel, today, orderedBy, phone, category, allocatedTo, alamat, shippingDate, items }) {
-            const lines = [];
-            lines.push('=== REQUEST ORDER ===');
-            lines.push('No. PO: ' + (poLabel || '-'));
-            lines.push('Tanggal: ' + formatTanggalIndo(today));
-            lines.push('Ordered By: ' + (orderedBy || '-'));
-            lines.push('Phone: ' + (phone || '-'));
-            lines.push('Kategori: ' + (category || '-'));
-            lines.push('Ship To: ' + (allocatedTo || '-'));
-            lines.push('Alamat: ' + (alamat || '-'));
-            lines.push('Shipping Date: ' + (shippingDate || '-'));
-            lines.push('');
-            lines.push('=== DAFTAR ITEM ===');
-            items.forEach((it, idx) => {
-                lines.push(
-                    `${idx + 1}. ${it.nama} | Qty: ${it.qty || '-'} | UOM: ${it.uom || '-'} | Desc: ${it.description || '-'}` +
-                    (it.note ? ` | Note: ${it.note}` : '')
-                );
-            });
-            return lines.join('\n');
+        function buildRequestOrderQRText({ poLabel, today, orderedBy, phone, category, allocatedTo, alamat, shippingDate, items, mapsUrl }) {
+            // Prioritas: gunakan mapsUrl jika sudah ada (koordinat pasti),
+            // jika tidak ada gunakan geocode via alamat teks.
+            if (mapsUrl && mapsUrl.startsWith('http')) return mapsUrl;
+            if (alamat) return 'https://maps.google.com/?q=' + encodeURIComponent(alamat);
+            return 'https://maps.google.com/';
         }
 
         /**
@@ -4449,32 +4513,14 @@
                 color: { dark: '#111827', light: '#FFFFFF' }
             };
 
-            let items = roData.items;
-            let truncated = false;
-
-            // Coba dengan seluruh item, lalu kurangi bertahap jika kapasitas tidak cukup
-            while (true) {
-                const text = buildRequestOrderQRText({ ...roData, items });
-                try {
-                    const dataUrl = await QRCode.toDataURL(text, qrOptions);
-                    return { dataUrl, truncated };
-                } catch (err) {
-                    // Kapasitas tidak cukup → potong item paling bawah
-                    if (items.length <= 1) {
-                        // Bahkan 1 item pun tidak cukup → kirim ringkasan header saja
-                        try {
-                            const headerOnlyText = buildRequestOrderQRText({ ...roData, items: [] }) +
-                                '\n(Daftar item terlalu banyak untuk QR Code,\nlihat dokumen PDF untuk detail lengkap)';
-                            const dataUrl = await QRCode.toDataURL(headerOnlyText, qrOptions);
-                            return { dataUrl, truncated: true };
-                        } catch (err2) {
-                            console.error('[RO QR] Gagal generate QR Code:', err2);
-                            return null;
-                        }
-                    }
-                    items = items.slice(0, items.length - 1);
-                    truncated = true;
-                }
+            // QR Code berisi Google Maps URL ke alamat PO
+            const text = buildRequestOrderQRText(roData);
+            try {
+                const dataUrl = await QRCode.toDataURL(text, qrOptions);
+                return { dataUrl, truncated: false };
+            } catch (err) {
+                console.error('[RO QR] Gagal generate QR Code:', err);
+                return null;
             }
         }
 
