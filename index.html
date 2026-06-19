@@ -852,8 +852,8 @@
         }
 
         /**
-         * Tampilkan popup Cancel dengan textarea alasan.
-         * Mengembalikan Promise<string|null> — null = batal, string = alasan yang diisi.
+         * Tampilkan popup Cancel dengan input Nama Driver + textarea alasan.
+         * Mengembalikan Promise<{namaDriver, alasan}|null> — null = batal.
          */
         function routeShowCancelModal(noPO) {
             return new Promise(resolve => {
@@ -872,6 +872,12 @@
                             <p class="font-bold text-gray-800 text-base">Cancel Pengiriman</p>
                             <p class="text-xs text-gray-400">PO: <b>${noPO}</b></p>
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nama Driver <span class="text-red-500">*</span></label>
+                        <input id="route-cancel-driver" type="text"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-300"
+                            placeholder="Nama driver / kurir pengirim..." />
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1.5">Masukan Alasan <span class="text-red-500">*</span></label>
@@ -894,14 +900,22 @@
                 document.body.appendChild(modal);
 
                 document.getElementById('route-cancel-submit').onclick = () => {
+                    const namaDriver = document.getElementById('route-cancel-driver').value.trim();
                     const alasan = document.getElementById('route-cancel-reason').value.trim();
+                    let hasError = false;
+                    if (!namaDriver) {
+                        document.getElementById('route-cancel-driver').classList.add('border-red-400', 'ring-2', 'ring-red-200');
+                        document.getElementById('route-cancel-driver').placeholder = '⚠ Nama driver wajib diisi!';
+                        hasError = true;
+                    }
                     if (!alasan) {
                         document.getElementById('route-cancel-reason').classList.add('border-red-400', 'ring-2', 'ring-red-200');
                         document.getElementById('route-cancel-reason').placeholder = '⚠ Alasan wajib diisi!';
-                        return;
+                        hasError = true;
                     }
+                    if (hasError) return;
                     modal.remove();
-                    resolve(alasan);
+                    resolve({ namaDriver, alasan });
                 };
                 document.getElementById('route-cancel-close').onclick = () => {
                     modal.remove();
@@ -1536,8 +1550,9 @@
          * Klik tombol "Cancel" → tampilkan popup alasan → kirim cancelDelivery ke GAS
          */
         async function routeCancelDelivery(noPO, idx) {
-            const alasan = await routeShowCancelModal(noPO);
-            if (!alasan) return; // user klik Kembali
+            const cancelData = await routeShowCancelModal(noPO);
+            if (!cancelData) return; // user klik Kembali
+            const { namaDriver, alasan } = cancelData;
 
             const btn       = document.getElementById(`route-btn-${idx}`);
             const cancelBtn = document.getElementById(`route-cancel-btn-${idx}`);
@@ -1552,7 +1567,8 @@
                     body: JSON.stringify({
                         action : 'cancelDelivery',
                         noPO,
-                        alasan
+                        alasan,
+                        namaPengirim: namaDriver
                     })
                 });
                 const result = await res.json();
@@ -1565,7 +1581,7 @@
                         setTimeout(() => card.remove(), 420);
                     }
                     showAlert('info', 'Pengiriman Dibatalkan',
-                        `PO ${noPO} dibatalkan.\nAlasan: ${alasan}`);
+                        `PO ${noPO} dibatalkan.\nDriver: ${namaDriver}\nAlasan: ${alasan}`);
 
                     setTimeout(() => {
                         const grid = document.getElementById('route-cards-grid');
