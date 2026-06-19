@@ -341,7 +341,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxNH-UqRTeKJre78TpKMT5xNv2CieacYaCaMkrJ30bGhZauV-Y_t0dnWo9HUcNG91VW/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbw2CnwSKeVYEvxEx90ObWfsXNBVhYWMvmml2j4kNgm8fKW7QG5bPO_Ow3plWQAnt3An/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -1125,16 +1125,20 @@
                 </div>
             </div>`;
 
-            // ── Ambil data dari sheet Plan Driver via GAS ──
+            // ── Ambil data dari sheet "Plan Driver" via GAS ──
+            // Backend sudah mengelompokkan & mengurutkan rute per Driver
+            // (Gold = rute pertama, lalu Zona_Area terdekat / nearest-neighbor).
             try {
                 const res = await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver');
                 const raw = await res.json();
 
                 // raw = array of rows (dengan header di index 0)
-                // Kolom yang dikembalikan GAS dari PO_Data:
+                // Kolom yang dikembalikan GAS dari sheet "Plan Driver":
                 // [0]=No.PO  [1]=Ship To  [2]=Alamat  [3]=Zona  [4]=SLA_Status  [5]=Status
                 // [6]=OrderedBy  [7]=Phone  [8]=ShippingDate  [9]=Driver/PIC  [10]=Maps URL
+                // [11]=Zona_Area  [12]=Skor_Prioritas  [13]=RouteOrder (urutan rute dalam driver itu)
                 const rows = Array.isArray(raw) ? raw : (raw.data || []);
+                if (raw && raw.error) throw new Error(raw.error);
                 const header = rows[0] || [];
                 const dataRows = rows.slice(1);
 
@@ -1161,11 +1165,70 @@
                     return;
                 }
 
-                // Render cards
-                cardArea.innerHTML = `
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="route-cards-grid">
-                    ${activeRows.map((r, idx) => _buildRouteCard(r, idx)).join('')}
-                </div>`;
+                // ── Kelompokkan baris per Driver (kolom [9]) sambil menjaga urutan
+                //    rute yang sudah dihitung backend (RouteOrder di kolom [13]). ──
+                const groups = {};       // { driverName: [row, row, ...] }
+                const groupOrder = [];   // urutan driver pertama kali muncul
+                const noDriverRows = [];
+
+                activeRows.forEach(r => {
+                    const driverName = String(r[9] || '').trim();
+                    if (!driverName) { noDriverRows.push(r); return; }
+                    if (!groups[driverName]) { groups[driverName] = []; groupOrder.push(driverName); }
+                    groups[driverName].push(r);
+                });
+
+                // Pastikan tiap grup terurut sesuai RouteOrder (index [13]) — backend
+                // sudah mengurutkan, ini hanya jaga-jaga kalau urutan berubah saat fetch.
+                groupOrder.forEach(name => {
+                    groups[name].sort((a, b) => (Number(a[13]) || 0) - (Number(b[13]) || 0));
+                });
+
+                // Render: 1 section per Driver (judul + urutan rute bernomor),
+                // lalu section terakhir untuk PO yang belum di-assign driver.
+                let globalIdx = 0;
+                let html = '';
+
+                groupOrder.forEach(driverName => {
+                    const rowsForDriver = groups[driverName];
+                    html += `
+                    <div class="mb-6">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-700 font-bold text-sm">
+                                ${driverName.charAt(0).toUpperCase()}
+                            </span>
+                            <h2 class="text-base font-bold text-gray-700">${driverName}</h2>
+                            <span class="text-xs text-gray-400">(${rowsForDriver.length} rute, urut terdekat)</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            ${rowsForDriver.map(r => {
+                                const card = _buildRouteCard(r, globalIdx);
+                                globalIdx++;
+                                return card;
+                            }).join('')}
+                        </div>
+                    </div>`;
+                });
+
+                if (noDriverRows.length > 0) {
+                    html += `
+                    <div class="mb-6">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-500 font-bold text-sm">?</span>
+                            <h2 class="text-base font-bold text-gray-500">Belum Ada Driver</h2>
+                            <span class="text-xs text-gray-400">(${noDriverRows.length} PO)</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            ${noDriverRows.map(r => {
+                                const card = _buildRouteCard(r, globalIdx);
+                                globalIdx++;
+                                return card;
+                            }).join('')}
+                        </div>
+                    </div>`;
+                }
+
+                cardArea.innerHTML = `<div id="route-cards-grid">${html}</div>`;
 
             } catch (err) {
                 document.getElementById('route-card-area').innerHTML = `
@@ -1242,8 +1305,27 @@
             const shippingDate = String(r[8]  || '').trim();
             const driver       = String(r[9]  || '').trim();
             const mapsUrl      = String(r[10] || '').trim();
+            const skorPrioritas = String(r[12] || '').trim();
+            const routeOrder    = Number(r[13]) || 0;
 
             const isOnDelivery = status === 'On-Delivery';
+
+            // Badge nomor urut rute (mis. "1", "2", ...) — hanya muncul kalau
+            // PO ini sudah punya driver & urutan rute (RouteOrder > 0)
+            const routeOrderBadge = routeOrder > 0
+                ? `<span class="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-700 text-white text-xs font-bold" title="Urutan rute ke-${routeOrder}">${routeOrder}</span>`
+                : '';
+
+            // Badge Skor_Prioritas (Gold / Silver)
+            const prioritasLower = skorPrioritas.toLowerCase();
+            const prioritasBadgeClass = prioritasLower === 'gold'
+                ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                : prioritasLower === 'silver'
+                    ? 'bg-gray-100 text-gray-600 border border-gray-300'
+                    : '';
+            const prioritasBadge = skorPrioritas
+                ? `<span class="flex-shrink-0 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${prioritasBadgeClass}">${skorPrioritas === 'Gold' ? '🥇' : skorPrioritas === 'Silver' ? '🥈' : ''} ${skorPrioritas}</span>`
+                : '';
 
             // Warna SLA badge
             const slaBadgeClass = slaStatus.toLowerCase().includes('late') || slaStatus.toLowerCase().includes('overdue')
@@ -1315,13 +1397,19 @@
             return `
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3 hover:shadow-md transition" id="route-card-${idx}" ${dataAttrs}>
 
-                <!-- Header: Ship To + Status badge -->
+                <!-- Header: urutan rute + Ship To + Status badge -->
                 <div class="flex items-start justify-between gap-2">
-                    <div class="flex-1 min-w-0">
-                        <p class="text-base font-bold text-gray-800 break-words leading-snug" title="${customer}">${customer || '-'}</p>
-                        <p class="text-xs text-gray-400 mt-0.5 break-words leading-relaxed" title="${alamat}">${alamat || '-'}</p>
+                    <div class="flex items-start gap-2 flex-1 min-w-0">
+                        ${routeOrderBadge}
+                        <div class="flex-1 min-w-0">
+                            <p class="text-base font-bold text-gray-800 break-words leading-snug" title="${customer}">${customer || '-'}</p>
+                            <p class="text-xs text-gray-400 mt-0.5 break-words leading-relaxed" title="${alamat}">${alamat || '-'}</p>
+                        </div>
                     </div>
-                    <span class="flex-shrink-0 inline-block px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass}" id="route-status-badge-${idx}">${statusLabel}</span>
+                    <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span class="inline-block px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass}" id="route-status-badge-${idx}">${statusLabel}</span>
+                        ${prioritasBadge}
+                    </div>
                 </div>
 
                 <!-- Detail PO: grid 2 kolom -->
