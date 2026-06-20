@@ -377,6 +377,37 @@
         let currentUserRole = '';
 
         // =========================================================================
+        // DRAFT AUTOSAVE (Form PO, Process PO, Process Inbound)
+        // =========================================================================
+        // Tujuan: kalau user belum sempat klik submit lalu tidak sengaja
+        // refresh browser / tekan tombol back / pindah menu, isian yang sudah
+        // diketik tidak hilang. Draft baru dibersihkan setelah submit berhasil.
+        const DRAFT_KEYS = {
+            formPO: 'draft_formPO',
+            processPO: 'draft_processPO',
+            processInbound: 'draft_processInbound'
+        };
+
+        function _saveDraft(key, data) {
+            try { sessionStorage.setItem(key, JSON.stringify(data)); } catch (e) { /* storage penuh/disabled, abaikan */ }
+        }
+
+        function _loadDraft(key) {
+            try {
+                const raw = sessionStorage.getItem(key);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) { return null; }
+        }
+
+        function _clearDraft(key) {
+            sessionStorage.removeItem(key);
+        }
+
+        function _clearAllDraftForms() {
+            Object.values(DRAFT_KEYS).forEach(k => sessionStorage.removeItem(k));
+        }
+
+        // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
         const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbw2CnwSKeVYEvxEx90ObWfsXNBVhYWMvmml2j4kNgm8fKW7QG5bPO_Ow3plWQAnt3An/exec';
@@ -411,15 +442,19 @@
 
             if (pass === 'admin123') {
                 currentUserRole = 'ADMIN';
+                sessionStorage.setItem('currentUserRole', currentUserRole);
                 startApp();
             } else if (pass === 'staff123') {
                 currentUserRole = 'PO_User';
+                sessionStorage.setItem('currentUserRole', currentUserRole);
                 startApp();
             } else if (pass === 'warehouse123') {
                 currentUserRole = 'WAREHOUSE';
+                sessionStorage.setItem('currentUserRole', currentUserRole);
                 startApp();
             } else if (pass === 'driver123') {
                 currentUserRole = 'DRIVER';
+                sessionStorage.setItem('currentUserRole', currentUserRole);
                 startApp();
             } else {
                 error.classList.remove('hidden');
@@ -470,7 +505,7 @@
                 // Buka PO submenu otomatis
                 document.getElementById('po-sub').classList.remove('hidden');
                 document.getElementById('arrow-po').textContent = '▲';
-                navTo('Purchase Order');
+                navTo(_getRestorePage('Purchase Order'));
 
                 // Tampilkan tombol notifikasi & load data Ready To Ship
                 const bellBtn = document.getElementById('notif-bell-btn');
@@ -485,7 +520,7 @@
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
                 document.getElementById('menu-team-delivery').classList.add('hidden');
-                navTo('Process PO');
+                navTo(_getRestorePage('Process PO'));
 
                 // Tampilkan tombol notifikasi & load data Open
                 const bellBtn2 = document.getElementById('notif-bell-btn');
@@ -503,14 +538,36 @@
                 // Buka submenu Team Delivery otomatis
                 document.getElementById('team-delivery-sub').classList.remove('hidden');
                 document.getElementById('arrow-team-delivery').textContent = '▲';
-                navTo('Route');
+                navTo(_getRestorePage('Route'));
             } else {
                 // ADMIN: semua menu tampil termasuk Process PO & Team Delivery
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
-                navTo('Dashboard');
+                navTo(_getRestorePage('Dashboard'));
             }
+        }
+
+        /**
+         * Tentukan halaman mana yang harus dibuka saat startApp() dipanggil:
+         * - Jika ada halaman tersimpan dari sesi sebelumnya (refresh) DAN halaman itu
+         *   valid untuk role saat ini → pakai halaman tersimpan.
+         * - Jika tidak ada → pakai halaman default sesuai role.
+         */
+        function _getRestorePage(defaultPage) {
+            const saved = sessionStorage.getItem('currentPage');
+            if (!saved) return defaultPage;
+
+            // Validasi: halaman tersimpan harus sesuai hak akses role saat ini,
+            // supaya tidak nyasar ke menu yang sebenarnya terkunci untuk role ini.
+            if ((saved === 'Process PO' || saved === 'Process Inbound') && currentUserRole === 'PO_User') {
+                return defaultPage;
+            }
+            if ((saved === 'Route' || saved === 'Report Finish') &&
+                !(currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER')) {
+                return defaultPage;
+            }
+            return saved;
         }
 
         /** Logout: reset state dan kembali ke halaman login */
@@ -519,6 +576,12 @@
 
             // Reset role
             currentUserRole = '';
+
+            // Hapus sesi tersimpan (role, halaman aktif, draft form) agar
+            // logout benar-benar membersihkan dan kembali ke login.
+            sessionStorage.removeItem('currentUserRole');
+            sessionStorage.removeItem('currentPage');
+            _clearAllDraftForms();
 
             // Reset form password
             document.getElementById('passwordInput').value = '';
@@ -814,6 +877,7 @@
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
+            sessionStorage.setItem('currentPage', pageName);
 
             // Tutup sidebar di mobile setelah klik menu
             if (window.innerWidth < 768 && sidebarOpen) toggleSidebar();
@@ -3086,6 +3150,89 @@
             </div>`;
             // Preload items for autocomplete
             preloadSourceItems();
+
+            // Restore draft (jika sebelumnya ada isian yang belum sempat disubmit)
+            // lalu pasang autosave agar perubahan berikutnya selalu tersimpan.
+            _restoreFormPODraft();
+            _attachFormPOAutosave();
+        }
+
+        /** Kumpulkan isi field Form PO (termasuk baris item dinamis) jadi object draft */
+        function _collectFormPODraft() {
+            const tbody = document.getElementById('po-item-table-body');
+            const items = [];
+            if (tbody) {
+                tbody.querySelectorAll('tr:not([data-placeholder])').forEach(tr => {
+                    items.push({
+                        nama: tr.querySelector('.po-item-nama')?.value || '',
+                        qty: tr.querySelector('.po-item-qty')?.value || '',
+                        uom: tr.querySelector('.po-item-uom')?.value || '',
+                        desc: tr.querySelector('.po-item-desc')?.value || '',
+                        note: tr.querySelector('.po-item-note')?.value || ''
+                    });
+                });
+            }
+            return {
+                nama: document.getElementById('nama')?.value || '',
+                category: document.getElementById('category')?.value || '',
+                allocatedTo: document.getElementById('allocated-to')?.value || '',
+                alamat: document.getElementById('po-alamat')?.value || '',
+                phone: document.getElementById('po-phone')?.value || '',
+                shippingDate: document.getElementById('po-shipping-date')?.value || '',
+                noteKhusus: document.getElementById('po-note-khusus')?.value || '',
+                items
+                // Catatan: file PDF yang sudah dipilih (input type="file") tidak bisa
+                // disimpan ke sessionStorage, jadi setelah refresh user perlu memilih
+                // ulang filenya. Field lain & baris item tetap aman.
+            };
+        }
+
+        /** Restore isian Form PO dari draft tersimpan (jika ada) */
+        function _restoreFormPODraft() {
+            const draft = _loadDraft(DRAFT_KEYS.formPO);
+            if (!draft) return;
+
+            const namaEl = document.getElementById('nama');
+            const categoryEl = document.getElementById('category');
+            if (namaEl && draft.nama) namaEl.value = draft.nama;
+            if (categoryEl && draft.category) { categoryEl.value = draft.category; updatePOPreview(); }
+            if (draft.allocatedTo) document.getElementById('allocated-to').value = draft.allocatedTo;
+            if (draft.alamat) document.getElementById('po-alamat').value = draft.alamat;
+            if (draft.phone) document.getElementById('po-phone').value = draft.phone;
+            if (draft.shippingDate) document.getElementById('po-shipping-date').value = draft.shippingDate;
+            if (draft.noteKhusus) document.getElementById('po-note-khusus').value = draft.noteKhusus;
+
+            if (Array.isArray(draft.items) && draft.items.length > 0) {
+                draft.items.forEach(item => {
+                    tambahBarisFormPO();
+                    const tbody = document.getElementById('po-item-table-body');
+                    const tr = tbody.querySelector('tr:last-child');
+                    if (!tr) return;
+                    if (tr.querySelector('.po-item-nama')) tr.querySelector('.po-item-nama').value = item.nama || '';
+                    if (tr.querySelector('.po-item-qty')) tr.querySelector('.po-item-qty').value = item.qty || '1';
+                    if (tr.querySelector('.po-item-uom')) tr.querySelector('.po-item-uom').value = item.uom || '';
+                    if (tr.querySelector('.po-item-desc')) tr.querySelector('.po-item-desc').value = item.desc || '';
+                    if (tr.querySelector('.po-item-note')) tr.querySelector('.po-item-note').value = item.note || '';
+                });
+            }
+        }
+
+        /** Pasang listener input/change pada semua field Form PO agar autosave ke draft.
+         *  Melepas listener lama dulu (jika ada) agar tidak menumpuk setiap kali
+         *  halaman Form PO dibuka ulang (pindah menu lalu balik lagi). */
+        let _formPOAutosaveHandler = null;
+        function _attachFormPOAutosave() {
+            const contentArea = document.getElementById('content-area');
+            if (!contentArea) return;
+            if (_formPOAutosaveHandler) {
+                contentArea.removeEventListener('input', _formPOAutosaveHandler);
+                contentArea.removeEventListener('change', _formPOAutosaveHandler);
+            }
+            _formPOAutosaveHandler = () => _saveDraft(DRAFT_KEYS.formPO, _collectFormPODraft());
+            // Event delegation: satu listener di container, menangkap semua input/select/textarea
+            // termasuk baris item yang ditambah/dihapus secara dinamis.
+            contentArea.addEventListener('input', _formPOAutosaveHandler);
+            contentArea.addEventListener('change', _formPOAutosaveHandler);
         }
 
         function updatePOPreview() {
@@ -3179,6 +3326,7 @@
                     const result = await response.json();
                     showAlert('success', 'PO Berhasil Dikirim!', 'No. PO: ' + result.po);
                     resetFormPO();
+                    _clearDraft(DRAFT_KEYS.formPO);
                 } catch (err) {
                     showAlert('error', 'Gagal Mengirim PO', err.message);
                 } finally {
@@ -3878,6 +4026,88 @@
             // Auto-load daftar PO Open setelah halaman ter-render
             loadOpenPOList();
             preloadSourceItems();
+
+            // Restore draft (field utama + isi tabel verifikasi) jika sebelumnya
+            // ada proses import/isi manual yang belum sempat diklik "Proses".
+            _restoreProcessPODraft();
+            _attachProcessPOAutosave();
+        }
+
+        /** Kumpulkan isi field Process PO (termasuk innerHTML tabel verifikasi) jadi draft */
+        function _collectProcessPODraft() {
+            const tbody = document.getElementById('proc-table-body');
+            // Hanya simpan innerHTML tabel jika sudah ada baris nyata (bukan placeholder kosong),
+            // supaya tidak menimpa draft lama dengan placeholder saat halaman baru dibuka.
+            const hasRealRows = tbody && Array.from(tbody.querySelectorAll('tr'))
+                .some(row => row.cells.length >= 5 && !row.querySelector('td[colspan]'));
+            return {
+                tglProses: document.getElementById('proc-tgl-proses')?.value || '',
+                noPO: document.getElementById('proc-no-po-select')?.value || '',
+                crewPacking: document.getElementById('proc-crew-packing')?.value || '',
+                orderedBy: document.getElementById('proc-ordered-by')?.value || '',
+                orderedByNoPO: document.getElementById('proc-ordered-by')?.dataset?.nopo || '',
+                shipTo: document.getElementById('proc-ship')?.value || '',
+                shippingDate: document.getElementById('proc-shipping-date')?.value || '',
+                tableHTML: hasRealRows ? tbody.innerHTML : null
+                // Catatan: file PDF yang sudah dipilih tidak bisa disimpan ke
+                // sessionStorage; field hasil ekstraksinya (tabel & field di atas)
+                // tetap tersimpan meski user perlu import ulang PDF-nya.
+            };
+        }
+
+        /** Restore isian Process PO dari draft tersimpan (jika ada) */
+        function _restoreProcessPODraft() {
+            const draft = _loadDraft(DRAFT_KEYS.processPO);
+            if (!draft) return;
+
+            if (draft.tglProses) document.getElementById('proc-tgl-proses').value = draft.tglProses;
+            if (draft.crewPacking) document.getElementById('proc-crew-packing').value = draft.crewPacking;
+            if (draft.orderedBy) {
+                const orderedByEl = document.getElementById('proc-ordered-by');
+                orderedByEl.value = draft.orderedBy;
+                if (draft.orderedByNoPO) orderedByEl.dataset.nopo = draft.orderedByNoPO;
+            }
+            if (draft.shipTo) document.getElementById('proc-ship').value = draft.shipTo;
+            if (draft.shippingDate) document.getElementById('proc-shipping-date').value = draft.shippingDate;
+            if (draft.tableHTML) {
+                document.getElementById('proc-table-body').innerHTML = draft.tableHTML;
+            }
+            // No. PO select diisi belakangan oleh loadOpenPOList(); set lagi setelah list siap.
+            if (draft.noPO) {
+                setTimeout(() => {
+                    const sel = document.getElementById('proc-no-po-select');
+                    if (sel && [...sel.options].some(o => o.value === draft.noPO)) sel.value = draft.noPO;
+                }, 800);
+            }
+        }
+
+        /** Pasang listener input/change pada Process PO agar autosave ke draft.
+         *  Melepas listener & observer lama dulu (jika ada) agar tidak menumpuk
+         *  setiap kali halaman Process PO dibuka ulang. */
+        let _processPOAutosaveHandler = null;
+        let _processPOMutationObserver = null;
+        function _attachProcessPOAutosave() {
+            const contentArea = document.getElementById('content-area');
+            if (!contentArea) return;
+            if (_processPOAutosaveHandler) {
+                contentArea.removeEventListener('input', _processPOAutosaveHandler);
+                contentArea.removeEventListener('change', _processPOAutosaveHandler);
+            }
+            if (_processPOMutationObserver) {
+                _processPOMutationObserver.disconnect();
+                _processPOMutationObserver = null;
+            }
+            _processPOAutosaveHandler = () => _saveDraft(DRAFT_KEYS.processPO, _collectProcessPODraft());
+            contentArea.addEventListener('input', _processPOAutosaveHandler);
+            contentArea.addEventListener('change', _processPOAutosaveHandler);
+            // Tabel verifikasi diisi ulang secara dinamis (import PDF, tambah baris manual,
+            // hapus baris) lewat innerHTML/DOM manipulation yang tidak selalu memicu
+            // event input/change di parent, jadi pantau juga perubahan struktur tabel.
+            const tbody = document.getElementById('proc-table-body');
+            if (tbody && window.MutationObserver) {
+                _processPOMutationObserver = new MutationObserver(_processPOAutosaveHandler);
+                _processPOMutationObserver.observe(tbody, { childList: true, subtree: true, characterData: true });
+            }
         }
 
         // =========================================================================
@@ -5140,9 +5370,75 @@
         </div>`;
 
             preloadSourceItems();
+
+            // Restore draft jika sebelumnya ada isian Detail Inbound yang belum
+            // sempat diklik "Proses Inbound".
+            _restoreProcessInboundDraft();
+            _attachProcessInboundAutosave();
         }
 
-        /** Validasi tanggal inbound tidak boleh lebih dari hari ini */
+        /** Kumpulkan isi field Process Inbound (termasuk baris item dinamis) jadi draft */
+        function _collectProcessInboundDraft() {
+            const tbody = document.getElementById('inb-table-body');
+            const items = [];
+            if (tbody) {
+                tbody.querySelectorAll('tr:not([data-placeholder])').forEach(tr => {
+                    items.push({
+                        nama: tr.querySelector('.nama-barang-input')?.value || '',
+                        qty: tr.querySelector('.qty-input')?.value || '',
+                        serial: tr.querySelector('.serial-input')?.value || '',
+                        remark: tr.querySelector('.remark-input')?.value || ''
+                    });
+                });
+            }
+            return {
+                tanggal: document.getElementById('inb-tanggal')?.value || '',
+                exLokasi: document.getElementById('inb-ex-lokasi')?.value || '',
+                crew: document.getElementById('inb-crew')?.value || '',
+                category: document.getElementById('inb-category')?.value || '',
+                items
+            };
+        }
+
+        /** Restore isian Process Inbound dari draft tersimpan (jika ada) */
+        function _restoreProcessInboundDraft() {
+            const draft = _loadDraft(DRAFT_KEYS.processInbound);
+            if (!draft) return;
+
+            if (draft.tanggal) document.getElementById('inb-tanggal').value = draft.tanggal;
+            if (draft.exLokasi) document.getElementById('inb-ex-lokasi').value = draft.exLokasi;
+            if (draft.crew) document.getElementById('inb-crew').value = draft.crew;
+            if (draft.category) document.getElementById('inb-category').value = draft.category;
+
+            if (Array.isArray(draft.items) && draft.items.length > 0) {
+                draft.items.forEach(item => {
+                    tambahBarisInbound();
+                    const tbody = document.getElementById('inb-table-body');
+                    const tr = tbody.querySelector('tr:last-child');
+                    if (!tr) return;
+                    if (tr.querySelector('.nama-barang-input')) tr.querySelector('.nama-barang-input').value = item.nama || '';
+                    if (tr.querySelector('.qty-input')) tr.querySelector('.qty-input').value = item.qty || '1';
+                    if (tr.querySelector('.serial-input')) tr.querySelector('.serial-input').value = item.serial || '';
+                    if (tr.querySelector('.remark-input')) tr.querySelector('.remark-input').value = item.remark || '';
+                });
+            }
+        }
+
+        /** Pasang listener input/change pada semua field Process Inbound agar autosave ke draft.
+         *  Melepas listener lama dulu (jika ada) agar tidak menumpuk setiap kali
+         *  halaman Process Inbound dibuka ulang. */
+        let _processInboundAutosaveHandler = null;
+        function _attachProcessInboundAutosave() {
+            const contentArea = document.getElementById('content-area');
+            if (!contentArea) return;
+            if (_processInboundAutosaveHandler) {
+                contentArea.removeEventListener('input', _processInboundAutosaveHandler);
+                contentArea.removeEventListener('change', _processInboundAutosaveHandler);
+            }
+            _processInboundAutosaveHandler = () => _saveDraft(DRAFT_KEYS.processInbound, _collectProcessInboundDraft());
+            contentArea.addEventListener('input', _processInboundAutosaveHandler);
+            contentArea.addEventListener('change', _processInboundAutosaveHandler);
+        }
         function validateInboundDate(input) {
             const errEl = document.getElementById('inb-tanggal-error');
             const today = new Date().toISOString().split('T')[0];
@@ -5565,6 +5861,7 @@
                     document.getElementById('inb-tanggal').value = today;
                     document.getElementById('inb-table-body').innerHTML =
                         '<tr data-placeholder><td colspan="5" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>';
+                    _clearDraft(DRAFT_KEYS.processInbound);
                 } else {
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
                 }
@@ -5938,6 +6235,7 @@
                         if (poSelect) poSelect.value = '';
                         document.getElementById('proc-table-body').innerHTML =
                             '<tr><td colspan="5" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
+                        _clearDraft(DRAFT_KEYS.processPO);
                     }, 1500);
 
                 } else {
@@ -5981,6 +6279,23 @@
         }
         // Konfigurasi wajib untuk pdf.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // =========================================================================
+        // RESTORE SESI SAAT BROWSER DI-REFRESH (F5 / tombol Back)
+        // =========================================================================
+        // Sebelumnya: refresh browser selalu mereset currentUserRole (in-memory)
+        // sehingga user terlempar kembali ke halaman login, walau sebelumnya
+        // sudah login dan sedang mengisi form / melihat Route.
+        // Sekarang: role & halaman terakhir disimpan di sessionStorage (bertahan
+        // selama tab terbuka, otomatis hilang saat tab/browser ditutup —
+        // jadi tetap aman secara sesi, tidak permanen seperti localStorage).
+        (function restoreSessionOnLoad() {
+            const savedRole = sessionStorage.getItem('currentUserRole');
+            if (!savedRole) return; // belum pernah login → tampilkan halaman login seperti biasa
+
+            currentUserRole = savedRole;
+            startApp();
+        })();
     </script>
 
     <!-- ═══ MODAL KAMERA QR — PERMANEN (tidak ikut innerHTML) ═══ -->
