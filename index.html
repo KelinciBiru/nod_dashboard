@@ -4010,11 +4010,13 @@
                             <th class="p-2 text-center">Qty PO</th>
                             <th class="p-2 text-center">Qty Outbound</th>
                             <th class="p-2 text-center">UOM</th>
-                            <th class="p-2 text-left rounded-tr-lg">Description</th>
+                            <th class="p-2 text-left">Description</th>
+                            <th class="p-2 text-left" style="min-width:140px">Serial Number</th>
+                            <th class="p-2 text-left rounded-tr-lg" style="min-width:140px">ID Device</th>
                         </tr>
                     </thead>
                     <tbody id="proc-table-body">
-                        <tr><td colspan="5" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
+                        <tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -4658,13 +4660,15 @@
                                     ${descOpts}
                                 </select>
                             </td>
+                            <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
+                            <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
                             <td class="p-2 text-center"><button onclick="hapusBaris(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>
                         </tr>`;
                     }).join('');
                 } else {
                     tbody.innerHTML = `
                         <tr class="bg-yellow-50 border-b border-yellow-200">
-                            <td colspan="5" class="p-3 text-center text-xs text-yellow-700">
+                            <td colspan="7" class="p-3 text-center text-xs text-yellow-700">
                                 ⚠️ Item tidak terdeteksi otomatis. Silakan isi manual atau periksa format PDF.<br>
                                 <span class="text-gray-400 text-[10px]">Ekstrak: ${rawText.substring(0, 200).replace(/[\r\n]+/g, ' ')}...</span>
                             </td>
@@ -4683,6 +4687,8 @@
                                     <option>Machine Display</option><option>Capsule Selling</option>
                                 </select>
                             </td>
+                            <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
+                            <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
                         </tr>`;
                 }
 
@@ -4751,10 +4757,15 @@
                 const uom = tds[3] ? tds[3].textContent.trim() : '';
                 const descSel = tds[4] ? tds[4].querySelector('select') : null;
                 const description = descSel ? descSel.value : (tds[4] ? tds[4].textContent.trim() : '');
-                // Kolom Remark hanya ada pada baris manual (tds[5] sebelum kolom Aksi)
-                const remark = (tds.length >= 7 && tds[5]) ? tds[5].textContent.trim() : '';
+                const serialInput = row.querySelector('.serial-number-input');
+                const idDeviceInput = row.querySelector('.id-device-input');
+                const serialNumber = serialInput ? serialInput.value.trim() : '';
+                const idDevice = idDeviceInput ? idDeviceInput.value.trim() : '';
+                // Kolom Remark hanya ada pada baris manual (contenteditable, setelah ID Device, sebelum kolom Aksi)
+                const remarkTd = row.querySelector('td[contenteditable]:last-of-type');
+                const remark = (tds.length >= 9 && remarkTd) ? remarkTd.textContent.trim() : '';
 
-                items.push({ nama, qty, uom, description, remark });
+                items.push({ nama, qty, uom, description, remark, serialNumber, idDevice });
             });
 
             if (items.length === 0) {
@@ -5448,6 +5459,8 @@
                 <td class="p-2 text-center"><input type="number" min="0" value="1" class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
                 <td class="p-2 text-center" contenteditable="true">Pcs</td>
                 <td class="p-2"><select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select></td>
+                <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
+                <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
                 <td class="p-2 text-xs text-gray-500" contenteditable="true"></td>
                 <td class="p-2 text-center"><button onclick="hapusBaris(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>`;
 
@@ -6311,6 +6324,8 @@
                 const qtyOutboundInput = row.querySelector('input[type="number"]');
                 const descSelect = row.querySelector('select');
                 const namaBarangInput = row.querySelector('.nama-barang-input');
+                const serialNumberInput = row.querySelector('.serial-number-input');
+                const idDeviceInput = row.querySelector('.id-device-input');
                 const namaBarang = namaBarangInput ? namaBarangInput.value.trim() : row.cells[0].innerText.trim();
                 const qtyPO = row.cells[1].innerText.trim();
                 if (!namaBarang || namaBarang === '-') return; // skip baris kosong
@@ -6320,6 +6335,8 @@
                     qtyOutbound: qtyOutboundInput ? qtyOutboundInput.value : row.cells[2].innerText.trim(),
                     uom: row.cells[3].innerText.trim(),
                     description: descSelect ? descSelect.value : row.cells[4].innerText.trim(),
+                    serialNumber: serialNumberInput ? serialNumberInput.value.trim() : '',
+                    idDevice: idDeviceInput ? idDeviceInput.value.trim() : '',
                 });
             });
 
@@ -6412,7 +6429,7 @@
                         const poSelect = document.getElementById('proc-no-po-select');
                         if (poSelect) poSelect.value = '';
                         document.getElementById('proc-table-body').innerHTML =
-                            '<tr><td colspan="5" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
+                            '<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
                         _clearDraft(DRAFT_KEYS.processPO);
                     }, 1500);
 
