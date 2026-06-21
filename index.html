@@ -5202,41 +5202,78 @@
             // window.visualViewport melaporkan ukuran viewport yang SUDAH
             // memperhitungkan keyboard, jadi dipakai sebagai acuan utama kalau ada.
             const vv = window.visualViewport;
+            const MAX_LIST_H = 224; // selaras dengan class Tailwind max-h-56 di template
 
             function positionList() {
                 const r = input.getBoundingClientRect();
                 const viewportH = vv ? vv.height : window.innerHeight;
                 const viewportOffsetTop = vv ? vv.offsetTop : 0;
-                const spaceBelow = (viewportOffsetTop + viewportH) - r.bottom;
-                const listH = list.offsetHeight || 224; // perkiraan sebelum dirender penuh
-                const left = Math.max(8, Math.min(r.left, (vv ? vv.width : window.innerWidth) - 228));
+                const viewportW = vv ? vv.width : window.innerWidth;
+                const viewportBottom = viewportOffsetTop + viewportH;
+
+                const spaceBelow = viewportBottom - r.bottom;
+                const spaceAbove = r.top - viewportOffsetTop;
+                const left = Math.max(8, Math.min(r.left, viewportW - 228));
 
                 list.style.left = left + 'px';
                 list.style.width = Math.max(r.width, 220) + 'px';
                 list.style.minWidth = '220px';
 
-                if (spaceBelow < listH && r.top - viewportOffsetTop > listH) {
-                    // Ruang di bawah input tidak cukup (mis. tertutup keyboard) —
-                    // tampilkan dropdown di ATAS input supaya tidak menimpa input.
-                    list.style.top = '';
-                    list.style.bottom = (window.innerHeight - r.top + 4) + 'px';
-                    list.style.maxHeight = Math.max(120, r.top - viewportOffsetTop - 12) + 'px';
+                // Tidak mengandalkan list.offsetHeight (bisa 0 sebelum browser
+                // selesai melayout, terutama saat pertama kali list ditampilkan)
+                // — cukup bandingkan ruang kosong di atas vs di bawah input.
+                // Kalau ruang di bawah jelas tidak cukup untuk dropdown ukuran
+                // wajar (MAX_LIST_H) DAN ruang di atas lebih luas, tampilkan
+                // dropdown di ATAS supaya tidak pernah menimpa kotak input.
+                const notEnoughBelow = spaceBelow < Math.min(MAX_LIST_H, 140);
+                const flipUp = notEnoughBelow && spaceAbove > spaceBelow;
+
+                // PENTING: pakai patokan yang SAMA (CSS pixel relatif ke layout
+                // viewport, yaitu hasil getBoundingClientRect()) untuk top MAUPUN
+                // bottom. Sebelumnya bottom sempat dihitung pakai window.innerHeight
+                // yang bisa berbeda dari acuan visual viewport di atas, sehingga
+                // dropdown "flip ke atas" malah jatuh di posisi yang salah dan
+                // balik lagi menimpa input.
+                let listTop;
+                let listMaxH;
+                if (flipUp) {
+                    listMaxH = Math.max(100, Math.min(MAX_LIST_H, spaceAbove - 12));
+                    listTop = r.top - listMaxH - 4;
                 } else {
-                    list.style.bottom = '';
-                    list.style.top = (r.bottom + 4) + 'px';
-                    list.style.maxHeight = Math.max(120, spaceBelow - 12) + 'px';
+                    listMaxH = Math.max(100, Math.min(MAX_LIST_H, spaceBelow - 12));
+                    listTop = r.bottom + 4;
                 }
+
+                // Pengaman terakhir: posisi top hasil hitungan TIDAK BOLEH pernah
+                // jatuh di rentang vertikal kotak input itu sendiri (r.top..r.bottom),
+                // apapun skenarionya. Kalau sampai terjadi (mis. ruang sangat sempit
+                // di kedua sisi), paksa dropdown nempel rapat di bawah/atas input.
+                const listBottom = listTop + listMaxH;
+                const overlapsInput = listTop < r.bottom && listBottom > r.top;
+                if (overlapsInput) {
+                    if (flipUp) {
+                        listTop = Math.min(listTop, r.top - 4 - listMaxH);
+                    } else {
+                        listTop = Math.max(listTop, r.bottom + 4);
+                    }
+                }
+
+                list.style.bottom = '';
+                list.style.top = listTop + 'px';
+                list.style.maxHeight = listMaxH + 'px';
             }
 
             function hideList() { list.classList.add('hidden'); stopAutoReposition(); }
             function showList() {
-                positionList();
                 list.classList.remove('hidden');
+                positionList();
                 // Reposisi sekali lagi setelah keyboard HP selesai animasi muncul,
                 // dan jalankan pengaman reposisi singkat memakai requestAnimationFrame
                 // supaya dropdown selalu "menempel" pas walau viewport masih bergeser.
+                requestAnimationFrame(positionList);
                 setTimeout(positionList, 50);
-                setTimeout(positionList, 300);
+                setTimeout(positionList, 150);
+                setTimeout(positionList, 350);
                 startAutoReposition();
             }
 
@@ -5248,9 +5285,9 @@
                     if (list.classList.contains('hidden')) return;
                     positionList();
                     ticks++;
-                    // Jalan terus selama list terbuka, tapi setelah 30 tick (~0.5 detik)
+                    // Jalan terus selama list terbuka, tapi setelah 40 tick (~0.7 detik)
                     // turunkan frekuensi jadi mengandalkan event scroll/resize saja.
-                    if (ticks < 30) {
+                    if (ticks < 40) {
                         _repositionRaf = requestAnimationFrame(loop);
                     }
                 };
