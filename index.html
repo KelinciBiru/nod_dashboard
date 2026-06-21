@@ -3163,7 +3163,7 @@
                     <table class="w-full text-xs border-collapse">
                         <thead>
                             <tr class="bg-gray-800 text-white">
-                                <th class="p-2 text-left rounded-tl-lg" style="min-width:200px">Item</th>
+                                <th class="p-2 text-left rounded-tl-lg" style="min-width:220px">Item</th>
                                 <th class="p-2 text-center" style="width:70px">Qty</th>
                                 <th class="p-2 text-center" style="width:110px">UOM</th>
                                 <th class="p-2 text-left" style="min-width:140px">Description</th>
@@ -3266,7 +3266,7 @@
                     const tbody = document.getElementById('po-item-table-body');
                     const tr = tbody.querySelector('tr:last-child');
                     if (!tr) return;
-                    if (tr.querySelector('.po-item-nama')) tr.querySelector('.po-item-nama').value = item.nama || '';
+                    if (tr.querySelector('.po-item-nama')) { const el = tr.querySelector('.po-item-nama'); el.value = item.nama || ''; el.title = el.value; }
                     if (tr.querySelector('.po-item-qty')) tr.querySelector('.po-item-qty').value = item.qty || '1';
                     if (tr.querySelector('.po-item-uom')) tr.querySelector('.po-item-uom').value = item.uom || '';
                     if (tr.querySelector('.po-item-desc')) tr.querySelector('.po-item-desc').value = item.desc || '';
@@ -3448,7 +3448,7 @@
                         <div class="po-item-nama-wrap relative">
                             <input type="text"
                                 class="po-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
-                                style="min-height:42px;"
+                                style="min-height:42px; text-overflow:ellipsis;"
                                 placeholder="Ketik atau pilih item..."
                                 autocomplete="off">
                             <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3992,7 +3992,7 @@
                 <table class="w-full text-xs border-collapse">
                     <thead>
                         <tr class="bg-gray-800 text-white">
-                            <th class="p-2 text-left rounded-tl-lg">Nama Barang</th>
+                            <th class="p-2 text-left rounded-tl-lg" style="min-width:200px">Nama Barang</th>
                             <th class="p-2 text-center">Qty PO</th>
                             <th class="p-2 text-center">Qty Outbound</th>
                             <th class="p-2 text-center">UOM</th>
@@ -5179,6 +5179,15 @@
             const maxResults = opts.maxResults || 30;
             const onSelect = opts.onSelect || (() => {});
 
+            // Sinkronkan attribute "title" dengan isi input, supaya saat teks
+            // panjang terpotong (ellipsis) di layar kecil, user tetap bisa
+            // melihat nama lengkapnya lewat tooltip (hover di desktop) atau
+            // tap-and-hold (di sebagian besar browser HP).
+            function syncTitle() { input.title = input.value; }
+            syncTitle();
+            input.addEventListener('input', syncTitle);
+            input.addEventListener('change', syncTitle);
+
             // Pindahkan list ke <body> (portal) supaya tidak ke-clip oleh
             // container tabel yang punya overflow-x-auto, dan posisikan
             // mengambang tepat di bawah input memakai posisi fixed.
@@ -5226,6 +5235,7 @@
                     li.onmousedown = (e) => {
                         e.preventDefault();
                         input.value = item;
+                        syncTitle();
                         hideList();
                         onSelect(item);
                     };
@@ -5265,7 +5275,7 @@
                     if (isListVisible) {
                         e.preventDefault();
                         const toSelect = active || lis[0];
-                        if (toSelect) { input.value = toSelect.textContent; hideList(); onSelect(toSelect.textContent); }
+                        if (toSelect) { input.value = toSelect.textContent; syncTitle(); hideList(); onSelect(toSelect.textContent); }
                     } else if (opts.onEnterNoList) {
                         e.preventDefault();
                         opts.onEnterNoList(e);
@@ -5292,11 +5302,11 @@
             const rowId = 'row-' + Date.now();
             tr.setAttribute('data-rowid', rowId);
             tr.innerHTML = `
-                <td class="p-2 font-medium relative" style="min-width:180px">
+                <td class="p-2 font-medium relative" style="min-width:200px">
                     <div class="relative">
                         <input type="text"
                             class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
-                            style="min-height:42px; min-width:160px"
+                            style="min-height:42px; min-width:180px; text-overflow:ellipsis;"
                             placeholder="Ketik atau pilih nama barang..."
                             autocomplete="off">
                         <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
@@ -5395,7 +5405,7 @@
                 <table class="w-full text-xs border-collapse">
                     <thead>
                         <tr class="bg-gray-800 text-white">
-                            <th class="p-2 text-left rounded-tl-lg" style="min-width:180px">Nama Barang</th>
+                            <th class="p-2 text-left rounded-tl-lg" style="min-width:200px">Nama Barang</th>
                             <th class="p-2 text-center">Qty</th>
                             <th class="p-2 text-left" style="min-width:140px">Serial Number</th>
                             <th class="p-2 text-left" style="min-width:120px">Remark</th>
@@ -5473,7 +5483,7 @@
                     const tbody = document.getElementById('inb-table-body');
                     const tr = tbody.querySelector('tr:last-child');
                     if (!tr) return;
-                    if (tr.querySelector('.nama-barang-input')) tr.querySelector('.nama-barang-input').value = item.nama || '';
+                    if (tr.querySelector('.nama-barang-input')) { const el = tr.querySelector('.nama-barang-input'); el.value = item.nama || ''; el.title = el.value; }
                     if (tr.querySelector('.qty-input')) tr.querySelector('.qty-input').value = item.qty || '1';
                     if (tr.querySelector('.serial-input')) tr.querySelector('.serial-input').value = item.serial || '';
                     if (tr.querySelector('.remark-input')) tr.querySelector('.remark-input').value = item.remark || '';
@@ -5519,11 +5529,11 @@
             const tr = document.createElement('tr');
             tr.className = `${bg} border-b border-gray-100`;
             tr.innerHTML = `
-                <td class="p-2 font-medium relative" style="min-width:180px">
+                <td class="p-2 font-medium relative" style="min-width:200px">
                     <div class="relative">
                         <input type="text" value="${prefillName.replace(/"/g, '&quot;')}"
                             class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
-                            style="min-height:42px; min-width:160px"
+                            style="min-height:42px; min-width:180px; text-overflow:ellipsis;"
                             placeholder="Ketik atau pilih nama barang..." autocomplete="off">
                         <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
