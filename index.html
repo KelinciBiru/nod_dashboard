@@ -3165,7 +3165,7 @@
                             <tr class="bg-gray-800 text-white">
                                 <th class="p-2 text-left rounded-tl-lg" style="min-width:200px">Item</th>
                                 <th class="p-2 text-center" style="width:70px">Qty</th>
-                                <th class="p-2 text-center" style="width:80px">UOM</th>
+                                <th class="p-2 text-center" style="width:110px">UOM</th>
                                 <th class="p-2 text-left" style="min-width:140px">Description</th>
                                 <th class="p-2 text-left" style="min-width:140px">Note</th>
                                 <th class="p-2 text-center rounded-tr-lg" style="width:50px">Aksi</th>
@@ -3192,17 +3192,17 @@
                 <textarea id="po-note-khusus" rows="4"
                     class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm resize-y"
                     placeholder="Tuliskan catatan khusus untuk permintaan order ini..."></textarea>
-                <div class="flex gap-3 mt-4">
+                <div class="flex flex-col sm:flex-row gap-3 mt-4">
                     <button id="downloadRequestOrderBtn" onclick="downloadRequestOrderPDF()"
-                        class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold text-sm transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed">
+                        class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-lg font-bold text-sm transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed text-center leading-tight">
                         <svg id="downloadRequestOrderIcon" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
-                        <span id="downloadRequestOrderLabel">Download PDF</span>
+                        <span id="downloadRequestOrderLabel" class="whitespace-nowrap">Download PDF</span>
                     </button>
                     <button id="submitBtn" onclick="submitPO()"
-                        class="flex-1 bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                        <span id="submitBtnLabel">Kirim PO</span>
+                        class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
+                        <span id="submitBtnLabel" class="whitespace-nowrap">Kirim PO</span>
                     </button>
                 </div>
             </div>`;
@@ -3445,23 +3445,29 @@
             tr.innerHTML = `
                 <td class="p-2 font-medium relative">
                     <div class="relative">
-                        <input type="text"
-                            class="po-item-nama w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
-                            placeholder="Ketik/pilih item..."
-                            autocomplete="off">
-                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
+                        <div class="po-item-nama-wrap relative">
+                            <input type="text"
+                                class="po-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
+                                style="min-height:42px;"
+                                placeholder="Ketik atau pilih item..."
+                                autocomplete="off">
+                            <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-full min-w-[220px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
                 </td>
                 <td class="p-2 text-center">
                     <input type="number" min="1" value="1" class="po-item-qty w-full p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
                 </td>
                 <td class="p-2 text-center">
-                    <select class="po-item-uom w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">
+                    <select class="po-item-uom w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px; min-width:80px;">
                         ${uomOpts}
                     </select>
                 </td>
                 <td class="p-2">
-                    <select class="po-item-desc w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select>
+                    <select class="po-item-desc w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px;">${descOpts}</select>
                 </td>
                 <td class="p-2">
                     <input type="text" class="po-item-note w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Catatan...">
@@ -3480,73 +3486,11 @@
             // Auto-show No. PO preview when first row is added
             checkAutoTriggerPOPreview();
 
-            // Autocomplete logic
+            // Autocomplete logic (dropdown mengambang di luar tabel, tetap bisa diketik untuk mencari)
             const input = tr.querySelector('.po-item-nama');
             const list = tr.querySelector('.autocomplete-list');
-
-            function renderList(filtered) {
-                list.innerHTML = '';
-                if (filtered.length === 0) { list.classList.add('hidden'); return; }
-                filtered.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = item;
-                    li.className = 'px-3 py-2 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition';
-                    li.onmousedown = (e) => {
-                        e.preventDefault();
-                        input.value = item;
-                        list.classList.add('hidden');
-                    };
-                    list.appendChild(li);
-                });
-                list.classList.remove('hidden');
-            }
-
-            input.addEventListener('input', async () => {
-                const q = input.value.trim().toLowerCase();
-                if (!q) { list.classList.add('hidden'); return; }
-                const items = await getSourceItems();
-                const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
-                renderList(filtered);
-            });
-
-            input.addEventListener('focus', async () => {
-                const q = input.value.trim().toLowerCase();
-                if (q) {
-                    const items = await getSourceItems();
-                    const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
-                    renderList(filtered);
-                }
-            });
-
-            input.addEventListener('blur', () => {
-                setTimeout(() => list.classList.add('hidden'), 150);
-            });
-
-            input.addEventListener('keydown', (e) => {
-                const lis = list.querySelectorAll('li');
-                const active = list.querySelector('li.bg-amber-100');
-                const isListVisible = !list.classList.contains('hidden') && lis.length > 0;
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    const next = active ? active.nextElementSibling : lis[0];
-                    if (active) active.classList.remove('bg-amber-100');
-                    if (next) next.classList.add('bg-amber-100');
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    const prev = active ? active.previousElementSibling : lis[lis.length - 1];
-                    if (active) active.classList.remove('bg-amber-100');
-                    if (prev) prev.classList.add('bg-amber-100');
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (isListVisible) {
-                        const toSelect = active || lis[0];
-                        if (toSelect) { input.value = toSelect.textContent; list.classList.add('hidden'); }
-                    } else {
-                        if (input.value.trim()) { tambahBarisFormPO(); }
-                    }
-                } else if (e.key === 'Escape') {
-                    list.classList.add('hidden');
-                }
+            attachItemAutocomplete(input, list, tr, tbody, {
+                onEnterNoList: () => { if (input.value.trim()) tambahBarisFormPO(); }
             });
 
             input.focus();
@@ -5224,6 +5168,116 @@
         // Preload saat halaman Process PO dibuka
         function preloadSourceItems() { getSourceItems(); }
 
+        // =========================================================================
+        // AUTOCOMPLETE ITEM (DROPDOWN MENGAMBANG DI LUAR TABEL)
+        // Dipakai bersama oleh Form PO, Process PO, dan Process Inbound supaya
+        // dropdown pilihan item tidak ke-clip/ke-scroll di dalam tabel yang
+        // punya overflow-x-auto, melainkan "melayang" di atas seluruh halaman
+        // persis seperti dropdown native (mis. UOM).
+        // =========================================================================
+        function attachItemAutocomplete(input, list, tr, tbody, opts = {}) {
+            const maxResults = opts.maxResults || 30;
+            const onSelect = opts.onSelect || (() => {});
+
+            // Pindahkan list ke <body> (portal) supaya tidak ke-clip oleh
+            // container tabel yang punya overflow-x-auto, dan posisikan
+            // mengambang tepat di bawah input memakai posisi fixed.
+            document.body.appendChild(list);
+            list.classList.remove('absolute', 'left-0', 'top-full', 'mt-1', 'mt-0.5', 'w-full', 'w-64');
+            list.style.position = 'fixed';
+            list.style.zIndex = '9999';
+
+            function positionList() {
+                const r = input.getBoundingClientRect();
+                list.style.left = r.left + 'px';
+                list.style.top = (r.bottom + 4) + 'px';
+                list.style.width = Math.max(r.width, 220) + 'px';
+                list.style.minWidth = '220px';
+            }
+
+            function hideList() { list.classList.add('hidden'); }
+            function showList() { positionList(); list.classList.remove('hidden'); }
+
+            // Sembunyikan + lepas list dari body saat baris dihapus, supaya
+            // tidak ada elemen "yatim" menumpuk di <body>.
+            const rowObserver = new MutationObserver(() => {
+                if (!document.body.contains(tr)) {
+                    list.remove();
+                    rowObserver.disconnect();
+                    window.removeEventListener('scroll', onScrollOrResize, true);
+                    window.removeEventListener('resize', onScrollOrResize);
+                }
+            });
+            if (tbody) rowObserver.observe(tbody, { childList: true });
+
+            function onScrollOrResize() {
+                if (!list.classList.contains('hidden')) positionList();
+            }
+            window.addEventListener('scroll', onScrollOrResize, true);
+            window.addEventListener('resize', onScrollOrResize);
+
+            function renderList(filtered) {
+                list.innerHTML = '';
+                if (filtered.length === 0) { hideList(); return; }
+                filtered.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    li.className = 'px-3 py-2.5 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition border-b border-gray-50 last:border-b-0';
+                    li.onmousedown = (e) => {
+                        e.preventDefault();
+                        input.value = item;
+                        hideList();
+                        onSelect(item);
+                    };
+                    list.appendChild(li);
+                });
+                showList();
+            }
+
+            async function refresh() {
+                const q = input.value.trim().toLowerCase();
+                const items = await getSourceItems();
+                const filtered = q
+                    ? items.filter(i => i.toLowerCase().includes(q)).slice(0, maxResults)
+                    : items.slice(0, maxResults);
+                renderList(filtered);
+            }
+
+            input.addEventListener('input', refresh);
+            input.addEventListener('focus', refresh);
+            input.addEventListener('blur', () => { setTimeout(hideList, 150); });
+
+            input.addEventListener('keydown', (e) => {
+                const lis = list.querySelectorAll('li');
+                const active = list.querySelector('li.bg-amber-100');
+                const isListVisible = !list.classList.contains('hidden') && lis.length > 0;
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const next = active ? active.nextElementSibling : lis[0];
+                    if (active) active.classList.remove('bg-amber-100');
+                    if (next) next.classList.add('bg-amber-100');
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const prev = active ? active.previousElementSibling : lis[lis.length - 1];
+                    if (active) active.classList.remove('bg-amber-100');
+                    if (prev) prev.classList.add('bg-amber-100');
+                } else if (e.key === 'Enter') {
+                    if (isListVisible) {
+                        e.preventDefault();
+                        const toSelect = active || lis[0];
+                        if (toSelect) { input.value = toSelect.textContent; hideList(); onSelect(toSelect.textContent); }
+                    } else if (opts.onEnterNoList) {
+                        e.preventDefault();
+                        opts.onEnterNoList(e);
+                    }
+                } else if (e.key === 'Escape') {
+                    hideList();
+                }
+            });
+
+            return { positionList, hideList, showList };
+        }
+
         function tambahBarisManual() {
             const tbody = document.getElementById('proc-table-body'); if (!tbody) return;
             const placeholder = tbody.querySelector('tr[data-placeholder], tr td[colspan]');
@@ -5241,11 +5295,11 @@
                 <td class="p-2 font-medium relative" style="min-width:180px">
                     <div class="relative">
                         <input type="text"
-                            class="nama-barang-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
-                            style="min-width:160px"
-                            placeholder="Ketik nama barang..."
+                            class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
+                            style="min-height:42px; min-width:160px"
+                            placeholder="Ketik atau pilih nama barang..."
                             autocomplete="off">
-                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
                 </td>
                 <td class="p-2 text-center font-semibold text-gray-700" contenteditable="true">1</td>
@@ -5257,66 +5311,10 @@
 
             tbody.appendChild(tr);
 
-            // Pasang event autocomplete
+            // Pasang event autocomplete (dropdown mengambang di luar tabel)
             const input = tr.querySelector('.nama-barang-input');
             const list = tr.querySelector('.autocomplete-list');
-
-            function renderList(filtered) {
-                list.innerHTML = '';
-                if (filtered.length === 0) { list.classList.add('hidden'); return; }
-                filtered.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = item;
-                    li.className = 'px-3 py-2 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition';
-                    li.onmousedown = (e) => {
-                        e.preventDefault();
-                        input.value = item;
-                        list.classList.add('hidden');
-                    };
-                    list.appendChild(li);
-                });
-                list.classList.remove('hidden');
-            }
-
-            input.addEventListener('input', async () => {
-                const q = input.value.trim().toLowerCase();
-                if (!q) { list.classList.add('hidden'); return; }
-                const items = await getSourceItems();
-                const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
-                renderList(filtered);
-            });
-
-            input.addEventListener('focus', async () => {
-                const q = input.value.trim().toLowerCase();
-                if (!q) return;
-                const items = await getSourceItems();
-                const filtered = items.filter(i => i.toLowerCase().includes(q)).slice(0, 20);
-                renderList(filtered);
-            });
-
-            input.addEventListener('blur', () => {
-                setTimeout(() => list.classList.add('hidden'), 150);
-            });
-
-            input.addEventListener('keydown', (e) => {
-                const lis = list.querySelectorAll('li');
-                const active = list.querySelector('li.bg-amber-100');
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    const next = active ? active.nextElementSibling : lis[0];
-                    if (active) active.classList.remove('bg-amber-100');
-                    if (next) next.classList.add('bg-amber-100');
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    const prev = active ? active.previousElementSibling : lis[lis.length - 1];
-                    if (active) active.classList.remove('bg-amber-100');
-                    if (prev) prev.classList.add('bg-amber-100');
-                } else if (e.key === 'Enter') {
-                    if (active) { e.preventDefault(); input.value = active.textContent; list.classList.add('hidden'); }
-                } else if (e.key === 'Escape') {
-                    list.classList.add('hidden');
-                }
-            });
+            attachItemAutocomplete(input, list, tr, tbody);
 
             input.focus();
         }
@@ -5524,10 +5522,10 @@
                 <td class="p-2 font-medium relative" style="min-width:180px">
                     <div class="relative">
                         <input type="text" value="${prefillName.replace(/"/g, '&quot;')}"
-                            class="nama-barang-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
-                            style="min-width:160px"
-                            placeholder="Ketik nama barang..." autocomplete="off">
-                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-0.5 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto hidden text-xs"></ul>
+                            class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
+                            style="min-height:42px; min-width:160px"
+                            placeholder="Ketik atau pilih nama barang..." autocomplete="off">
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
                 </td>
                 <td class="p-2 text-center"><input type="number" min="0" value="1" class="qty-input w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
@@ -5539,33 +5537,7 @@
 
             const input = tr.querySelector('.nama-barang-input');
             const list = tr.querySelector('.autocomplete-list');
-
-            function renderList(filtered) {
-                list.innerHTML = '';
-                if (filtered.length === 0) { list.classList.add('hidden'); return; }
-                filtered.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = item;
-                    li.className = 'px-3 py-2 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition';
-                    li.onmousedown = (e) => { e.preventDefault(); input.value = item; list.classList.add('hidden'); };
-                    list.appendChild(li);
-                });
-                list.classList.remove('hidden');
-            }
-
-            input.addEventListener('input', async () => {
-                const q = input.value.trim().toLowerCase();
-                if (!q) { list.classList.add('hidden'); return; }
-                const items = await getSourceItems();
-                renderList(items.filter(i => i.toLowerCase().includes(q)).slice(0, 20));
-            });
-            input.addEventListener('focus', async () => {
-                const q = input.value.trim().toLowerCase();
-                if (!q) return;
-                const items = await getSourceItems();
-                renderList(items.filter(i => i.toLowerCase().includes(q)).slice(0, 20));
-            });
-            input.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 150));
+            attachItemAutocomplete(input, list, tr, tbody);
 
             if (!prefillName) input.focus();
             return tr;
