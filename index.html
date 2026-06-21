@@ -3061,7 +3061,7 @@
         // =========================================================================
         const CATEGORY_CODE = {
             'Outlet': 'OT', 'Event': 'EV', 'KOL': 'KOL',
-            'B2C': 'B2C', 'B2B': 'B2B', 'Selling': 'SEL', 'Switch Unit': 'SU', 'FAS': 'FAS', 'Need Repair': 'NRP', 'Box Damaged': 'BDM'
+            'B2C': 'B2C', 'B2B': 'B2B', 'Selling': 'SEL', 'Switch Unit': 'SU', 'FAS': 'FAS', 'Need Repair': 'NRP', 'Box Damaged': 'BDM', 'Tukar Sleeve': 'TSL', 'TF Stock to Hampers': 'TSH'
         };
 
         function formatDateForPO(date) {
@@ -3090,7 +3090,9 @@
                 namaOptions += '<option disabled>Gagal memuat nama</option>';
             }
 
+            const ADMIN_ONLY_CATEGORIES = ['Tukar Sleeve', 'TF Stock to Hampers'];
             const categoryOptions = Object.keys(CATEGORY_CODE)
+                .filter(k => currentUserRole === 'ADMIN' || !ADMIN_ONLY_CATEGORIES.includes(k))
                 .map(k => `<option value="${k}">${k}</option>`).join('');
 
             contentArea.innerHTML = `
@@ -3331,6 +3333,10 @@
 
             if (!namaEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon terlebih dahulu.'); return; }
             if (!categoryEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih kategori terlebih dahulu.'); return; }
+            if (currentUserRole !== 'ADMIN' && ['Tukar Sleeve', 'TF Stock to Hampers'].includes(categoryEl.value)) {
+                showAlert('error', 'Tidak Diizinkan', 'Kategori ini hanya dapat digunakan oleh Admin.');
+                return;
+            }
             if (!allocatedToEl || !allocatedToEl.value.trim()) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
             const shippingDateVal = document.getElementById('po-shipping-date')?.value || '';
             if (!shippingDateVal) { showAlert('warning', 'Belum Lengkap', 'Isi Shipping Date terlebih dahulu.'); return; }
@@ -5459,7 +5465,7 @@
         // =========================================================================
         // HALAMAN: PROCESS INBOUND
         // =========================================================================
-        const INBOUND_CATEGORY_OPTIONS = ['Event', 'Outlet', 'B2B', 'B2C', 'KOL', 'Need Repair', 'Box Damaged', 'FAS'];
+        const INBOUND_CATEGORY_OPTIONS = ['Event', 'Outlet', 'B2B', 'B2C', 'KOL', 'Need Repair', 'Box Damaged', 'FAS', 'New Inbound'];
         const INBOUND_CREW_OPTIONS = ['Adam', 'Rizal', 'Helmi', 'Raka'];
 
         async function showProcessInbound() {
