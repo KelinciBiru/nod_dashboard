@@ -3770,7 +3770,7 @@
             if (finalY > pageHeight - 90) { doc.addPage(); finalY = 30; }
 
             const sigColW = (pageWidth - marginX * 2) / 3;
-            const sigLabels = ['Diminta oleh,', 'Disetujui oleh,', 'Diterima oleh,'];
+            const sigLabels = ['Diminta oleh,', 'Dikirim oleh,', 'Diterima oleh,'];
             const sigNames = [orderedBy || '', '', ''];
 
             sigLabels.forEach((label, i) => {
@@ -4936,7 +4936,7 @@
             }
 
             const sigColW = (pageWidth - marginX * 2) / 3;
-            const sigLabels = ['Disiapkan oleh,', 'Diperiksa oleh,', 'Diterima oleh,'];
+            const sigLabels = ['Disiapkan oleh,', 'Dikirim oleh,', 'Diterima oleh,'];
             const sigNames = [crewPacking, '', shipTo || ''];
 
             sigLabels.forEach((label, i) => {
