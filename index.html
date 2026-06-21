@@ -5196,25 +5196,83 @@
             list.style.position = 'fixed';
             list.style.zIndex = '9999';
 
+            // Di HP, keyboard virtual muncul setelah event focus dan mendorong
+            // viewport (kadang dengan delay/animasi), jadi posisi yang dihitung
+            // tepat saat focus bisa langsung basi begitu keyboard selesai muncul.
+            // window.visualViewport melaporkan ukuran viewport yang SUDAH
+            // memperhitungkan keyboard, jadi dipakai sebagai acuan utama kalau ada.
+            const vv = window.visualViewport;
+
             function positionList() {
                 const r = input.getBoundingClientRect();
-                list.style.left = r.left + 'px';
-                list.style.top = (r.bottom + 4) + 'px';
+                const viewportH = vv ? vv.height : window.innerHeight;
+                const viewportOffsetTop = vv ? vv.offsetTop : 0;
+                const spaceBelow = (viewportOffsetTop + viewportH) - r.bottom;
+                const listH = list.offsetHeight || 224; // perkiraan sebelum dirender penuh
+                const left = Math.max(8, Math.min(r.left, (vv ? vv.width : window.innerWidth) - 228));
+
+                list.style.left = left + 'px';
                 list.style.width = Math.max(r.width, 220) + 'px';
                 list.style.minWidth = '220px';
+
+                if (spaceBelow < listH && r.top - viewportOffsetTop > listH) {
+                    // Ruang di bawah input tidak cukup (mis. tertutup keyboard) —
+                    // tampilkan dropdown di ATAS input supaya tidak menimpa input.
+                    list.style.top = '';
+                    list.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+                    list.style.maxHeight = Math.max(120, r.top - viewportOffsetTop - 12) + 'px';
+                } else {
+                    list.style.bottom = '';
+                    list.style.top = (r.bottom + 4) + 'px';
+                    list.style.maxHeight = Math.max(120, spaceBelow - 12) + 'px';
+                }
             }
 
-            function hideList() { list.classList.add('hidden'); }
-            function showList() { positionList(); list.classList.remove('hidden'); }
+            function hideList() { list.classList.add('hidden'); stopAutoReposition(); }
+            function showList() {
+                positionList();
+                list.classList.remove('hidden');
+                // Reposisi sekali lagi setelah keyboard HP selesai animasi muncul,
+                // dan jalankan pengaman reposisi singkat memakai requestAnimationFrame
+                // supaya dropdown selalu "menempel" pas walau viewport masih bergeser.
+                setTimeout(positionList, 50);
+                setTimeout(positionList, 300);
+                startAutoReposition();
+            }
+
+            let _repositionRaf = null;
+            function startAutoReposition() {
+                stopAutoReposition();
+                let ticks = 0;
+                const loop = () => {
+                    if (list.classList.contains('hidden')) return;
+                    positionList();
+                    ticks++;
+                    // Jalan terus selama list terbuka, tapi setelah 30 tick (~0.5 detik)
+                    // turunkan frekuensi jadi mengandalkan event scroll/resize saja.
+                    if (ticks < 30) {
+                        _repositionRaf = requestAnimationFrame(loop);
+                    }
+                };
+                _repositionRaf = requestAnimationFrame(loop);
+            }
+            function stopAutoReposition() {
+                if (_repositionRaf) { cancelAnimationFrame(_repositionRaf); _repositionRaf = null; }
+            }
 
             // Sembunyikan + lepas list dari body saat baris dihapus, supaya
             // tidak ada elemen "yatim" menumpuk di <body>.
             const rowObserver = new MutationObserver(() => {
                 if (!document.body.contains(tr)) {
+                    stopAutoReposition();
                     list.remove();
                     rowObserver.disconnect();
                     window.removeEventListener('scroll', onScrollOrResize, true);
                     window.removeEventListener('resize', onScrollOrResize);
+                    if (vv) {
+                        vv.removeEventListener('resize', onScrollOrResize);
+                        vv.removeEventListener('scroll', onScrollOrResize);
+                    }
                 }
             });
             if (tbody) rowObserver.observe(tbody, { childList: true });
@@ -5224,6 +5282,12 @@
             }
             window.addEventListener('scroll', onScrollOrResize, true);
             window.addEventListener('resize', onScrollOrResize);
+            // visualViewport menangkap perubahan akibat keyboard virtual muncul/hilang
+            // di HP, yang TIDAK selalu memicu window 'resize' biasa.
+            if (vv) {
+                vv.addEventListener('resize', onScrollOrResize);
+                vv.addEventListener('scroll', onScrollOrResize);
+            }
 
             function renderList(filtered) {
                 list.innerHTML = '';
