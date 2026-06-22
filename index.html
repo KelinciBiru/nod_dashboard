@@ -5664,7 +5664,7 @@
         }
 
         /** Tambah baris kosong ke tabel Detail Inbound, dengan autocomplete Nama Barang */
-        function tambahBarisInbound(prefillName = '') {
+        function tambahBarisInbound(prefillName = '', prefillQty = 1) {
             const tbody = document.getElementById('inb-table-body');
             if (!tbody) return;
             const placeholder = tbody.querySelector('tr[data-placeholder]');
@@ -5683,7 +5683,7 @@
                         <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
                 </td>
-                <td class="p-2 text-center"><input type="number" min="0" value="1" class="qty-input w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
+                <td class="p-2 text-center"><input type="number" min="0" value="${prefillQty}" class="qty-input w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
                 <td class="p-2" style="min-width:140px"><input type="text" class="serial-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" style="min-width:120px" placeholder="Serial Number"></td>
                 <td class="p-2" style="min-width:120px"><input type="text" class="remark-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" style="min-width:100px" placeholder="Remark"></td>
                 <td class="p-2 text-center"><button onclick="hapusBarisInbound(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>`;
@@ -5838,7 +5838,7 @@
             }
 
             // ── Tambahkan item yang dipilih ke tabel ──
-            selectedItems.forEach(nama => tambahBarisInbound(nama));
+            selectedItems.forEach(({ nama, qty }) => tambahBarisInbound(nama, qty));
 
             if (statusEl) {
                 statusEl.textContent = `✅ ${selectedItems.length} item ditambahkan ke tabel. Klik Scan untuk lanjut.`;
@@ -5866,16 +5866,23 @@
                 modal.id = 'inb-item-select-modal';
                 modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
 
-                const checkboxRows = resolvedItems.map((item, idx) => `
-                    <label class="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:bg-amber-50 transition group border border-transparent hover:border-amber-200"
-                        for="inb-item-cb-${idx}">
+                // Filter out undefined/empty items
+                const validItems = resolvedItems.filter(item => item.label && item.label !== 'undefined' && item.label.trim() !== '');
+
+                const checkboxRows = validItems.map((item, idx) => `
+                    <div class="flex items-center gap-3 p-3 rounded-xl hover:bg-amber-50 transition border border-transparent hover:border-amber-200">
                         <input type="checkbox" id="inb-item-cb-${idx}" value="${item.label.replace(/"/g, '&quot;')}"
-                            class="mt-0.5 w-4 h-4 rounded accent-amber-500 flex-shrink-0 cursor-pointer" checked>
-                        <div class="flex-1 min-w-0">
+                            class="w-4 h-4 rounded accent-amber-500 flex-shrink-0 cursor-pointer" checked>
+                        <label for="inb-item-cb-${idx}" class="flex-1 min-w-0 cursor-pointer">
                             <span class="block text-sm font-semibold text-gray-800 leading-tight">${item.label}</span>
-                            ${!item.matched ? `<span class="text-[10px] text-amber-500 font-medium">⚠ Item tidak ditemukan di Stock Master — akan ditambahkan apa adanya</span>` : `<span class="text-[10px] text-green-600">✓ Terdeteksi dari Stock Master</span>`}
+                        </label>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <label class="text-[11px] text-gray-400 font-medium">Qty</label>
+                            <input type="number" min="1" value="1" data-item-idx="${idx}"
+                                class="inb-qty-input w-16 text-center text-sm border border-gray-300 rounded-lg py-1 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none"
+                                style="min-width:56px;">
                         </div>
-                    </label>`).join('');
+                    </div>`).join('');
 
                 modal.innerHTML = `
                 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 flex flex-col overflow-hidden" style="max-height:90vh;">
@@ -5888,7 +5895,7 @@
                         </div>
                         <div>
                             <p class="font-bold text-gray-800 text-sm">Pilih Item dari QR Code</p>
-                            <p class="text-[11px] text-gray-400">${resolvedItems.length} item terdeteksi — centang yang ingin ditambahkan</p>
+                            <p class="text-[11px] text-gray-400">${validItems.length} item terdeteksi — centang yang ingin ditambahkan</p>
                         </div>
                     </div>
 
@@ -5903,7 +5910,13 @@
                             class="text-[11px] font-semibold text-gray-400 hover:text-gray-600 underline underline-offset-2 transition">
                             Hapus Semua
                         </button>
-                        <span id="inb-selected-count" class="ml-auto text-[11px] text-gray-400 font-medium">${resolvedItems.length} dipilih</span>
+                        <span id="inb-selected-count" class="ml-auto text-[11px] text-gray-400 font-medium">${validItems.length} dipilih</span>
+                    </div>
+
+                    <!-- Header kolom Qty -->
+                    <div class="flex items-center px-5 py-1.5 bg-gray-50 border-b border-gray-100 flex-shrink-0">
+                        <span class="flex-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Nama Barang</span>
+                        <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide w-20 text-center">Qty</span>
                     </div>
 
                     <!-- Daftar Checkbox -->
@@ -5952,7 +5965,12 @@
                 };
 
                 document.getElementById('inb-item-confirm-btn').onclick = () => {
-                    const selected = [...modal.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value);
+                    const selected = [...modal.querySelectorAll('input[type="checkbox"]:checked')].map(cb => {
+                        const idx = cb.id.replace('inb-item-cb-', '');
+                        const qtyInput = modal.querySelector(`.inb-qty-input[data-item-idx="${idx}"]`);
+                        const qty = qtyInput ? Math.max(1, parseInt(qtyInput.value) || 1) : 1;
+                        return { nama: cb.value, qty };
+                    });
                     modal.remove();
                     resolve(selected);
                 };
