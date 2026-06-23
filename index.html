@@ -3894,14 +3894,25 @@
                 const currentVal = sel.value;
                 sel.innerHTML = '<option value="">— Pilih No. PO (opsional) —</option>';
                 openPOs.forEach(row => {
-                    const noPO = String(row[1] || '').trim();
-                    const nama = String(row[6] || '').trim();
+                    const noPO    = String(row[1] || '').trim();
+                    const shipTo  = String(row[3] || '').trim();
                     const opt = document.createElement('option');
                     opt.value = noPO;
-                    opt.textContent = noPO + (nama ? ' — ' + nama : '');
+                    opt.dataset.shipTo = shipTo;
+                    opt.textContent = noPO + (shipTo ? ' — ' + shipTo : '');
                     if (noPO === currentVal) opt.selected = true;
                     sel.appendChild(opt);
                 });
+
+                // Auto-fill field Ship To ketika user memilih PO dari dropdown
+                sel.onchange = function () {
+                    const selectedOpt = sel.options[sel.selectedIndex];
+                    const shipToVal = selectedOpt?.dataset?.shipTo || '';
+                    const procShipEl = document.getElementById('proc-ship');
+                    if (procShipEl && shipToVal) {
+                        procShipEl.value = shipToVal;
+                    }
+                };
 
                 if (statusEl) {
                     if (openPOs.length > 0) {
