@@ -3145,19 +3145,14 @@
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">File PDF</label>
-                        <input type="file" id="pdfFile" accept="application/pdf" class="hidden">
-                        <div id="pdfFileDisplay" class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-400 flex items-center gap-2">
-                            <svg class="h-4 w-4 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                            </svg>
-                            <span id="pdfFileName">Belum ada file — klik "Download PDF" untuk membuat</span>
-                        </div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Upload File PDF</label>
+                        <input type="file" id="pdfFile" accept="application/pdf"
+                            class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm">
                         <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
                             <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            File PDF <span class="font-semibold text-amber-600">Request Order</span> otomatis terisi saat tombol <span class="font-semibold text-amber-600">Download PDF</span> diklik
+                            Upload file PDF <span class="font-semibold text-amber-600">Request Order</span> yang telah diunduh sebelumnya
                         </p>
                     </div>
                 </div>
@@ -3425,10 +3420,6 @@
             if (phoneEl) phoneEl.value = '';
             if (shippingDateEl) shippingDateEl.value = '';
             if (fileInput) fileInput.value = '';
-            const pdfFileName = document.getElementById('pdfFileName');
-            const pdfFileDisplay = document.getElementById('pdfFileDisplay');
-            if (pdfFileName) pdfFileName.textContent = 'Belum ada file — klik "Download PDF" untuk membuat';
-            if (pdfFileDisplay) { pdfFileDisplay.classList.remove('text-green-700'); pdfFileDisplay.classList.add('text-gray-400'); }
             if (noteKhususEl) noteKhususEl.value = '';
 
             // Kosongkan tabel item, kembalikan placeholder
@@ -3840,18 +3831,10 @@
                     fileInput.files = dataTransfer.files;
                     // Trigger change event in case any listener depends on it
                     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    // Update display
-                    const pdfFileName = document.getElementById('pdfFileName');
-                    const pdfFileDisplay = document.getElementById('pdfFileDisplay');
-                    if (pdfFileName) pdfFileName.textContent = fileName;
-                    if (pdfFileDisplay) {
-                        pdfFileDisplay.classList.remove('text-gray-400');
-                        pdfFileDisplay.classList.add('text-green-700');
-                    }
                 }
-                showAlert('success', 'PDF Siap', 'Request Order berhasil dibuat dan siap dikirim ke Drive.');
+                showAlert('success', 'PDF Siap', 'Request Order berhasil dibuat dan otomatis dilampirkan ke kotak Upload File PDF.');
             } catch (err) {
-                showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan coba lagi.');
+                showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan unggah manual.');
             }
         }
 
@@ -4038,6 +4021,7 @@
                             <th class="p-2 text-center">Qty PO</th>
                             <th class="p-2 text-center">Qty Outbound</th>
                             <th class="p-2 text-center">UOM</th>
+                            <th class="p-2 text-center">Qty /pcs</th>
                             <th class="p-2 text-left">Description</th>
                             <th class="p-2 text-left" style="min-width:140px">Serial Number</th>
                             <th class="p-2 text-left" style="min-width:140px">ID Device</th>
@@ -4045,7 +4029,7 @@
                         </tr>
                     </thead>
                     <tbody id="proc-table-body">
-                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
+                        <tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -4684,6 +4668,7 @@
                                     class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
                             </td>
                             <td class="p-2 text-center" contenteditable="true">${item.uom || ''}</td>
+                            <td class="p-2 text-center qty-pcs-cell font-semibold text-blue-700"></td>
                             <td class="p-2">
                                 <select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">
                                     ${descOpts}
@@ -4698,7 +4683,7 @@
                 } else {
                     tbody.innerHTML = `
                         <tr class="bg-yellow-50 border-b border-yellow-200">
-                            <td colspan="8" class="p-3 text-center text-xs text-yellow-700">
+                            <td colspan="9" class="p-3 text-center text-xs text-yellow-700">
                                 ⚠️ Item tidak terdeteksi otomatis. Silakan isi manual atau periksa format PDF.<br>
                                 <span class="text-gray-400 text-[10px]">Ekstrak: ${rawText.substring(0, 200).replace(/[\r\n]+/g, ' ')}...</span>
                             </td>
@@ -4711,6 +4696,7 @@
                                     class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
                             </td>
                             <td class="p-2 text-center" contenteditable="true">pcs</td>
+                            <td class="p-2 text-center qty-pcs-cell font-semibold text-blue-700">0</td>
                             <td class="p-2">
                                 <select class="w-full text-xs border border-gray-200 rounded p-1 bg-white">
                                     <option>Supplies</option><option>Sampling</option><option>Machine Selling</option>
@@ -4726,6 +4712,7 @@
                 const itemCount = parsed.items ? parsed.items.length : 0;
                 statusEl.textContent = `✅ Berhasil — ${itemCount} item ditemukan${parsed.no_po ? ' — No. PO: ' + parsed.no_po : ''}. Data dapat diedit langsung.`;
                 statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
+                recalcAllQtyPcs();
 
             } catch (err) {
                 statusEl.textContent = '❌ Gagal: ' + err.message;
@@ -4740,6 +4727,43 @@
         // Fungsi lama handlePDFUpload (biarkan kosong agar tidak error jika dipanggil)
         function handlePDFUpload() { }
 
+        /**
+         * Hitung Qty /pcs untuk satu baris:
+         * - UOM = "Box" → Qty Outbound × 10
+         * - UOM lain    → sama dengan Qty Outbound
+         */
+        function recalcQtyPcs(row) {
+            const tds = row.querySelectorAll('td');
+            const qtyInput = row.querySelector('input[type="number"]');
+            const uomCell = tds[3];  // kolom UOM selalu index 3
+            const qtyPcsCell = row.querySelector('.qty-pcs-cell');
+            if (!qtyInput || !uomCell || !qtyPcsCell) return;
+            const qty = parseFloat(qtyInput.value) || 0;
+            const uom = uomCell.textContent.trim().toLowerCase();
+            qtyPcsCell.textContent = uom === 'box' ? qty * 10 : qty;
+        }
+
+        /** Recalc semua baris di proc-table-body */
+        function recalcAllQtyPcs() {
+            document.querySelectorAll('#proc-table-body tr').forEach(row => {
+                if (!row.querySelector('td[colspan]')) recalcQtyPcs(row);
+            });
+        }
+
+        // Event delegation di level document: dengarkan perubahan Qty Outbound (input) di proc-table-body
+        document.addEventListener('input', function (e) {
+            const row = e.target.closest('#proc-table-body tr');
+            if (!row) return;
+            if (e.target.type === 'number') recalcQtyPcs(row);
+        });
+        // Dengarkan edit UOM (contenteditable) via input event (bisa juga keyup)
+        document.addEventListener('input', function (e) {
+            // Sudah ditangani di atas jika type=number; handle contenteditable
+            const row = e.target.closest('#proc-table-body tr');
+            if (!row || e.target.type === 'number') return;
+            if (e.target.isContentEditable) recalcQtyPcs(row);
+        });
+
         function hapusBaris(btn) {
             const row = btn.closest('tr'); if (!row) return;
             row.style.transition = 'opacity 0.2s, transform 0.2s';
@@ -4748,7 +4772,7 @@
                 row.remove();
                 const tbody = document.getElementById('proc-table-body');
                 if (tbody && tbody.querySelectorAll('tr:not([data-placeholder])').length === 0) {
-                    tbody.innerHTML = `<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Tabel kosong — klik "Tambah Baris" untuk isi manual.</td></tr>`;
+                    tbody.innerHTML = `<tr data-placeholder><td colspan="9" class="p-6 text-center text-gray-400 italic">Tabel kosong — klik "Tambah Baris" untuk isi manual.</td></tr>`;
                 }
             }, 200);
         }
@@ -4786,8 +4810,8 @@
                 const qtyOutInput = tds[2] ? tds[2].querySelector('input') : null;
                 const qty = qtyOutInput ? qtyOutInput.value : (tds[2] ? tds[2].textContent.trim() : '');
                 const uom = tds[3] ? tds[3].textContent.trim() : '';
-                const descSel = tds[4] ? tds[4].querySelector('select') : null;
-                const description = descSel ? descSel.value : (tds[4] ? tds[4].textContent.trim() : '');
+                const descSel = tds[5] ? tds[5].querySelector('select') : null;
+                const description = descSel ? descSel.value : (tds[5] ? tds[5].textContent.trim() : '');
                 const serialInput = row.querySelector('.serial-number-input');
                 const idDeviceInput = row.querySelector('.id-device-input');
                 const serialNumber = serialInput ? serialInput.value.trim() : '';
@@ -5489,6 +5513,7 @@
                 <td class="p-2 text-center font-semibold text-gray-700" contenteditable="true">1</td>
                 <td class="p-2 text-center"><input type="number" min="0" value="1" class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
                 <td class="p-2 text-center" contenteditable="true">Pcs</td>
+                <td class="p-2 text-center qty-pcs-cell font-semibold text-blue-700">1</td>
                 <td class="p-2"><select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select></td>
                 <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
                 <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
@@ -5502,6 +5527,7 @@
             const list = tr.querySelector('.autocomplete-list');
             attachItemAutocomplete(input, list, tr, tbody);
 
+            recalcQtyPcs(tr);
             input.focus();
         }
 
@@ -6347,7 +6373,7 @@
             }, 300);
         }
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz1q5yfLlIBF8f9fDwhq0hDKwMdhi5cbLBKH9Cjz0l6eUr8uJLo5c1QemV_mTMHhqs/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyGwyUjZc55K3reYqInjLHDF8wbYNukdAWhRJhWSgZv8MfCnDbMD6HnwohmkE-cf0NX/exec";
 
         async function simpanOutboundFinal() {
             const orderedByEl = document.getElementById('proc-ordered-by');
@@ -6394,6 +6420,8 @@
                 const namaBarang = namaBarangInput ? namaBarangInput.value.trim() : row.cells[0].innerText.trim();
                 const qtyPO = row.cells[1].innerText.trim();
                 if (!namaBarang || namaBarang === '-') return; // skip baris kosong
+                const qtyPcsCell = row.querySelector('.qty-pcs-cell');
+                const qtyPcs = qtyPcsCell ? qtyPcsCell.textContent.trim() : '';
                 items.push({
                     namaBarang: namaBarang,
                     qtyPO: qtyPO,
@@ -6402,6 +6430,7 @@
                     description: descSelect ? descSelect.value : row.cells[4].innerText.trim(),
                     serialNumber: serialNumberInput ? serialNumberInput.value.trim() : '',
                     idDevice: idDeviceInput ? idDeviceInput.value.trim() : '',
+                    qtyPcs: qtyPcs,
                 });
             });
 
@@ -6494,7 +6523,7 @@
                         const poSelect = document.getElementById('proc-no-po-select');
                         if (poSelect) poSelect.value = '';
                         document.getElementById('proc-table-body').innerHTML =
-                            '<tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
+                            '<tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
                         _clearDraft(DRAFT_KEYS.processPO);
                     }, 1500);
 
