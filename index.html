@@ -297,6 +297,12 @@
                             <button onclick="navTo('Purchase Order')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Form
                                 PO</button>
+                            <button onclick="navTo('Form Pengembalian Barang')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Form
+                                Pengembalian Barang</button>
+                            <button onclick="navTo('Receive PO')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Receive
+                                PO</button>
                             <button onclick="navTo('Report Status')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report
                                 Status</button>
@@ -388,6 +394,7 @@
         // diketik tidak hilang. Draft baru dibersihkan setelah submit berhasil.
         const DRAFT_KEYS = {
             formPO: 'draft_formPO',
+            formRetur: 'draft_formRetur',
             processPO: 'draft_processPO',
             processInbound: 'draft_processInbound'
         };
@@ -433,7 +440,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzf773cvBuvDxKnpIvs-HUvq3HmeYCEWVX_hcgAIiHXhKtAdctJ4LvWMGt3TqY7PXW8/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbz5E9RwLVi0__i_NjeWIib9wL07GesBT-WdbvA16S0bGbbUaIlR5UJWykRmga8Np9qI/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -880,6 +887,7 @@
             all.forEach(el => {
                 if (el.textContent.trim() === pageName ||
                     (pageName === 'Purchase Order' && el.textContent.trim() === 'Form PO') ||
+                    (pageName === 'Form Pengembalian Barang' && el.textContent.trim() === 'Form Pengembalian Barang') ||
                     (pageName === 'Dashboard' && el.textContent.trim() === 'Dashboard')) {
                     el.classList.add('bg-amber-500', 'text-white', 'font-bold');
                     el.classList.remove('text-gray-700', 'text-gray-500');
@@ -916,6 +924,8 @@
                 'Report KPI': 'Report KPI',
                 'Report Maintenance': 'Report Maintenance',
                 'Purchase Order': 'Form Purchase Order',
+                'Form Pengembalian Barang': 'Form Pengembalian Barang',
+                'Receive PO': 'Receive PO',
                 'Report Status': 'Report Status PO',
                 'Process PO': 'Proses PO Masuk',
                 'Process Inbound': 'Process Inbound',
@@ -944,6 +954,7 @@
                 case 'Report KPI': await showReportKPI(); break;
                 case 'Report Maintenance': await showReportMaintenance(); break;
                 case 'Purchase Order': await showFormPO(); break;
+                case 'Form Pengembalian Barang': await showFormRetur(); break;
                 case 'Report Status': await showReportStatus(); break;
                 case 'Process PO': await showProcessPO(); break;
                 case 'Process Inbound': await showProcessInbound(); break;
@@ -3431,8 +3442,741 @@
         }
 
         // =========================================================================
-        // FORM PO: TAMBAH BARIS ITEM
+        // FORM PENGEMBALIAN BARANG (RETUR)
+        // Duplikat Form PO dengan prefix "Retur-" pada No. PO dan target sheet Retur_Data
         // =========================================================================
+        async function showFormRetur() {
+            setLoading('Memuat form...');
+            const contentArea = document.getElementById('content-area');
+
+            let namaOptions = '<option value="">-- Pilih Nama --</option>';
+            try {
+                const res = await fetch(API_URLS.purchaseOrder + '?action=getNames');
+                const names = await res.json();
+                if (Array.isArray(names)) {
+                    names.filter(n => n && String(n).trim() !== '').forEach(name => {
+                        namaOptions += `<option value="${name}">${name}</option>`;
+                    });
+                } else {
+                    namaOptions += '<option disabled>Gagal memuat nama</option>';
+                }
+            } catch (e) {
+                namaOptions += '<option disabled>Gagal memuat nama</option>';
+            }
+
+            const ADMIN_ONLY_CATEGORIES = ['Tukar Sleeve', 'TF Stock to Hampers'];
+            const categoryOptions = Object.keys(CATEGORY_CODE)
+                .filter(k => currentUserRole === 'ADMIN' || !ADMIN_ONLY_CATEGORIES.includes(k))
+                .map(k => `<option value="${k}">${k}</option>`).join('');
+
+            contentArea.innerHTML = `
+            <div class="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200">
+                <h1 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">Form Pengembalian Barang</h1>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">No. PO (otomatis)</label>
+                        <div id="retur-po-preview"
+                            class="w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 text-sm font-mono tracking-wide">
+                            Pilih kategori untuk melihat preview No. PO
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ordered By</label>
+                        <select id="retur-nama"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            ${namaOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Kategori</label>
+                        <select id="retur-category" onchange="updateReturPreview()"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            <option value="">-- Pilih Kategori --</option>
+                            ${categoryOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
+                        <input type="text" id="retur-allocated-to"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan Nama (Event/Outlet/Penerima)">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat</label>
+                        <input type="text" id="retur-alamat"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan alamat pengiriman">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">No. Telepon</label>
+                        <input type="tel" id="retur-phone"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Contoh: 08123456789">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Shipping Date</label>
+                        <input type="date" id="retur-shipping-date"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Upload File PDF</label>
+                        <input type="file" id="retur-pdfFile" accept="application/pdf"
+                            class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-sm">
+                        <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                            <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Upload file PDF <span class="font-semibold text-amber-600">Pengembalian Barang</span> yang telah diunduh sebelumnya
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabel Item Retur -->
+            <div class="max-w-4xl mx-auto mt-6 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+                <h2 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">Detail Item</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-800 text-white">
+                                <th class="p-2 text-left rounded-tl-lg" style="min-width:220px">Item</th>
+                                <th class="p-2 text-center" style="width:70px">Qty</th>
+                                <th class="p-2 text-center" style="width:110px">UOM</th>
+                                <th class="p-2 text-left" style="min-width:140px">Description</th>
+                                <th class="p-2 text-left" style="min-width:140px">Note</th>
+                                <th class="p-2 text-center rounded-tr-lg" style="width:50px">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="retur-item-table-body">
+                            <tr data-placeholder>
+                                <td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <button onclick="tambahBarisFormRetur()" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-xs transition shadow-sm">
+                        <svg class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                        Tambah Baris
+                    </button>
+                </div>
+            </div>
+
+            <!-- Note Khusus -->
+            <div class="max-w-4xl mx-auto mt-4 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Note Khusus</label>
+                <textarea id="retur-note-khusus" rows="4"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm resize-y"
+                    placeholder="Tuliskan catatan khusus untuk pengembalian barang ini..."></textarea>
+                <div class="flex flex-col sm:flex-row gap-3 mt-4">
+                    <button id="retur-downloadBtn" onclick="downloadReturPDF()"
+                        class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-lg font-bold text-sm transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed text-center leading-tight">
+                        <svg id="retur-downloadIcon" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span id="retur-downloadLabel" class="whitespace-nowrap">Download PDF</span>
+                    </button>
+                    <button id="retur-submitBtn" onclick="submitRetur()"
+                        class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
+                        <span id="retur-submitBtnLabel" class="whitespace-nowrap">Kirim Retur</span>
+                    </button>
+                </div>
+            </div>`;
+
+            // Preload items for autocomplete
+            preloadSourceItems();
+
+            // Restore draft
+            _restoreFormReturDraft();
+            _attachFormReturAutosave();
+        }
+
+        function updateReturPreview() {
+            const category = document.getElementById('retur-category').value;
+            const preview = document.getElementById('retur-po-preview');
+            if (!category || !CATEGORY_CODE[category]) {
+                preview.textContent = 'Pilih kategori untuk melihat preview No. PO';
+                preview.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 text-sm font-mono tracking-wide';
+                return;
+            }
+            preview.textContent = `Retur-${CATEGORY_CODE[category]}-${formatDateForPO(new Date())}-00?`;
+            preview.className = 'w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold';
+        }
+
+        function checkAutoTriggerReturPreview() {
+            const category = document.getElementById('retur-category');
+            const preview = document.getElementById('retur-po-preview');
+            if (!category || !preview) return;
+            const hasCategory = category.value && CATEGORY_CODE[category.value];
+            if (hasCategory) return;
+            const tbody = document.getElementById('retur-item-table-body');
+            if (!tbody) return;
+            const hasItem = tbody.querySelectorAll('tr:not([data-placeholder])').length > 0;
+            if (hasItem && category.value) {
+                updateReturPreview();
+            }
+        }
+
+        async function submitRetur() {
+            const namaEl = document.getElementById('retur-nama');
+            const categoryEl = document.getElementById('retur-category');
+            const allocatedToEl = document.getElementById('retur-allocated-to');
+            const fileInput = document.getElementById('retur-pdfFile');
+            const btn = document.getElementById('retur-submitBtn');
+            const btnLabel = document.getElementById('retur-submitBtnLabel');
+
+            if (!namaEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon terlebih dahulu.'); return; }
+            if (!categoryEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih kategori terlebih dahulu.'); return; }
+            if (currentUserRole !== 'ADMIN' && ['Tukar Sleeve', 'TF Stock to Hampers'].includes(categoryEl.value)) {
+                showAlert('error', 'Tidak Diizinkan', 'Kategori ini hanya dapat digunakan oleh Admin.');
+                return;
+            }
+            if (!allocatedToEl || !allocatedToEl.value.trim()) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
+            const shippingDateVal = document.getElementById('retur-shipping-date')?.value || '';
+            if (!shippingDateVal) { showAlert('warning', 'Belum Lengkap', 'Isi Shipping Date terlebih dahulu.'); return; }
+            const file = fileInput.files[0];
+            if (!file) { showAlert('warning', 'Belum Lengkap', 'Pilih file PDF terlebih dahulu.'); return; }
+
+            const setSubmitLoading = (loading) => {
+                btn.disabled = loading;
+                let spinner = btn.querySelector('.submit-spinner');
+                if (loading) {
+                    if (!spinner) {
+                        spinner = document.createElement('svg');
+                        spinner.className = 'submit-spinner animate-spin h-4 w-4 flex-shrink-0';
+                        spinner.setAttribute('viewBox', '0 0 24 24');
+                        spinner.setAttribute('fill', 'none');
+                        spinner.innerHTML = '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
+                        btn.insertBefore(spinner, btnLabel);
+                    }
+                    btnLabel.textContent = 'Mengirim...';
+                } else {
+                    if (spinner) spinner.remove();
+                    btnLabel.textContent = 'Kirim Retur';
+                }
+            };
+
+            setSubmitLoading(true);
+
+            const reader = new FileReader();
+            reader.onload = async function (e) {
+                const payload = {
+                    action: 'submitRetur',
+                    token: sessionToken,
+                    nama: namaEl.value,
+                    allocatedTo: allocatedToEl ? allocatedToEl.value.trim() : '',
+                    alamat: document.getElementById('retur-alamat')?.value?.trim() || '',
+                    phone: document.getElementById('retur-phone')?.value?.trim() || '',
+                    shippingDate: document.getElementById('retur-shipping-date')?.value || '',
+                    noteKhusus: document.getElementById('retur-note-khusus')?.value?.trim() || '',
+                    category: categoryEl.value,
+                    categoryCode: CATEGORY_CODE[categoryEl.value],
+                    tanggal: formatDateForPO(new Date()),
+                    fileData: e.target.result.split(',')[1],
+                    fileName: file.name,
+                    fileType: file.type,
+                    targetSheet: 'Retur_Data',
+                    poPrefix: 'Retur-',
+                };
+                try {
+                    const response = await fetch(API_URLS.purchaseOrder, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    showAlert('success', 'Retur Berhasil Dikirim!', 'No. PO: ' + result.po);
+                    resetFormRetur();
+                    _clearDraft(DRAFT_KEYS.formRetur);
+                } catch (err) {
+                    showAlert('error', 'Gagal Mengirim Retur', err.message);
+                } finally {
+                    setSubmitLoading(false);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        /** Reset semua kotak pengisian di Form Retur */
+        function resetFormRetur() {
+            const namaEl = document.getElementById('retur-nama');
+            const categoryEl = document.getElementById('retur-category');
+            const allocatedToEl = document.getElementById('retur-allocated-to');
+            const alamatEl = document.getElementById('retur-alamat');
+            const phoneEl = document.getElementById('retur-phone');
+            const shippingDateEl = document.getElementById('retur-shipping-date');
+            const fileInput = document.getElementById('retur-pdfFile');
+            const tbody = document.getElementById('retur-item-table-body');
+            const noteKhususEl = document.getElementById('retur-note-khusus');
+
+            if (namaEl) namaEl.selectedIndex = 0;
+            if (categoryEl) categoryEl.selectedIndex = 0;
+            if (allocatedToEl) allocatedToEl.value = '';
+            if (alamatEl) alamatEl.value = '';
+            if (phoneEl) phoneEl.value = '';
+            if (shippingDateEl) shippingDateEl.value = '';
+            if (fileInput) fileInput.value = '';
+            if (noteKhususEl) noteKhususEl.value = '';
+
+            if (tbody) {
+                tbody.innerHTML = '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+            }
+            updateReturPreview();
+        }
+
+        function tambahBarisFormRetur() {
+            const tbody = document.getElementById('retur-item-table-body');
+            if (!tbody) return;
+            const placeholder = tbody.querySelector('tr[data-placeholder]');
+            if (placeholder) placeholder.remove();
+
+            const DESCRIPTION_OPTIONS = ['Supplies', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Machine Event'];
+            const UOM_OPTIONS = ['Pcs', 'Box', 'Unit', 'Pack', 'Karton', 'Kg', 'Ltr', 'Lusin', 'Set', 'Roll', 'Sheet', 'Btl', 'Dus', 'Meter'];
+            const descOpts = DESCRIPTION_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
+            const uomOpts = UOM_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
+
+            const bg = tbody.querySelectorAll('tr').length % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            const tr = document.createElement('tr');
+            tr.className = `${bg} border-b border-gray-100`;
+
+            tr.innerHTML = `
+                <td class="p-2 font-medium relative">
+                    <div class="relative">
+                        <div class="po-item-nama-wrap relative">
+                            <input type="text"
+                                class="po-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
+                                style="min-height:42px; text-overflow:ellipsis;"
+                                placeholder="Ketik atau pilih item..."
+                                autocomplete="off">
+                            <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-full min-w-[220px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
+                    </div>
+                </td>
+                <td class="p-2 text-center">
+                    <input type="number" min="1" value="1" class="po-item-qty w-full p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
+                </td>
+                <td class="p-2 text-center">
+                    <select class="po-item-uom w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px; min-width:80px;">
+                        ${uomOpts}
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="po-item-desc w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px;">${descOpts}</select>
+                </td>
+                <td class="p-2">
+                    <input type="text" class="po-item-note w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Catatan...">
+                </td>
+                <td class="p-2 text-center">
+                    <button onclick="hapusBarisFormRetur(this)" title="Hapus baris"
+                        class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </td>`;
+
+            tbody.appendChild(tr);
+            checkAutoTriggerReturPreview();
+
+            const input = tr.querySelector('.po-item-nama');
+            const list = tr.querySelector('.autocomplete-list');
+            attachItemAutocomplete(input, list, tr, tbody, {
+                onEnterNoList: () => { if (input.value.trim()) tambahBarisFormRetur(); }
+            });
+
+            input.focus();
+        }
+
+        function hapusBarisFormRetur(btn) {
+            const tr = btn.closest('tr');
+            const tbody = document.getElementById('retur-item-table-body');
+            if (!tbody) return;
+            tr.remove();
+            if (tbody.querySelectorAll('tr').length === 0) {
+                tbody.innerHTML = '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+            }
+        }
+
+        /** Kumpulkan isi field Form Retur jadi object draft */
+        function _collectFormReturDraft() {
+            const tbody = document.getElementById('retur-item-table-body');
+            const items = [];
+            if (tbody) {
+                tbody.querySelectorAll('tr:not([data-placeholder])').forEach(tr => {
+                    items.push({
+                        nama: tr.querySelector('.po-item-nama')?.value || '',
+                        qty: tr.querySelector('.po-item-qty')?.value || '',
+                        uom: tr.querySelector('.po-item-uom')?.value || '',
+                        desc: tr.querySelector('.po-item-desc')?.value || '',
+                        note: tr.querySelector('.po-item-note')?.value || ''
+                    });
+                });
+            }
+            return {
+                nama: document.getElementById('retur-nama')?.value || '',
+                category: document.getElementById('retur-category')?.value || '',
+                allocatedTo: document.getElementById('retur-allocated-to')?.value || '',
+                alamat: document.getElementById('retur-alamat')?.value || '',
+                phone: document.getElementById('retur-phone')?.value || '',
+                shippingDate: document.getElementById('retur-shipping-date')?.value || '',
+                noteKhusus: document.getElementById('retur-note-khusus')?.value || '',
+                items
+            };
+        }
+
+        /** Restore isian Form Retur dari draft tersimpan */
+        function _restoreFormReturDraft() {
+            const draft = _loadDraft(DRAFT_KEYS.formRetur);
+            if (!draft) return;
+
+            const namaEl = document.getElementById('retur-nama');
+            const categoryEl = document.getElementById('retur-category');
+            if (namaEl && draft.nama) namaEl.value = draft.nama;
+            if (categoryEl && draft.category) { categoryEl.value = draft.category; updateReturPreview(); }
+            if (draft.allocatedTo) document.getElementById('retur-allocated-to').value = draft.allocatedTo;
+            if (draft.alamat) document.getElementById('retur-alamat').value = draft.alamat;
+            if (draft.phone) document.getElementById('retur-phone').value = draft.phone;
+            if (draft.shippingDate) document.getElementById('retur-shipping-date').value = draft.shippingDate;
+            if (draft.noteKhusus) document.getElementById('retur-note-khusus').value = draft.noteKhusus;
+
+            if (Array.isArray(draft.items) && draft.items.length > 0) {
+                draft.items.forEach(item => {
+                    tambahBarisFormRetur();
+                    const tbody = document.getElementById('retur-item-table-body');
+                    const tr = tbody.querySelector('tr:last-child');
+                    if (!tr) return;
+                    if (tr.querySelector('.po-item-nama')) { const el = tr.querySelector('.po-item-nama'); el.value = item.nama || ''; el.title = el.value; }
+                    if (tr.querySelector('.po-item-qty')) tr.querySelector('.po-item-qty').value = item.qty || '1';
+                    if (tr.querySelector('.po-item-uom')) tr.querySelector('.po-item-uom').value = item.uom || '';
+                    if (tr.querySelector('.po-item-desc')) tr.querySelector('.po-item-desc').value = item.desc || '';
+                    if (tr.querySelector('.po-item-note')) tr.querySelector('.po-item-note').value = item.note || '';
+                });
+            }
+        }
+
+        /** Pasang autosave listener Form Retur */
+        let _formReturAutosaveHandler = null;
+        function _attachFormReturAutosave() {
+            const contentArea = document.getElementById('content-area');
+            if (!contentArea) return;
+            if (_formReturAutosaveHandler) {
+                contentArea.removeEventListener('input', _formReturAutosaveHandler);
+                contentArea.removeEventListener('change', _formReturAutosaveHandler);
+            }
+            _formReturAutosaveHandler = () => _saveDraft(DRAFT_KEYS.formRetur, _collectFormReturDraft());
+            contentArea.addEventListener('input', _formReturAutosaveHandler);
+            contentArea.addEventListener('change', _formReturAutosaveHandler);
+        }
+
+        // =========================================================================
+        // FORM PENGEMBALIAN BARANG: DOWNLOAD PDF
+        // =========================================================================
+        async function downloadReturPDF() {
+            const dlBtn   = document.getElementById('retur-downloadBtn');
+            const dlIcon  = document.getElementById('retur-downloadIcon');
+            const dlLabel = document.getElementById('retur-downloadLabel');
+            const setDlLoading = (loading) => {
+                if (!dlBtn) return;
+                dlBtn.disabled = loading;
+                if (dlIcon)  dlIcon.classList.toggle('hidden', loading);
+                if (dlLabel) dlLabel.textContent = loading ? 'Memproses...' : 'Download PDF';
+                let spinner = dlBtn.querySelector('.dl-spinner');
+                if (loading) {
+                    if (!spinner) {
+                        spinner = document.createElement('svg');
+                        spinner.className = 'dl-spinner animate-spin h-4 w-4 flex-shrink-0';
+                        spinner.setAttribute('viewBox', '0 0 24 24');
+                        spinner.setAttribute('fill', 'none');
+                        spinner.innerHTML = '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
+                        dlBtn.insertBefore(spinner, dlLabel);
+                    }
+                } else if (spinner) {
+                    spinner.remove();
+                }
+            };
+            setDlLoading(true);
+            try {
+                await downloadReturPDFInner();
+            } finally {
+                setDlLoading(false);
+            }
+        }
+
+        async function downloadReturPDFInner() {
+            const namaEl        = document.getElementById('retur-nama');
+            const categoryEl    = document.getElementById('retur-category');
+            const allocatedToEl = document.getElementById('retur-allocated-to');
+            const poPreview     = document.getElementById('retur-po-preview');
+
+            const orderedBy      = namaEl        ? namaEl.value             : '';
+            const allocatedTo    = allocatedToEl ? allocatedToEl.value.trim(): '';
+            const alamat         = document.getElementById('retur-alamat')?.value?.trim()         || '';
+            const phone          = document.getElementById('retur-phone')?.value?.trim()          || '';
+            const shippingDateRaw= document.getElementById('retur-shipping-date')?.value          || '';
+            const shippingDate   = shippingDateRaw ? formatTanggalIndo(shippingDateRaw) : '-';
+            const noPO           = poPreview ? poPreview.textContent.trim() : '';
+            const noteKhusus     = document.getElementById('retur-note-khusus')?.value?.trim()    || '';
+
+            // Ambil item dari tabel
+            const rows  = document.querySelectorAll('#retur-item-table-body tr:not([data-placeholder])');
+            const items = [];
+            rows.forEach(row => {
+                const nama = row.querySelector('.po-item-nama')?.value?.trim() || '';
+                if (!nama) return;
+                items.push({
+                    nama,
+                    qty         : row.querySelector('.po-item-qty')?.value  || '1',
+                    uom         : row.querySelector('.po-item-uom')?.value  || '-',
+                    description : row.querySelector('.po-item-desc')?.value || '-',
+                    note        : row.querySelector('.po-item-note')?.value?.trim() || ''
+                });
+            });
+
+            if (items.length === 0) {
+                showAlert('warning', 'Tabel Kosong', 'Tambahkan minimal satu item sebelum download.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc       = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const marginX   = 14;
+            const today     = new Date().toISOString().split('T')[0];
+
+            // ── Hitung No. PO Retur berikutnya (prefix "Retur-") ──
+            let resolvedPONumber = null;
+            if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
+                const catCode = CATEGORY_CODE[categoryEl.value];
+                const dateStr = formatDateForPO(new Date());
+                const prefix  = `Retur-${catCode}-${dateStr}-`;
+                try {
+                    let poData = [];
+                    try {
+                        const r   = await fetch(API_URLS.purchaseOrder + '?action=getReturData');
+                        const raw = await r.json();
+                        poData = Array.isArray(raw) ? raw : [];
+                    } catch (_) {}
+                    if (poData.length === 0) {
+                        const r2   = await fetch(API_URLS.purchaseOrder + '?action=getPOData');
+                        const raw2 = await r2.json();
+                        poData = Array.isArray(raw2) ? raw2 : [];
+                    }
+                    let maxSeq = 0;
+                    poData.slice(1).forEach(row => {
+                        const no = String(row[1] || '').trim();
+                        if (no.startsWith(prefix)) {
+                            const seq = parseInt(no.replace(prefix, ''), 10);
+                            if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                        }
+                    });
+                    resolvedPONumber = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+                } catch (_) {}
+            }
+
+            // ── Header Background ──
+            try { doc.addImage(HEADER_BG_IMG, 'PNG', 0, 0, pageWidth, 32); } catch (_) {}
+
+            // ── Logo NOD ──
+            const logoData   = await loadImageAsDataURL(NOD_LOGO_URL);
+            let   logoBottomY = 18;
+            if (logoData) {
+                try {
+                    const dims = getImageFitDims(logoData, 26, 14);
+                    doc.addImage(logoData.dataUrl, logoData.format, marginX, 8, dims.w, dims.h);
+                    logoBottomY = 8 + dims.h;
+                } catch (_) { drawFallbackLogo(doc, marginX); logoBottomY = 22; }
+            } else {
+                drawFallbackLogo(doc, marginX);
+                logoBottomY = 22;
+            }
+
+            // ── Tagline ──
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(7.5);
+            doc.setTextColor(120, 113, 108);
+            doc.text('Your All-in-One Drink Maker', marginX, logoBottomY + 4);
+
+            // ── Judul Dokumen: PENGEMBALIAN BARANG ──
+            doc.setTextColor(17, 24, 39);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.text('PENGEMBALIAN BARANG', pageWidth - marginX, 16, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(107, 114, 128);
+            const poLabel = resolvedPONumber || (noPO && noPO !== 'Pilih kategori untuk melihat preview No. PO' ? noPO : '-');
+            doc.text('No. PO: ' + poLabel, pageWidth - marginX, 22, { align: 'right' });
+
+            // ── QR Code ──
+            const roQR = await generateROQRCodeDataURL({
+                poLabel, today, orderedBy, phone,
+                category: categoryEl ? categoryEl.value : '',
+                allocatedTo, alamat, shippingDate, items
+            });
+
+            // Garis pemisah
+            doc.setDrawColor(229, 231, 235);
+            doc.setLineWidth(0.4);
+            doc.line(marginX, 28, pageWidth - marginX, 28);
+
+            // ── Info Box ──
+            let y = 36;
+            doc.setFontSize(10);
+            doc.setTextColor(31, 41, 55);
+
+            const infoLeft = [
+                ['Tanggal',    formatTanggalIndo(today)],
+                ['No. PO',     poLabel],
+                ['Ordered By', orderedBy || '-'],
+                ['Phone',      phone || '-'],
+            ];
+            const infoRight = [
+                ['Kategori',       categoryEl ? categoryEl.value || '-' : '-'],
+                ['Ship To',        allocatedTo || '-'],
+                ['Alamat',         alamat || '-'],
+                ['Shipping Date',  shippingDate],
+            ];
+
+            const colLeftX       = marginX;
+            const colLeftLabelW  = 28;
+            const colRightX      = pageWidth / 2 + 4;
+            const colRightLabelW = 28;
+            const lineH          = 6;
+            const colRightValueX = colRightX + colRightLabelW + 3;
+            const colRightMaxW   = pageWidth - marginX - colRightValueX;
+
+            infoLeft.forEach((row, i) => {
+                const yy = y + i * lineH;
+                doc.setFont('helvetica', 'bold');   doc.text(row[0], colLeftX, yy);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colLeftX + colLeftLabelW, yy);
+                doc.text(String(row[1] || '-'), colLeftX + colLeftLabelW + 3, yy);
+            });
+
+            let rightY = y;
+            infoRight.forEach(row => {
+                if (!row[0]) return;
+                doc.setFont('helvetica', 'bold');   doc.text(row[0], colRightX, rightY);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colRightX + colRightLabelW, rightY);
+                const wrapped = doc.splitTextToSize(String(row[1] || '-'), colRightMaxW);
+                doc.text(wrapped, colRightValueX, rightY);
+                rightY += lineH * wrapped.length;
+            });
+
+            y += Math.max(infoLeft.length * lineH, rightY - y) + 6;
+
+            // ── Tabel Item ──
+            const tableBody = items.map((it, idx) => [
+                String(idx + 1), it.nama, it.qty || '-', it.uom || '-', it.description || '-', it.note || '-'
+            ]);
+
+            doc.autoTable({
+                startY: y,
+                head: [['No', 'Item', 'Qty', 'UOM', 'Description', 'Note']],
+                body: tableBody,
+                theme: 'grid',
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle' },
+                headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 9 },
+                    2: { halign: 'center', cellWidth: 16 },
+                    3: { halign: 'center', cellWidth: 18 },
+                    5: { cellWidth: 35 },
+                },
+                margin: { left: marginX, right: marginX },
+            });
+
+            // ── Note Khusus ──
+            let finalY = doc.lastAutoTable.finalY + 6;
+            if (noteKhusus) {
+                if (finalY > doc.internal.pageSize.getHeight() - 60) { doc.addPage(); finalY = 30; }
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(9);
+                doc.setTextColor(31, 41, 55);
+                doc.text('Note Khusus:', marginX, finalY);
+                finalY += 5;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8.5);
+                doc.setTextColor(55, 65, 81);
+                const wrappedNote = doc.splitTextToSize(noteKhusus, pageWidth - marginX * 2);
+                doc.text(wrappedNote, marginX, finalY);
+                finalY += wrappedNote.length * 5 + 8;
+            } else {
+                finalY += 12;
+            }
+
+            // ── Tanda Tangan ──
+            const pageHeight = doc.internal.pageSize.getHeight();
+            if (finalY > pageHeight - 90) { doc.addPage(); finalY = 30; }
+
+            const sigColW  = (pageWidth - marginX * 2) / 3;
+            const sigLabels = ['Diminta oleh,', 'Dikirim oleh,', 'Diterima oleh,'];
+            const sigNames  = [orderedBy || '', '', ''];
+
+            sigLabels.forEach((label, i) => {
+                const x = marginX + i * sigColW;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(31, 41, 55);
+                doc.text(label, x, finalY);
+                doc.line(x, finalY + 18, x + sigColW - 10, finalY + 18);
+                doc.setFont('helvetica', 'bold');
+                doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
+            });
+
+            // ── QR Code (kanan bawah) ──
+            if (roQR && roQR.dataUrl) {
+                const qrSize = 22;
+                const qrX    = pageWidth - marginX - qrSize;
+                const qrY    = pageHeight - 30 - 4 - qrSize;
+                try {
+                    doc.addImage(roQR.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(107, 114, 128);
+                    doc.text('Scan untuk buka lokasi Maps', qrX + qrSize, qrY - 2, { align: 'right' });
+                    if (roQR.truncated) {
+                        doc.setFontSize(5.5);
+                        doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
+                    }
+                } catch (errQr) { console.error('[Retur QR]', errQr); }
+            }
+
+            // ── Footer ──
+            const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(180, 180, 180);
+            doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
+
+            const fileName = `Pengembalian_Barang_${poLabel !== '-' ? poLabel : 'Retur'}_${today}.pdf`;
+
+            // ── Simpan PDF ke perangkat ──
+            doc.save(fileName);
+
+            // ── Otomatis lampirkan PDF ke kotak "Upload File PDF" ──
+            try {
+                const pdfBlob  = doc.output('blob');
+                const pdfFile  = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                const dt       = new DataTransfer();
+                dt.items.add(pdfFile);
+                const fileInput = document.getElementById('retur-pdfFile');
+                if (fileInput) {
+                    fileInput.files = dt.files;
+                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                showAlert('success', 'PDF Siap', 'Dokumen Pengembalian Barang berhasil dibuat dan otomatis dilampirkan ke kotak Upload File PDF.');
+            } catch (err) {
+                showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan unggah manual.');
+            }
+        }
+
+        // =========================================================================
+        // END FORM PENGEMBALIAN BARANG (RETUR)
+        // =========================================================================
+
         function tambahBarisFormPO() {
             const tbody = document.getElementById('po-item-table-body');
             if (!tbody) return;
