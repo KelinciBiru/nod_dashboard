@@ -4812,7 +4812,6 @@
                             <th class="p-2 text-center">Qty PO</th>
                             <th class="p-2 text-center">Qty Outbound</th>
                             <th class="p-2 text-center">UOM</th>
-                            <th class="p-2 text-center">Qty /pcs</th>
                             <th class="p-2 text-left">Description</th>
                             <th class="p-2 text-left" style="min-width:140px">Serial Number</th>
                             <th class="p-2 text-left" style="min-width:140px">ID Device</th>
@@ -4820,7 +4819,7 @@
                         </tr>
                     </thead>
                     <tbody id="proc-table-body">
-                        <tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
+                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5459,7 +5458,6 @@
                                     class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
                             </td>
                             <td class="p-2 text-center" contenteditable="true">${item.uom || ''}</td>
-                            <td class="p-2 text-center qty-pcs-cell font-semibold text-blue-700"></td>
                             <td class="p-2">
                                 <select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">
                                     ${descOpts}
@@ -5474,7 +5472,7 @@
                 } else {
                     tbody.innerHTML = `
                         <tr class="bg-yellow-50 border-b border-yellow-200">
-                            <td colspan="9" class="p-3 text-center text-xs text-yellow-700">
+                            <td colspan="8" class="p-3 text-center text-xs text-yellow-700">
                                 ⚠️ Item tidak terdeteksi otomatis. Silakan isi manual atau periksa format PDF.<br>
                                 <span class="text-gray-400 text-[10px]">Ekstrak: ${rawText.substring(0, 200).replace(/[\r\n]+/g, ' ')}...</span>
                             </td>
@@ -5487,7 +5485,6 @@
                                     class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
                             </td>
                             <td class="p-2 text-center" contenteditable="true">pcs</td>
-                            <td class="p-2 text-center qty-pcs-cell font-semibold text-blue-700">0</td>
                             <td class="p-2">
                                 <select class="w-full text-xs border border-gray-200 rounded p-1 bg-white">
                                     <option>Supplies</option><option>Sampling</option><option>Machine Selling</option>
@@ -5563,7 +5560,7 @@
                 row.remove();
                 const tbody = document.getElementById('proc-table-body');
                 if (tbody && tbody.querySelectorAll('tr:not([data-placeholder])').length === 0) {
-                    tbody.innerHTML = `<tr data-placeholder><td colspan="9" class="p-6 text-center text-gray-400 italic">Tabel kosong — klik "Tambah Baris" untuk isi manual.</td></tr>`;
+                    tbody.innerHTML = `<tr data-placeholder><td colspan="8" class="p-6 text-center text-gray-400 italic">Tabel kosong — klik "Tambah Baris" untuk isi manual.</td></tr>`;
                 }
             }, 200);
         }
@@ -6304,7 +6301,6 @@
                 <td class="p-2 text-center font-semibold text-gray-700" contenteditable="true">1</td>
                 <td class="p-2 text-center"><input type="number" min="0" value="1" class="w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
                 <td class="p-2 text-center" contenteditable="true">Pcs</td>
-                <td class="p-2 text-center qty-pcs-cell font-semibold text-blue-700">1</td>
                 <td class="p-2"><select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select></td>
                 <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
                 <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
@@ -7386,8 +7382,6 @@
                 const namaBarang = namaBarangInput ? namaBarangInput.value.trim() : row.cells[0].innerText.trim();
                 const qtyPO = row.cells[1].innerText.trim();
                 if (!namaBarang || namaBarang === '-') return; // skip baris kosong
-                const qtyPcsCell = row.querySelector('.qty-pcs-cell');
-                const qtyPcs = qtyPcsCell ? qtyPcsCell.textContent.trim() : '';
                 items.push({
                     namaBarang: namaBarang,
                     qtyPO: qtyPO,
@@ -7396,7 +7390,6 @@
                     description: descSelect ? descSelect.value : row.cells[4].innerText.trim(),
                     serialNumber: serialNumberInput ? serialNumberInput.value.trim() : '',
                     idDevice: idDeviceInput ? idDeviceInput.value.trim() : '',
-                    qtyPcs: qtyPcs,
                 });
             });
 
@@ -7489,7 +7482,7 @@
                         const poSelect = document.getElementById('proc-no-po-select');
                         if (poSelect) poSelect.value = '';
                         document.getElementById('proc-table-body').innerHTML =
-                            '<tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
+                            '<tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
                         _clearDraft(DRAFT_KEYS.processPO);
                     }, 1500);
 
