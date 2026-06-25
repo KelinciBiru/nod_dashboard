@@ -440,7 +440,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzf773cvBuvDxKnpIvs-HUvq3HmeYCEWVX_hcgAIiHXhKtAdctJ4LvWMGt3TqY7PXW8/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyEl7LWeY7zrhAcIL4r1pPqhSRPL6hTaJFYZxaSwgC_RnGN4QYhLNfbgDGsiHYwGqiC/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -3072,7 +3072,7 @@
         // =========================================================================
         const CATEGORY_CODE = {
             'Outlet': 'OT', 'Event': 'EV', 'KOL': 'KOL',
-            'B2C': 'B2C', 'B2B': 'B2B', 'Selling': 'SEL', 'Switch Unit': 'SU', 'FAS': 'FAS', 'Need Repair': 'NRP', 'Box Damaged': 'BDM', 'Tukar Sleeve': 'TSL', 'TF Stock to Hampers': 'TSH'
+            'B2C': 'B2C', 'B2B': 'B2B', 'Selling': 'SEL', 'Switch Unit': 'SU', 'FAS': 'FAS', 'Need Repair': 'NRP', 'Box Damaged': 'BDM', 'Tukar Sleeve': 'TSL', 'TF Stock to Hampers': 'TSH', 'Retail': 'RTL'
         };
 
         function formatDateForPO(date) {
@@ -3508,16 +3508,22 @@
                         </select>
                     </div>
                     <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">From Location</label>
+                        <input type="text" id="retur-from-location"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan lokasi asal barang diambil">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat Penarikan</label>
+                        <input type="text" id="retur-alamat"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan alamat penarikan barang">
+                    </div>
+                    <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
                         <input type="text" id="retur-allocated-to"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan Nama (Event/Outlet/Penerima)">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat</label>
-                        <input type="text" id="retur-alamat"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                            placeholder="Masukkan alamat pengiriman">
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">No. Telepon</label>
@@ -3683,6 +3689,7 @@
                     token: sessionToken,
                     nama: namaEl.value,
                     allocatedTo: allocatedToEl ? allocatedToEl.value.trim() : '',
+                    fromLocation: document.getElementById('retur-from-location')?.value?.trim() || '',
                     alamat: document.getElementById('retur-alamat')?.value?.trim() || '',
                     phone: document.getElementById('retur-phone')?.value?.trim() || '',
                     shippingDate: document.getElementById('retur-shipping-date')?.value || '',
@@ -3719,8 +3726,9 @@
         function resetFormRetur() {
             const namaEl = document.getElementById('retur-nama');
             const categoryEl = document.getElementById('retur-category');
-            const allocatedToEl = document.getElementById('retur-allocated-to');
-            const alamatEl = document.getElementById('retur-alamat');
+            const allocatedToEl  = document.getElementById('retur-allocated-to');
+            const alamatEl       = document.getElementById('retur-alamat');
+            const fromLocationEl = document.getElementById('retur-from-location');
             const phoneEl = document.getElementById('retur-phone');
             const shippingDateEl = document.getElementById('retur-shipping-date');
             const fileInput = document.getElementById('retur-pdfFile');
@@ -3731,6 +3739,7 @@
             if (categoryEl) categoryEl.selectedIndex = 0;
             if (allocatedToEl) allocatedToEl.value = '';
             if (alamatEl) alamatEl.value = '';
+            if (fromLocationEl) fromLocationEl.value = '';
             if (phoneEl) phoneEl.value = '';
             if (shippingDateEl) shippingDateEl.value = '';
             if (fileInput) fileInput.value = '';
@@ -3843,6 +3852,7 @@
             return {
                 nama: document.getElementById('retur-nama')?.value || '',
                 category: document.getElementById('retur-category')?.value || '',
+                fromLocation: document.getElementById('retur-from-location')?.value || '',
                 allocatedTo: document.getElementById('retur-allocated-to')?.value || '',
                 alamat: document.getElementById('retur-alamat')?.value || '',
                 phone: document.getElementById('retur-phone')?.value || '',
@@ -3861,6 +3871,7 @@
             const categoryEl = document.getElementById('retur-category');
             if (namaEl && draft.nama) namaEl.value = draft.nama;
             if (categoryEl && draft.category) { categoryEl.value = draft.category; updateReturPreview(); }
+            if (draft.fromLocation) document.getElementById('retur-from-location').value = draft.fromLocation;
             if (draft.allocatedTo) document.getElementById('retur-allocated-to').value = draft.allocatedTo;
             if (draft.alamat) document.getElementById('retur-alamat').value = draft.alamat;
             if (draft.phone) document.getElementById('retur-phone').value = draft.phone;
@@ -3938,6 +3949,7 @@
 
             const orderedBy      = namaEl        ? namaEl.value             : '';
             const allocatedTo    = allocatedToEl ? allocatedToEl.value.trim(): '';
+            const fromLocation   = document.getElementById('retur-from-location')?.value?.trim() || '';
             const alamat         = document.getElementById('retur-alamat')?.value?.trim()         || '';
             const phone          = document.getElementById('retur-phone')?.value?.trim()          || '';
             const shippingDateRaw= document.getElementById('retur-shipping-date')?.value          || '';
@@ -4059,10 +4071,11 @@
                 ['Phone',      phone || '-'],
             ];
             const infoRight = [
-                ['Kategori',       categoryEl ? categoryEl.value || '-' : '-'],
-                ['Ship To',        allocatedTo || '-'],
-                ['Alamat',         alamat || '-'],
-                ['Shipping Date',  shippingDate],
+                ['Kategori',          categoryEl ? categoryEl.value || '-' : '-'],
+                ['From Location',     fromLocation || '-'],
+                ['Alamat Penarikan',  alamat || '-'],
+                ['Ship To',           allocatedTo || '-'],
+                ['Shipping Date',     shippingDate],
             ];
 
             const colLeftX       = marginX;
