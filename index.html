@@ -5793,7 +5793,7 @@
                 doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
             });
 
-            // ── QR Code (kanan bawah halaman) — berisi seluruh isi Delivery Order ──
+            // ── QR Code (kanan bawah halaman) — berisi seluruh data hasil Process PO ──
             if (doQR && doQR.dataUrl) {
                 const qrSize = 22;
                 const qrX = pageWidth - marginX - qrSize;
@@ -5804,7 +5804,7 @@
                     doc.setFontSize(6.5);
                     doc.setTextColor(107, 114, 128);
                     // Rata kanan ke tepi QR (= margin kertas) supaya tidak mepet/terpotong di ujung kertas
-                    doc.text('Scan untuk buka lokasi Maps', qrX + qrSize, qrY - 2, { align: 'right' });
+                    doc.text('Scan untuk lihat data PO', qrX + qrSize, qrY - 2, { align: 'right' });
                     if (doQR.truncated) {
                         doc.setFontSize(5.5);
                         doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
@@ -5831,14 +5831,36 @@
         }
 
         /**
-         * Menghasilkan Google Maps URL berdasarkan alamat PO untuk Delivery Order.
-         * Driver men-scan QR ini saat tiba di lokasi → membuka Maps ke titik tujuan.
+         * Menghasilkan teks QR Code berisi seluruh data hasil Process PO
+         * yang diproses oleh team Warehouse (Delivery Order).
+         * Format: teks ringkasan data PO yang dapat dibaca saat di-scan.
          */
         function buildDeliveryOrderQRText({ noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items, alamat, mapsUrl }) {
-            if (mapsUrl && mapsUrl.startsWith('http')) return mapsUrl;
-            if (alamat) return 'https://maps.google.com/?q=' + encodeURIComponent(alamat);
-            if (shipTo) return 'https://maps.google.com/?q=' + encodeURIComponent(shipTo);
-            return 'https://maps.google.com/';
+            const lines = [];
+            lines.push('=== DELIVERY ORDER ===');
+            if (noPO)          lines.push('No. PO: ' + noPO);
+            if (tglProses)     lines.push('Tgl Proses: ' + tglProses);
+            if (crewPacking)   lines.push('Crew Packing: ' + crewPacking);
+            if (orderedBy)     lines.push('Ordered By: ' + orderedBy);
+            if (shipTo)        lines.push('Ship To: ' + shipTo);
+            if (shippingDate)  lines.push('Shipping Date: ' + shippingDate);
+            if (alamat)        lines.push('Alamat: ' + alamat);
+            if (mapsUrl && mapsUrl.startsWith('http')) lines.push('Maps: ' + mapsUrl);
+
+            if (items && items.length > 0) {
+                lines.push('--- ITEM ---');
+                items.forEach((it, i) => {
+                    const qty  = it.qty  || '-';
+                    const uom  = it.uom  || '';
+                    const nama = it.nama || '-';
+                    lines.push((i + 1) + '. ' + nama + ' - ' + qty + (uom ? ' ' + uom : ''));
+                    if (it.description) lines.push('   Desc: ' + it.description);
+                    if (it.remark)      lines.push('   Ket: ' + it.remark);
+                });
+            }
+
+            lines.push('=== NOD Warehouse System ===');
+            return lines.join('\n');
         }
 
         /**
@@ -5860,14 +5882,28 @@
                 color: { dark: '#111827', light: '#FFFFFF' }
             };
 
-            // QR Code berisi Google Maps URL ke alamat PO
-            const text = buildDeliveryOrderQRText(doData);
-            try {
-                const dataUrl = await QRCode.toDataURL(text, qrOptions);
-                return { dataUrl, truncated: false };
-            } catch (err) {
-                console.error('[DO QR] Gagal generate QR Code:', err);
-                return null;
+            // QR Code berisi seluruh data hasil Process PO (DO) yang diproses team Warehouse
+            const fullText = buildDeliveryOrderQRText(doData);
+
+            // Coba generate dengan data lengkap dulu; jika terlalu panjang, potong item satu per satu
+            const itemsCopy = doData.items ? [...doData.items] : [];
+            let text = fullText;
+            let truncated = false;
+
+            while (true) {
+                try {
+                    const dataUrl = await QRCode.toDataURL(text, qrOptions);
+                    return { dataUrl, truncated };
+                } catch (err) {
+                    if (itemsCopy.length === 0) {
+                        console.error('[DO QR] Gagal generate QR Code bahkan tanpa item:', err);
+                        return null;
+                    }
+                    // Kurangi satu item dari belakang dan coba lagi
+                    itemsCopy.pop();
+                    truncated = true;
+                    text = buildDeliveryOrderQRText({ ...doData, items: itemsCopy });
+                }
             }
         }
 
