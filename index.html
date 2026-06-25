@@ -439,7 +439,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyEl7LWeY7zrhAcIL4r1pPqhSRPL6hTaJFYZxaSwgC_RnGN4QYhLNfbgDGsiHYwGqiC/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyhxR3x-nYNXzGufO3ehto3k-SKVmTtzZRSt67rojQB0BPQCBajwspxulnlx1IFIG4/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -4039,12 +4039,12 @@
             doc.setTextColor(17, 24, 39);
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(16);
-            doc.text('PENGEMBALIAN BARANG', pageWidth - marginX, 16, { align: 'right' });
+            doc.text('RETURN ORDER', pageWidth - marginX, 16, { align: 'right' });
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
             doc.setTextColor(107, 114, 128);
-            const poLabel = resolvedPONumber || (noPO && noPO !== 'Pilih kategori untuk melihat preview No. PO' ? noPO : '-');
-            doc.text('No. PO: ' + poLabel, pageWidth - marginX, 22, { align: 'right' });
+            const poLabel = resolvedPONumber || (noPO && noPO !== 'Pilih kategori untuk melihat preview No. RO' ? noPO : '-');
+            doc.text('No. RO: ' + poLabel, pageWidth - marginX, 22, { align: 'right' });
 
             // ── QR Code ──
             const roQR = await generateROQRCodeDataURL({
@@ -4065,7 +4065,7 @@
 
             const infoLeft = [
                 ['Tanggal',    formatTanggalIndo(today)],
-                ['No. PO',     poLabel],
+                ['No. RO',     poLabel],
                 ['Ordered By', orderedBy || '-'],
                 ['Phone',      phone || '-'],
             ];
@@ -4209,7 +4209,7 @@
                     if (labelEl)  labelEl.textContent = '✓ ' + fileName;
                     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                showAlert('success', 'PDF Siap', 'Dokumen Pengembalian Barang berhasil dibuat dan otomatis dilampirkan.');
+                showAlert('success', 'PDF Siap', 'Dokumen Return Order berhasil dibuat dan otomatis dilampirkan.');
             } catch (err) {
                 showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan coba klik Download PDF sekali lagi.');
             }
@@ -6956,6 +6956,7 @@
             // [8]=Phone     [9]=Shipping Date          [10]=Note
 
             try {
+                // ── Fetch PO_Data ──
                 let data = [];
                 try {
                     const res1 = await fetch(API_URLS.reportStatus + '?action=getPOData');
@@ -6968,6 +6969,14 @@
                     const raw2 = await res2.json();
                     data = Array.isArray(raw2) ? raw2 : [];
                 }
+
+                // ── Fetch Retur_Data untuk No. RO yang Open ──
+                let retuData = [];
+                try {
+                    const retuRes = await fetch(API_URLS.purchaseOrder + '?action=getReturData');
+                    const retuRaw = await retuRes.json();
+                    retuData = Array.isArray(retuRaw) ? retuRaw : [];
+                } catch (_) { }
 
                 // Parse tanggal format "DD/MM/YYYY HH:MM:SS" dari kolom A
                 const parseTanggalPO = (str) => {
@@ -6994,7 +7003,29 @@
                     return true;
                 });
 
-                if (allRows.length === 0) {
+                // ── Filter RO: tampilkan semua kecuali yang Closed > 7 hari ──
+                // Retur_Data: [0]=Timestamp [1]=No.RO [2]=Ordered By [3]=Ship To [4]=Status ...
+                const parseTanggalRO = (str) => {
+                    if (!str) return null;
+                    // Format dari GAS: Date object atau string "DD/MM/YYYY HH:MM:SS"
+                    if (str instanceof Date) return str;
+                    const match = String(str).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+                    if (match) return new Date(+match[3], +match[2] - 1, +match[1]);
+                    return null;
+                };
+                const openRORows = retuData.slice(1).filter(row => {
+                    const noRO = String(row[1] || '').trim();
+                    if (noRO === '') return false;
+                    const statusRaw = row[4] ? row[4].toString().trim() : '';
+                    if (statusRaw === 'Closed') {
+                        const tglRO = parseTanggalRO(row[0]);
+                        if (!tglRO || isNaN(tglRO.getTime())) return false;
+                        return tglRO >= sevenDaysAgo;
+                    }
+                    return true;
+                });
+
+                if (allRows.length === 0 && openRORows.length === 0) {
                     contentArea.innerHTML = `
                     <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
                     <div class="p-8 text-center bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -7066,6 +7097,80 @@
                     </tr>`;
                 });
 
+                // ── Build tabel RO ──
+                let ro_rows_html = '';
+                openRORows.forEach(row => {
+                    const noRO         = row[1] || '-';
+                    const orderedBy    = row[2] || '-';
+                    const fromLocation = row[11] || '-';
+                    const shipTo       = row[3] || '-';
+                    const status       = row[4] || '';
+                    const link         = row[5] || '';
+                    const statusStr    = status ? status.toString().trim() : '';
+                    const isClosed     = statusStr === 'Closed';
+                    const isOpen       = !isClosed;
+
+                    const statusBadge = isClosed
+                        ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Closed</span>`
+                        : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Open</span>`;
+
+                    const linkCell = (link && link !== '')
+                        ? `<a href="${link}" target="_blank"
+                              class="inline-block max-w-[200px] truncate align-middle text-blue-600 underline hover:text-blue-800 text-xs">
+                              Lihat PDF
+                           </a>`
+                        : '-';
+
+                    const roKey = noRO.replace(/[^a-zA-Z0-9\-]/g, '_');
+                    const aksiCell = isAdmin ? `
+                        <td class="p-3 border-b">
+                            ${isClosed
+                                ? `<button id="robtn-${roKey}" onclick="removeRORow('${noRO}')"
+                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1 mx-auto">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    Remove
+                                   </button>`
+                                : `<button id="robtn-${roKey}" onclick="closeRO('${noRO}')"
+                                    class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-xs font-semibold transition">
+                                    Closed
+                                   </button>`
+                            }
+                        </td>` : '';
+
+                    const rowBg = isClosed ? 'bg-gray-50 opacity-60' : 'hover:bg-purple-50';
+                    ro_rows_html += `
+                    <tr id="row-ro-${roKey}" class="${rowBg}">
+                        <td class="p-3 border-b font-mono text-left">${escapeHtml(noRO)}</td>
+                        <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
+                        <td class="p-3 border-b">${escapeHtml(fromLocation)}</td>
+                        <td class="p-3 border-b">${escapeHtml(shipTo)}</td>
+                        <td class="p-3 border-b" id="rostatus-${roKey}">${statusBadge}</td>
+                        ${isAdmin ? `<td class="p-3 border-b">${linkCell}</td>` : ''}
+                        ${aksiCell}
+                    </tr>`;
+                });
+
+                const roTheadExtra = isAdmin ? '<th class="p-3">Link PDF</th><th class="p-3">Aksi</th>' : '';
+                const roSection = openRORows.length > 0 ? `
+                <h2 class="text-lg font-bold text-gray-700 mt-8 mb-3">Report Status RO</h2>
+                <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
+                    <table class="w-full text-xs text-center border-collapse">
+                        <thead>
+                            <tr class="bg-purple-900 text-white">
+                                <th class="p-3 text-left">No. RO</th>
+                                <th class="p-3">Ordered By</th>
+                                <th class="p-3">From Location</th>
+                                <th class="p-3">Ship To</th>
+                                <th class="p-3">Status</th>
+                                ${roTheadExtra}
+                            </tr>
+                        </thead>
+                        <tbody id="ro-table-body">${ro_rows_html}</tbody>
+                    </table>
+                </div>` : '';
+
                 // Header: PO_User hanya 4 kolom, Admin + kolom Link & Aksi
                 const theadExtra = isAdmin ? '<th class="p-3">Link PDF</th><th class="p-3">Aksi</th>' : '';
 
@@ -7084,7 +7189,8 @@
                         </thead>
                         <tbody id="po-table-body">${rows_html}</tbody>
                     </table>
-                </div>`;
+                </div>
+                ${roSection}`;
 
             } catch (err) { setError(err.message); }
         }
@@ -7160,6 +7266,75 @@
                     <div class="p-8 text-center bg-white border border-gray-200 rounded-lg shadow-sm">
                         <p class="text-gray-500">✅ Tidak ada PO yang ditampilkan.</p>
                     </div>`;
+                }
+            }, 300);
+        }
+
+        async function closeRO(noRO) {
+            const ok = await showConfirm('Tutup Return Order?', `RO ${noRO} akan ditandai sebagai Closed. Tindakan ini tidak dapat dibatalkan.`);
+            if (!ok) return;
+
+            const roKey = noRO.replace(/[^a-zA-Z0-9\-]/g, '_');
+            const btn = document.getElementById(`robtn-${roKey}`);
+            const statusCell = document.getElementById(`rostatus-${roKey}`);
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>Menyimpan...'; }
+
+            try {
+                const response = await fetch(API_URLS.reportStatus, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'closeRO', token: sessionToken, noRO }),
+                });
+                const result = await response.json();
+                if (result.success) {
+                    if (statusCell) statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Closed</span>`;
+
+                    const row = document.getElementById(`row-ro-${roKey}`);
+                    if (row) {
+                        row.classList.remove('hover:bg-purple-50');
+                        row.classList.add('bg-gray-50', 'opacity-60');
+                    }
+                    if (btn) {
+                        btn.onclick = () => removeRORow(noRO);
+                        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Remove`;
+                        btn.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center mx-auto';
+                        btn.disabled = false;
+                    }
+                    showAlert('success', 'RO Berhasil Ditutup', `RO ${noRO} telah ditandai sebagai Closed.`);
+                } else {
+                    showAlert('error', 'Gagal Menutup RO', result.message || 'Terjadi kesalahan, coba lagi.');
+                    if (btn) { btn.disabled = false; btn.innerText = 'Closed'; }
+                }
+            } catch (err) {
+                showAlert('error', 'Terjadi Kesalahan', err.message);
+                if (btn) { btn.disabled = false; btn.innerText = 'Closed'; }
+            }
+        }
+
+        async function removeRORow(noRO) {
+            const ok = await showConfirm(
+                'Hapus baris dari tampilan?',
+                `Baris RO ${noRO} akan dihapus dari tampilan ini. Data di sheet tetap tersimpan.`
+            );
+            if (!ok) return;
+
+            const roKey = noRO.replace(/[^a-zA-Z0-9\-]/g, '_');
+            const row = document.getElementById(`row-ro-${roKey}`);
+            if (!row) return;
+
+            row.style.transition = 'opacity 0.3s, transform 0.3s';
+            row.style.opacity = '0';
+            row.style.transform = 'translateX(20px)';
+
+            setTimeout(() => {
+                row.remove();
+                const tbody = document.getElementById('ro-table-body');
+                if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                    const roSection = document.querySelector('h2.text-lg.font-bold.text-gray-700.mt-8');
+                    if (roSection) {
+                        const container = roSection.nextElementSibling;
+                        roSection.remove();
+                        if (container) container.remove();
+                    }
                 }
             }, 300);
         }
