@@ -105,8 +105,19 @@
             </div>
             <h2 class="text-xl font-bold mb-2 text-gray-700">Login</h2>
             <input type="password" id="passwordInput" onkeydown="if(event.key==='Enter') checkLogin()"
-                class="w-full p-2 border border-gray-300 rounded mb-4 focus:ring-2 focus:ring-amber-500 outline-none"
+                class="w-full p-2 border border-gray-300 rounded mb-3 focus:ring-2 focus:ring-amber-500 outline-none"
                 placeholder="Masukkan Password">
+            <!-- Field Nama Driver: hanya tampil setelah password divalidasi sebagai DRIVER -->
+            <div id="driverNameWrap" class="hidden mb-4">
+                <p class="text-xs text-gray-500 mb-1 text-left">Masukkan nama Anda (sesuai assignment rute):</p>
+                <input type="text" id="driverNameInput" onkeydown="if(event.key==='Enter') confirmDriverLogin()"
+                    class="w-full p-2 border border-amber-400 rounded focus:ring-2 focus:ring-amber-500 outline-none"
+                    placeholder="Contoh: Sobur / Car Refiller">
+                <button id="driverLoginBtn" onclick="confirmDriverLogin()" style="background-color: #14141e;"
+                    class="w-full text-white py-2 rounded-full font-bold hover:opacity-90 transition mt-3">
+                    Masuk sebagai Driver
+                </button>
+            </div>
             <button id="loginBtn" onclick="checkLogin()" style="background-color: #14141e;"
                 class="w-full text-white py-2 rounded-full font-bold hover:opacity-90 transition">
                 Masuk
@@ -385,6 +396,7 @@
         // STATE GLOBAL
         // =========================================================================
         let currentUserRole = '';
+        let currentDriverName = '';  // Nama akun driver yang sedang login (untuk filter rute)
 
         // =========================================================================
         // DRAFT AUTOSAVE (Form PO, Process PO, Process Inbound)
@@ -475,6 +487,9 @@
         // token tsb sebelum mengizinkan aksi tulis (lihat checkAccess() di GAS).
         let sessionToken = null;
 
+        // Simpan data login sementara saat menunggu nama driver diisi
+        let _pendingLoginData = null;
+
         async function checkLogin() {
             const passInput = document.getElementById('passwordInput');
             const pass = passInput.value;
@@ -489,20 +504,30 @@
             try {
                 const res = await fetch(PO_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({ action: 'login', password: pass })
                 });
                 const data = await res.json();
 
                 if (data && data.success && data.token && data.role) {
-                    currentUserRole = data.role;
-                    sessionToken = data.token;
-                    // Token & role disimpan per-tab (sessionStorage), hilang otomatis
-                    // saat tab/browser ditutup — tidak permanen seperti localStorage.
-                    sessionStorage.setItem('currentUserRole', currentUserRole);
-                    sessionStorage.setItem('sessionToken', sessionToken);
-                    passInput.value = '';
-                    startApp();
+                    if (data.role === 'DRIVER') {
+                        // Simpan dulu, minta nama driver sebelum masuk
+                        _pendingLoginData = data;
+                        // Sembunyikan tombol Masuk utama, tampilkan field nama driver
+                        loginBtn.classList.add('hidden');
+                        passInput.disabled = true;
+                        document.getElementById('driverNameWrap').classList.remove('hidden');
+                        document.getElementById('driverNameInput').focus();
+                    } else {
+                        // Role lain: langsung masuk seperti biasa
+                        currentUserRole = data.role;
+                        sessionToken = data.token;
+                        sessionStorage.setItem('currentUserRole', currentUserRole);
+                        sessionStorage.setItem('sessionToken', sessionToken);
+                        passInput.value = '';
+                        startApp();
+                    }
                 } else {
                     error.textContent = (data && data.message) ? data.message : 'Password Salah!';
                     error.classList.remove('hidden');
@@ -515,6 +540,40 @@
             }
         }
 
+        /** Konfirmasi nama driver lalu masuk ke app */
+        function confirmDriverLogin() {
+            const nameInput = document.getElementById('driverNameInput');
+            const driverName = nameInput.value.trim();
+            const error = document.getElementById('loginError');
+
+            if (!driverName) {
+                error.textContent = 'Nama wajib diisi!';
+                error.classList.remove('hidden');
+                nameInput.focus();
+                return;
+            }
+            if (!_pendingLoginData) return;
+
+            currentUserRole = _pendingLoginData.role;
+            sessionToken = _pendingLoginData.token;
+            currentDriverName = driverName;
+
+            sessionStorage.setItem('currentUserRole', currentUserRole);
+            sessionStorage.setItem('sessionToken', sessionToken);
+            sessionStorage.setItem('currentDriverName', currentDriverName);
+
+            // Reset form login
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('passwordInput').disabled = false;
+            nameInput.value = '';
+            document.getElementById('driverNameWrap').classList.add('hidden');
+            document.getElementById('loginBtn').classList.remove('hidden');
+            error.classList.add('hidden');
+            _pendingLoginData = null;
+
+            startApp();
+        }
+
         /** Tampilkan app sesuai role setelah login berhasil */
         function startApp() {
             document.getElementById('login-page').classList.add('hidden');
@@ -522,6 +581,11 @@
             const app = document.getElementById('app-container');
             app.classList.remove('hidden');
             app.classList.add('flex');
+
+            // Restore currentDriverName dari session (untuk kasus refresh halaman)
+            if (!currentDriverName) {
+                currentDriverName = sessionStorage.getItem('currentDriverName') || '';
+            }
 
             // Update label role di sidebar footer dan topbar badge
             const roleLabel = document.getElementById('user-role-label');
@@ -533,8 +597,9 @@
                 if (roleLabel) roleLabel.textContent = 'Team Warehouse';
                 if (roleBadge) { roleBadge.textContent = 'Warehouse'; roleBadge.classList.remove('hidden'); }
             } else if (currentUserRole === 'DRIVER') {
-                if (roleLabel) roleLabel.textContent = 'Team Delivery (Driver)';
-                if (roleBadge) { roleBadge.textContent = 'Driver'; roleBadge.classList.remove('hidden'); }
+                const displayName = currentDriverName || 'Driver';
+                if (roleLabel) roleLabel.textContent = `Driver — ${displayName}`;
+                if (roleBadge) { roleBadge.textContent = displayName; roleBadge.classList.remove('hidden'); }
             } else {
                 if (roleLabel) roleLabel.textContent = 'PO User';
                 if (roleBadge) { roleBadge.textContent = 'PO User'; roleBadge.classList.remove('hidden'); }
@@ -636,12 +701,14 @@
             // Reset role & token
             currentUserRole = '';
             sessionToken = null;
+            currentDriverName = '';
 
             // Hapus sesi tersimpan (role, token, halaman aktif, draft form) agar
             // logout benar-benar membersihkan dan kembali ke login.
             sessionStorage.removeItem('currentUserRole');
             sessionStorage.removeItem('sessionToken');
             sessionStorage.removeItem('currentPage');
+            sessionStorage.removeItem('currentDriverName');
             _clearAllDraftForms();
 
             // Reset form password
@@ -1099,7 +1166,7 @@
 
         /**
          * Tampilkan modal isian Nama Pengirim, Nama Penerima, Tanggal Diterima,
-         * dan fitur Scan QR Code sebelum Delivered.
+         * dan fitur Ambil Foto sebagai dokumentasi bukti barang sudah diterima.
          * Saat modal dibuka, otomatis mengambil titik koordinat GPS driver
          * (lokasi saat ini = lokasi tiba di alamat PO) untuk dicatat ke Delivery_Log
          * dan disisipkan ke dalam QR Code hasil PDF.
@@ -1152,15 +1219,31 @@
                                 value="${today}" placeholder="DD/MM/YYYY" />
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">Scan QR Code (opsional)</label>
-                            <button type="button" id="route-delivered-scan-btn"
-                                class="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl px-3 py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:border-green-300 hover:text-green-600 transition">
-                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4V2H2v6h2V4zm16 0v4h2V2h-6v2h4zM4 16H2v6h6v-2H4v-4zm16 4h-4v2h6v-6h-2v4zM7 7h2v2H7V7zm0 8h2v2H7v-2zm8-8h2v2h-2V7zm0 8h2v2h-2v-2zm-4-4h2v2h-2v-2z"/>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1.5">📸 Foto Bukti Penerimaan <span class="text-red-500">*</span></label>
+                            <!-- Preview foto -->
+                            <div id="route-delivered-photo-preview" class="hidden mb-2 relative">
+                                <img id="route-delivered-photo-img"
+                                    class="w-full rounded-xl object-cover border border-green-200"
+                                    style="max-height:160px;" alt="Foto bukti" />
+                                <button type="button" id="route-delivered-photo-retake"
+                                    class="absolute top-1.5 right-1.5 bg-white/90 hover:bg-white text-xs font-semibold text-gray-600 px-2 py-1 rounded-lg shadow transition">
+                                    🔄 Ambil Ulang
+                                </button>
+                            </div>
+                            <!-- Tombol ambil foto -->
+                            <button type="button" id="route-delivered-photo-btn"
+                                class="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:border-green-300 hover:text-green-600 transition">
+                                <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
                                 </svg>
-                                <span id="route-delivered-scan-label">Scan QR Code</span>
+                                <span id="route-delivered-photo-label">Ambil Foto Bukti</span>
                             </button>
-                            <p id="route-delivered-scan-result" class="text-[11px] text-gray-400 mt-1 italic hidden"></p>
+                            <!-- Hidden input file kamera -->
+                            <input type="file" id="route-delivered-photo-input"
+                                accept="image/*" capture="environment" class="hidden" />
+                            <p id="route-delivered-photo-status" class="text-[11px] text-gray-400 mt-1 italic hidden"></p>
                         </div>
                     </div>
                     <div class="flex gap-2">
@@ -1215,19 +1298,60 @@
                     setGpsStatus('error', '⚠ Perangkat/browser tidak mendukung GPS.');
                 }
 
-                // ── Tombol Scan QR Code (opsional, untuk verifikasi tambahan) ──
-                document.getElementById('route-delivered-scan-btn').onclick = () => {
-                    startQRCamera(true, (decodedText) => {
-                        const resultEl = document.getElementById('route-delivered-scan-result');
-                        const labelEl  = document.getElementById('route-delivered-scan-label');
-                        if (resultEl) {
-                            resultEl.textContent = `✅ QR terbaca: ${decodedText}`;
-                            resultEl.classList.remove('hidden');
-                        }
-                        if (labelEl) labelEl.textContent = 'QR Code Terverifikasi ✓';
-                        playScanBeep();
-                    });
+                // ── Tombol Ambil Foto Bukti Penerimaan ──
+                let photoBase64 = null; // simpan data foto base64 untuk dikirim ke GAS
+
+                const photoBtn     = document.getElementById('route-delivered-photo-btn');
+                const photoInput   = document.getElementById('route-delivered-photo-input');
+                const photoPreview = document.getElementById('route-delivered-photo-preview');
+                const photoImg     = document.getElementById('route-delivered-photo-img');
+                const photoStatus  = document.getElementById('route-delivered-photo-status');
+                const photoLabel   = document.getElementById('route-delivered-photo-label');
+                const photoRetake  = document.getElementById('route-delivered-photo-retake');
+
+                // Fungsi compress + tampilkan foto
+                const handlePhotoFile = (file) => {
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        // Compress via canvas agar tidak terlalu besar
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX_W = 1280, MAX_H = 960;
+                            let w = img.width, h = img.height;
+                            if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+                            if (h > MAX_H) { w = Math.round(w * MAX_H / h); h = MAX_H; }
+                            canvas.width = w; canvas.height = h;
+                            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                            photoBase64 = canvas.toDataURL('image/jpeg', 0.75); // ~75% kualitas
+                            // Tampilkan preview
+                            photoImg.src = photoBase64;
+                            photoPreview.classList.remove('hidden');
+                            photoBtn.classList.add('hidden');
+                            if (photoStatus) {
+                                photoStatus.textContent = `✅ Foto siap (${(photoBase64.length / 1024).toFixed(0)} KB)`;
+                                photoStatus.classList.remove('hidden');
+                                photoStatus.className = 'text-[11px] text-green-600 mt-1 font-semibold';
+                            }
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
                 };
+
+                photoBtn.onclick = () => photoInput.click();
+                photoInput.onchange = (e) => handlePhotoFile(e.target.files[0]);
+
+                if (photoRetake) {
+                    photoRetake.onclick = () => {
+                        photoBase64 = null;
+                        photoPreview.classList.add('hidden');
+                        photoBtn.classList.remove('hidden');
+                        if (photoStatus) photoStatus.classList.add('hidden');
+                        photoInput.value = '';
+                    };
+                }
 
                 document.getElementById('route-delivered-submit').onclick = () => {
                     const namaPengirim = document.getElementById('route-delivered-pengirim').value.trim();
@@ -1243,6 +1367,19 @@
                         document.getElementById('route-delivered-penerima').placeholder = '⚠ Nama penerima wajib diisi!';
                         return;
                     }
+                    if (!photoBase64) {
+                        if (photoBtn) {
+                            photoBtn.classList.remove('hidden');
+                            photoBtn.classList.add('ring-2', 'ring-red-300', 'border-red-400');
+                        }
+                        if (photoLabel) photoLabel.textContent = '⚠ Foto bukti wajib diambil!';
+                        if (photoStatus) {
+                            photoStatus.textContent = '⚠ Harap ambil foto bukti penerimaan terlebih dahulu.';
+                            photoStatus.classList.remove('hidden');
+                            photoStatus.className = 'text-[11px] text-red-500 mt-1 font-semibold';
+                        }
+                        return;
+                    }
                     const mapsUrl = gpsCoords
                         ? `https://www.google.com/maps?q=${gpsCoords.lat},${gpsCoords.lng}`
                         : '';
@@ -1253,7 +1390,8 @@
                         tglDiterima,
                         lat: gpsCoords ? gpsCoords.lat : '',
                         lng: gpsCoords ? gpsCoords.lng : '',
-                        mapsUrl
+                        mapsUrl,
+                        photoBase64
                     });
                 };
                 document.getElementById('route-delivered-close').onclick = () => {
@@ -1320,9 +1458,17 @@
                     return st === 'Ready To Ship' || st === 'On-Delivery';
                 });
 
+                // ── Filter per driver: jika login sebagai DRIVER, hanya tampilkan rute miliknya ──
+                const visibleRows = (currentUserRole === 'DRIVER' && currentDriverName)
+                    ? activeRows.filter(r => String(r[9] || '').trim().toLowerCase() === currentDriverName.toLowerCase())
+                    : activeRows;
+
                 const cardArea = document.getElementById('route-card-area');
 
-                if (activeRows.length === 0) {
+                if (visibleRows.length === 0) {
+                    const emptyMsg = (currentUserRole === 'DRIVER' && currentDriverName)
+                        ? `Tidak ada rute aktif untuk <b>${escapeHtml(currentDriverName)}</b>.`
+                        : 'Semua PO sudah selesai atau belum ada yang siap dikirim.';
                     cardArea.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-20 text-center">
                         <svg class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1332,7 +1478,7 @@
                                 d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2.5 1.5M13 16H4m9 0l2.5 1.5M13 16V9h3l3 3v4h-3"/>
                         </svg>
                         <p class="text-lg font-semibold text-gray-400">Tidak ada pengiriman aktif</p>
-                        <p class="text-sm text-gray-400 mt-1">Semua PO sudah selesai atau belum ada yang siap dikirim.</p>
+                        <p class="text-sm text-gray-400 mt-1">${emptyMsg}</p>
                     </div>`;
                     return;
                 }
@@ -1343,7 +1489,7 @@
                 const groupOrder = [];   // urutan driver pertama kali muncul
                 const noDriverRows = [];
 
-                activeRows.forEach(r => {
+                visibleRows.forEach(r => {
                     const driverName = String(r[9] || '').trim();
                     if (!driverName) { noDriverRows.push(r); return; }
                     if (!groups[driverName]) { groups[driverName] = []; groupOrder.push(driverName); }
@@ -1728,6 +1874,7 @@
             try {
                 const res = await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({
                         action      : 'startDelivery',
@@ -1800,7 +1947,7 @@
             const formData = await routeShowDeliveredModal(noPO);
             if (!formData) return; // user klik Batal
 
-            const { namaPengirim, namaPenerima, tglDiterima, lat, lng, mapsUrl } = formData;
+            const { namaPengirim, namaPenerima, tglDiterima, lat, lng, mapsUrl, photoBase64 } = formData;
 
             const btn  = document.getElementById(`route-btn-${idx}`);
             const card = document.getElementById(`route-card-${idx}`);
@@ -1825,6 +1972,7 @@
             try {
                 const res = await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({
                         action      : 'deliveryDone',
@@ -1842,7 +1990,8 @@
                         jamTiba,
                         lokasiTibaLat : lat,
                         lokasiTibaLng : lng,
-                        lokasiTibaMapsUrl : mapsUrl
+                        lokasiTibaMapsUrl : mapsUrl,
+                        fotoBukti     : photoBase64 || ''
                     })
                 });
                 const result = await res.json();
@@ -1861,8 +2010,9 @@
                         setTimeout(() => card.remove(), 420);
                     }
                     const lokasiInfo = mapsUrl ? `\nLokasi Tiba: ${mapsUrl}` : '';
+                    const fotoInfo = photoBase64 ? '\n📸 Foto bukti penerimaan dicatat.' : '';
                     showAlert('success', '✅ Pengantaran Selesai!',
-                        `PO ${noPO} dicatat Done.\nNama Pengirim: ${namaPengirim}\nNama Penerima: ${namaPenerima}\nTgl Diterima: ${tglKonfirmasi} | Jam Tiba: ${jamTiba}${lokasiInfo}`);
+                        `PO ${noPO} dicatat Done.\nNama Pengirim: ${namaPengirim}\nNama Penerima: ${namaPenerima}\nTgl Diterima: ${tglKonfirmasi} | Jam Tiba: ${jamTiba}${lokasiInfo}${fotoInfo}`);
 
                     setTimeout(() => {
                         const grid = document.getElementById('route-cards-grid');
@@ -1903,6 +2053,7 @@
             try {
                 const res = await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({
                         action : 'cancelDelivery',
@@ -2616,6 +2767,7 @@
             try {
                 const res = await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(payload)
                 });
@@ -3416,6 +3568,7 @@
                 try {
                     const response = await fetch(API_URLS.purchaseOrder, {
                         method: 'POST',
+                    redirect: 'follow',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify(payload)
                     });
@@ -3720,6 +3873,7 @@
                 try {
                     const response = await fetch(API_URLS.purchaseOrder, {
                         method: 'POST',
+                    redirect: 'follow',
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify(payload)
                     });
@@ -6964,6 +7118,7 @@
             try {
                 const response = await fetch(INBOUND_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(payload)
                 });
@@ -7255,6 +7410,7 @@
             try {
                 const response = await fetch(API_URLS.reportStatus, {
                     method: 'POST',
+                    redirect: 'follow',
                     body: JSON.stringify({ action: 'closePO', token: sessionToken, poNumber }),
                 });
                 const result = await response.json();
@@ -7330,6 +7486,7 @@
             try {
                 const response = await fetch(API_URLS.reportStatus, {
                     method: 'POST',
+                    redirect: 'follow',
                     body: JSON.stringify({ action: 'closeRO', token: sessionToken, noRO }),
                 });
                 const result = await response.json();
@@ -7482,6 +7639,7 @@
             try {
                 const response = await fetch(WEB_APP_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain untuk avoid CORS preflight
                     body: JSON.stringify(payload)
                 });
@@ -8067,6 +8225,7 @@
             try {
                 const response = await fetch(RECEIVE_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(payload),
                 });
@@ -8153,6 +8312,7 @@
             try {
                 const res = await fetch(PO_GAS_URL, {
                     method: 'POST',
+                    redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({ action: 'validateSession', token: savedToken })
                 });
@@ -8160,16 +8320,22 @@
                 if (data && data.success && data.role === savedRole) {
                     currentUserRole = savedRole;
                     sessionToken = savedToken;
+                    // Restore nama driver dari sesi sebelumnya
+                    if (savedRole === 'DRIVER') {
+                        currentDriverName = sessionStorage.getItem('currentDriverName') || '';
+                    }
                     startApp();
                 } else {
                     sessionStorage.removeItem('currentUserRole');
                     sessionStorage.removeItem('sessionToken');
+                    sessionStorage.removeItem('currentDriverName');
                 }
             } catch (e) {
                 // Gagal terhubung — biarkan user login ulang manual daripada
                 // memberi akses berdasarkan asumsi.
                 sessionStorage.removeItem('currentUserRole');
                 sessionStorage.removeItem('sessionToken');
+                sessionStorage.removeItem('currentDriverName');
             }
         })();
     </script>
