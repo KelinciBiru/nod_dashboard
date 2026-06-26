@@ -299,8 +299,8 @@
                                 PO</button>
                             <button onclick="navTo('Form Pengembalian Barang')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Form RO</button>
-                            <button onclick="navTo('Receive PO')"
-                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Receive
+                            <button id="sub-receive-po" onclick="navTo('Receive PO')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition hidden">Receive
                                 PO</button>
                             <button onclick="navTo('Report Status')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report
@@ -352,6 +352,7 @@
                         </svg>
                         Process PO
                     </button>
+
 
                 </nav>
 
@@ -546,13 +547,15 @@
             }
 
             if (currentUserRole === 'PO_User') {
-                // Staff: hanya bisa akses Purchase Order, Process PO TERSEMBUNYI
+                // Staff: hanya bisa akses Purchase Order (termasuk Receive PO), Process PO TERSEMBUNYI
                 document.getElementById('menu-inventory').classList.add('hidden');
                 document.getElementById('menu-plan-task').classList.add('hidden');
                 document.getElementById('menu-maintenance').classList.add('hidden');
                 document.getElementById('menu-process-po').classList.add('hidden');
                 document.getElementById('menu-process-inbound').classList.add('hidden');
                 document.getElementById('menu-team-delivery').classList.add('hidden');
+                // Tampilkan Receive PO di bawah submenu Purchase Order
+                document.getElementById('sub-receive-po').classList.remove('hidden');
                 // Buka PO submenu otomatis
                 document.getElementById('po-sub').classList.remove('hidden');
                 document.getElementById('arrow-po').textContent = '▲';
@@ -563,7 +566,7 @@
                 if (bellBtn) bellBtn.classList.remove('hidden');
                 loadNotifReadyToShip();
             } else if (currentUserRole === 'WAREHOUSE') {
-                // Team Warehouse: hanya tampilkan menu Process PO
+                // Team Warehouse: hanya tampilkan menu Process PO & Process Inbound
                 document.getElementById('menu-inventory').classList.add('hidden');
                 document.getElementById('menu-plan-task').classList.add('hidden');
                 document.getElementById('menu-maintenance').classList.add('hidden');
@@ -594,6 +597,8 @@
                 // ADMIN: semua menu tampil termasuk Process PO & Team Delivery
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
+                // Tampilkan Receive PO di bawah submenu Purchase Order
+                document.getElementById('sub-receive-po').classList.remove('hidden');
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
                 navTo(_getRestorePage('Dashboard'));
             }
@@ -612,6 +617,9 @@
             // Validasi: halaman tersimpan harus sesuai hak akses role saat ini,
             // supaya tidak nyasar ke menu yang sebenarnya terkunci untuk role ini.
             if ((saved === 'Process PO' || saved === 'Process Inbound') && currentUserRole === 'PO_User') {
+                return defaultPage;
+            }
+            if (saved === 'Receive PO' && !(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
                 return defaultPage;
             }
             if ((saved === 'Route' || saved === 'Report Finish') &&
@@ -905,6 +913,10 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Process PO" hanya dapat diakses oleh Team Warehouse dan Admin.');
                 return;
             }
+            if (pageName === 'Receive PO' && !(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
+                showAlert('error', 'Akses Ditolak', 'Menu "Receive PO" hanya dapat diakses oleh Admin dan PO User.');
+                return;
+            }
             if (pageName === 'Process Inbound' && currentUserRole === 'PO_User') {
                 showAlert('error', 'Akses Ditolak', 'Menu "Process Inbound" hanya dapat diakses oleh Team Warehouse dan Admin.');
                 return;
@@ -924,7 +936,7 @@
                 'Report Maintenance': 'Report Maintenance',
                 'Purchase Order': 'Form Purchase Order',
                 'Form Pengembalian Barang': 'Form Pengembalian Barang',
-                'Receive PO': 'Receive PO',
+                'Receive PO': 'Receive PO (Verifikasi Penerimaan)',
                 'Report Status': 'Report Status PO',
                 'Process PO': 'Proses PO Masuk',
                 'Process Inbound': 'Process Inbound',
@@ -956,6 +968,7 @@
                 case 'Form Pengembalian Barang': await showFormRetur(); break;
                 case 'Report Status': await showReportStatus(); break;
                 case 'Process PO': await showProcessPO(); break;
+                case 'Receive PO': await showReceivePO(); break;
                 case 'Process Inbound': await showProcessInbound(); break;
                 case 'Route': await showTeamDeliveryRoute(); break;
                 case 'Report Finish': await showTeamDeliveryReportFinish(); break;
@@ -2106,6 +2119,8 @@
             }
             if (modal) modal.classList.add('hidden');
             document.body.style.overflow = '';
+            // Hentikan kamera Receive PO jika aktif
+            if (typeof stopReceiveQRScan === 'function') stopReceiveQRScan();
         }
 
         /**
@@ -4773,6 +4788,7 @@
                     <option value="Rizal">Rizal</option>
                     <option value="Helmi">Helmi</option>
                     <option value="Raka">Raka</option>
+                    <option value="Imam Suhada">Imam Suhada</option>
                 </select>
             </div>
         </div>
@@ -7534,6 +7550,560 @@
                 }
             }
         }
+        // =========================================================================
+        // RECEIVE PO — URL GAS TERPISAH (bukan PO_GAS_URL)
+        // =========================================================================
+        const RECEIVE_GAS_URL = 'https://script.google.com/macros/s/AKfycbwuGaC6W1j8SxzxW1YOyNeqceyPWg1c2JqgLVay33lxvo6-NddFJZsc_53jCeNFOXxT/exec'; // Ganti dengan URL GAS Receive PO
+
+        // =========================================================================
+        // HALAMAN: RECEIVE PO
+        // =========================================================================
+        let _receiveQRStream = null;
+
+        async function showReceivePO() {
+            document.getElementById('content-area').innerHTML = `
+        <h1 class="text-2xl font-bold text-gray-700 mb-6">Receive PO</h1>
+
+        <!-- Scan QR Delivery Order -->
+        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
+            <label class="block text-xs font-bold text-gray-500 mb-2">SCAN QR CODE — DELIVERY ORDER</label>
+            <div class="flex flex-col gap-3">
+                <div id="recv-qr-container" class="hidden">
+                    <p class="text-xs text-gray-400 mt-1 mb-2">Arahkan kamera ke QR Code pada Delivery Order PDF</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button id="btn-start-qr-recv" onclick="startReceiveQRScan()"
+                        class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition">
+                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM4 9.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+                        </svg>
+                        Buka Kamera Scan QR
+                    </button>
+                    <button id="btn-stop-qr-recv" onclick="stopReceiveQRScan()" class="hidden flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-lg transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        Stop Kamera
+                    </button>
+                </div>
+                <p id="recv-qr-status" class="text-xs text-gray-400"></p>
+            </div>
+        </div>
+
+        <!-- Baris: Tanggal Terima + No PO -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">TANGGAL TERIMA</label>
+                <input type="date" id="recv-tgl-terima" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none"
+                    value="${new Date().toISOString().split('T')[0]}">
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">NO. PO</label>
+                <input type="text" id="recv-no-po" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-gray-50" placeholder="Otomatis terisi dari QR...">
+            </div>
+        </div>
+
+        <!-- Baris: Crew Packing (auto dari QR) + Crew Checking (manual) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">CREW PACKING <span class="font-normal text-gray-400">(dari Delivery Order)</span></label>
+                <input type="text" id="recv-crew-packing" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">CREW CHECKING</label>
+                <input type="text" id="recv-crew-checking" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none" placeholder="Isi nama crew checking...">
+            </div>
+        </div>
+
+        <!-- Baris: Ordered By, Ship To, Shipping Date -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">ORDERED BY</label>
+                <input type="text" id="recv-ordered-by" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">SHIP TO</label>
+                <input type="text" id="recv-ship" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">SHIPPING DATE</label>
+                <input type="text" id="recv-shipping-date" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+            </div>
+        </div>
+
+        <!-- Tabel Verifikasi -->
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200">
+            <h2 class="text-sm font-bold text-gray-700 mb-3">Detail Item — Verifikasi Penerimaan</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-gray-800 text-white">
+                            <th class="p-2 text-center rounded-tl-lg" style="width:36px">✓/✗</th>
+                            <th class="p-2 text-left" style="min-width:200px">Nama Barang</th>
+                            <th class="p-2 text-center">Qty Outbound</th>
+                            <th class="p-2 text-center">Qty Received</th>
+                            <th class="p-2 text-center">UOM</th>
+                            <th class="p-2 text-left">Description</th>
+                            <th class="p-2 text-left rounded-tr-lg" style="min-width:120px">Remark</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recv-table-body">
+                        <tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Scan QR Code Delivery Order untuk mengisi data secara otomatis</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+                <button id="btn-generate-recv-pdf" onclick="generateReceivedPOPDF()"
+                    class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto sm:ml-auto">
+                    <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Received PO
+                </button>
+                <button onclick="simpanReceiveFinal()"
+                    class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto">
+                    <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Receive
+                </button>
+            </div>
+        </div>
+    `;
+        }
+
+        // ─── Render baris tabel Receive PO dari data item ───────────────────────────
+        function renderReceiveTableRows(items) {
+            const tbody = document.getElementById('recv-table-body');
+            if (!tbody) return;
+            if (!items || items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Tidak ada item ditemukan dalam QR Code.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            items.forEach((it, idx) => {
+                const qtyOut = parseFloat(it.qty) || 0;
+                const tr = document.createElement('tr');
+                tr.className = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                tr.dataset.idx = idx;
+                tr.dataset.qtyOutbound = qtyOut;
+                tr.innerHTML = `
+                    <td class="p-2 text-center align-middle">
+                        <span id="recv-check-${idx}" class="text-base font-bold">—</span>
+                    </td>
+                    <td class="p-2 align-middle font-medium text-gray-800">${escapeHtml(it.nama || '-')}</td>
+                    <td class="p-2 text-center align-middle text-gray-700">${escapeHtml(String(it.qty || '-'))}</td>
+                    <td class="p-2 text-center align-middle">
+                        <input type="number" min="0" step="1"
+                            class="recv-qty-received w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                            data-idx="${idx}"
+                            data-qty-outbound="${qtyOut}"
+                            value="${qtyOut}"
+                            oninput="updateReceiveCheck(this)">
+                    </td>
+                    <td class="p-2 text-center align-middle text-gray-500">${escapeHtml(it.uom || '-')}</td>
+                    <td class="p-2 align-middle text-gray-500">${escapeHtml(it.description || '-')}</td>
+                    <td class="p-2 align-middle">
+                        <input type="text"
+                            class="recv-remark-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                            placeholder="Remark..."
+                            value="${escapeHtml(it.remark || '')}">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+                // Initial check
+                updateReceiveCheckByIdx(idx, qtyOut, qtyOut);
+            });
+        }
+
+        // ─── Update ikon ✓/✗ saat qty received berubah ────────────────────────────
+        function updateReceiveCheck(input) {
+            const idx = input.dataset.idx;
+            const qtyOut = parseFloat(input.dataset.qtyOutbound) || 0;
+            const qtyRec = parseFloat(input.value) || 0;
+            updateReceiveCheckByIdx(idx, qtyOut, qtyRec);
+        }
+        function updateReceiveCheckByIdx(idx, qtyOut, qtyRec) {
+            const span = document.getElementById('recv-check-' + idx);
+            if (!span) return;
+            if (qtyRec === qtyOut && qtyOut > 0) {
+                span.textContent = '✅';
+                span.title = 'Sesuai';
+            } else {
+                span.textContent = '❌';
+                span.title = 'Tidak Sesuai (Outbound: ' + qtyOut + ', Received: ' + qtyRec + ')';
+            }
+        }
+
+        // ─── Parse teks QR Code Delivery Order jadi object data ───────────────────
+        function parseDeliveryOrderQRText(text) {
+            const result = { noPO: '', tglProses: '', crewPacking: '', orderedBy: '', shipTo: '', shippingDate: '', items: [] };
+            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+            let inItems = false;
+            let currentItem = null;
+            for (const line of lines) {
+                if (line.startsWith('No. PO:')) { result.noPO = line.replace('No. PO:', '').trim(); continue; }
+                if (line.startsWith('Tgl Proses:')) { result.tglProses = line.replace('Tgl Proses:', '').trim(); continue; }
+                if (line.startsWith('Crew Packing:')) { result.crewPacking = line.replace('Crew Packing:', '').trim(); continue; }
+                if (line.startsWith('Ordered By:')) { result.orderedBy = line.replace('Ordered By:', '').trim(); continue; }
+                if (line.startsWith('Ship To:')) { result.shipTo = line.replace('Ship To:', '').trim(); continue; }
+                if (line.startsWith('Shipping Date:')) { result.shippingDate = line.replace('Shipping Date:', '').trim(); continue; }
+                if (line === '--- ITEM ---') { inItems = true; continue; }
+                if (line.startsWith('===')) { inItems = false; continue; }
+                if (inItems) {
+                    const itemMatch = line.match(/^(\d+)\.\s+(.+?)\s+-\s+(\S+)(?:\s+(.*))?$/);
+                    if (itemMatch) {
+                        if (currentItem) result.items.push(currentItem);
+                        const uomDesc = (itemMatch[4] || '').trim();
+                        currentItem = { nama: itemMatch[2].trim(), qty: itemMatch[3], uom: uomDesc, description: '' };
+                    } else if (line.startsWith('Desc:') && currentItem) {
+                        currentItem.description = line.replace('Desc:', '').trim();
+                    } else if (line.startsWith('Ket:') && currentItem) {
+                        currentItem.remark = line.replace('Ket:', '').trim();
+                    }
+                }
+            }
+            if (currentItem) result.items.push(currentItem);
+            return result;
+        }
+
+        // ─── Isi form Receive PO dari data hasil parse QR ──────────────────────────
+        function fillReceivePOFromQR(doData) {
+            const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+            setVal('recv-no-po', doData.noPO);
+            setVal('recv-crew-packing', doData.crewPacking);
+            setVal('recv-ordered-by', doData.orderedBy);
+            setVal('recv-ship', doData.shipTo);
+            setVal('recv-shipping-date', doData.shippingDate);
+            renderReceiveTableRows(doData.items);
+            document.getElementById('recv-qr-status').textContent = '✅ Data berhasil diisi dari QR Code Delivery Order.';
+        }
+
+        let _recvHtml5QR = null;
+
+        async function startReceiveQRScan() {
+            const container = document.getElementById('recv-qr-container');
+            const btnStart = document.getElementById('btn-start-qr-recv');
+            const btnStop = document.getElementById('btn-stop-qr-recv');
+            const status = document.getElementById('recv-qr-status');
+            if (!container) return;
+
+            // Buat elemen video/div untuk html5-qrcode jika belum ada
+            let qrDiv = document.getElementById('recv-qr-reader');
+            if (!qrDiv) {
+                qrDiv = document.createElement('div');
+                qrDiv.id = 'recv-qr-reader';
+                qrDiv.style.width = '100%';
+                qrDiv.style.maxWidth = '360px';
+                container.innerHTML = '';
+                container.appendChild(qrDiv);
+            }
+
+            container.classList.remove('hidden');
+            btnStart.classList.add('hidden');
+            btnStop.classList.remove('hidden');
+            status.textContent = 'Kamera aktif — arahkan ke QR Code Delivery Order...';
+
+            try {
+                _recvHtml5QR = new Html5Qrcode('recv-qr-reader');
+                await _recvHtml5QR.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => {
+                        stopReceiveQRScan();
+                        const doData = parseDeliveryOrderQRText(decodedText);
+                        fillReceivePOFromQR(doData);
+                    },
+                    () => {} // error frame — abaikan
+                );
+            } catch (err) {
+                status.textContent = '⚠️ Kamera tidak dapat diakses: ' + err.message;
+                container.classList.add('hidden');
+                btnStart.classList.remove('hidden');
+                btnStop.classList.add('hidden');
+            }
+        }
+
+        function stopReceiveQRScan() {
+            if (_recvHtml5QR) {
+                const inst = _recvHtml5QR;
+                _recvHtml5QR = null;
+                inst.stop().then(() => { try { inst.clear(); } catch (_) {} }).catch(() => {});
+            }
+            const container = document.getElementById('recv-qr-container');
+            const btnStart = document.getElementById('btn-start-qr-recv');
+            const btnStop = document.getElementById('btn-stop-qr-recv');
+            if (container) container.classList.add('hidden');
+            if (btnStart) btnStart.classList.remove('hidden');
+            if (btnStop) btnStop.classList.add('hidden');
+        }
+
+        // Receive QR scan juga dihentikan oleh stopQRCamera yang sudah ada di navTo
+        // (stopQRCamera dipanggil otomatis setiap kali pindah halaman)
+
+        // ─── Generate PDF "Received PO" (hanya item bertanda ❌) ──────────────────
+        async function generateReceivedPOPDF() {
+            const tglTerima = document.getElementById('recv-tgl-terima')?.value || '';
+            const noPO = document.getElementById('recv-no-po')?.value?.trim() || '';
+            const crewPacking = document.getElementById('recv-crew-packing')?.value?.trim() || '';
+            const crewChecking = document.getElementById('recv-crew-checking')?.value?.trim() || '';
+            const orderedBy = document.getElementById('recv-ordered-by')?.value?.trim() || '';
+            const shipTo = document.getElementById('recv-ship')?.value?.trim() || '';
+            const shippingDate = document.getElementById('recv-shipping-date')?.value?.trim() || '';
+
+            if (!tglTerima) { showAlert('warning', 'Data Belum Lengkap', 'Tanggal Terima belum diisi.'); return; }
+
+            // Kumpulkan hanya item yang ❌ (tidak sesuai)
+            const rows = document.querySelectorAll('#recv-table-body tr');
+            const mismatchItems = [];
+            rows.forEach(row => {
+                const checkSpan = row.querySelector('[id^="recv-check-"]');
+                if (!checkSpan || checkSpan.textContent !== '❌') return;
+                const cells = row.querySelectorAll('td');
+                if (cells.length < 6) return;
+                const qtyRecInput = row.querySelector('.recv-qty-received');
+                const remarkInput = row.querySelector('.recv-remark-input');
+                mismatchItems.push({
+                    nama: cells[1].textContent.trim(),
+                    qtyOutbound: cells[2].textContent.trim(),
+                    qtyReceived: qtyRecInput ? qtyRecInput.value : cells[3].textContent.trim(),
+                    uom: cells[4].textContent.trim(),
+                    description: cells[5].textContent.trim(),
+                    remark: remarkInput ? remarkInput.value.trim() : '',
+                });
+            });
+
+            if (mismatchItems.length === 0) {
+                showAlert('info', 'Semua Item Sesuai', 'Tidak ada item dengan ketidaksesuaian. PDF Received PO tidak perlu dibuat.');
+                return;
+            }
+
+            const btn = document.getElementById('btn-generate-recv-pdf');
+            if (btn) { btn.disabled = true; btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Memproses...`; }
+            const resetBtn = () => { if (btn) { btn.disabled = false; btn.innerHTML = `<svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Received PO`; } };
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const marginX = 14;
+
+                try { doc.addImage(HEADER_BG_IMG, 'PNG', 0, 0, pageWidth, 32); } catch (_) {}
+
+                const logoData = await loadImageAsDataURL(NOD_LOGO_URL);
+                let logoBottomY = 18;
+                if (logoData) {
+                    try {
+                        const dims = getImageFitDims(logoData, 26, 14);
+                        doc.addImage(logoData.dataUrl, logoData.format, marginX, 8, dims.w, dims.h);
+                        logoBottomY = 8 + dims.h;
+                    } catch (_) { drawFallbackLogo(doc, marginX); logoBottomY = 22; }
+                } else { drawFallbackLogo(doc, marginX); logoBottomY = 22; }
+
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(7.5);
+                doc.setTextColor(120, 113, 108);
+                doc.text('Your All-in-One Drink Maker', marginX, logoBottomY + 4);
+
+                doc.setTextColor(17, 24, 39);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(16);
+                doc.text('RECEIVED PO — MISMATCH', pageWidth - marginX, 16, { align: 'right' });
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(107, 114, 128);
+                doc.text('No. PO: ' + (noPO || '-'), pageWidth - marginX, 22, { align: 'right' });
+
+                doc.setDrawColor(229, 231, 235);
+                doc.setLineWidth(0.4);
+                doc.line(marginX, 28, pageWidth - marginX, 28);
+
+                let y = 36;
+                doc.setFontSize(10);
+                doc.setTextColor(31, 41, 55);
+
+                const infoLeft = [
+                    ['Tanggal Terima', formatTanggalIndo(tglTerima)],
+                    ['No. PO', noPO || '-'],
+                    ['Crew Packing', crewPacking || '-'],
+                    ['Crew Checking', crewChecking || '-'],
+                ];
+                const infoRight = [
+                    ['Ordered By', orderedBy || '-'],
+                    ['Ship To', shipTo || '-'],
+                    ['Shipping Date', shippingDate || '-'],
+                ];
+
+                const colLeftX = marginX, colLeftLabelW = 34;
+                const colRightX = pageWidth / 2 + 4, colRightLabelW = 28;
+                const lineH = 6;
+
+                infoLeft.forEach((row, i) => {
+                    const yy = y + i * lineH;
+                    doc.setFont('helvetica', 'bold'); doc.text(row[0], colLeftX, yy);
+                    doc.setFont('helvetica', 'normal'); doc.text(':', colLeftX + colLeftLabelW, yy);
+                    doc.text(String(row[1] || '-'), colLeftX + colLeftLabelW + 3, yy);
+                });
+                infoRight.forEach((row, i) => {
+                    const yy = y + i * lineH;
+                    doc.setFont('helvetica', 'bold'); doc.text(row[0], colRightX, yy);
+                    doc.setFont('helvetica', 'normal'); doc.text(':', colRightX + colRightLabelW, yy);
+                    const wrapped = doc.splitTextToSize(String(row[1] || '-'), pageWidth - marginX - (colRightX + colRightLabelW + 3));
+                    doc.text(wrapped, colRightX + colRightLabelW + 3, yy);
+                });
+
+                y += Math.max(infoLeft.length, infoRight.length) * lineH + 6;
+
+                const tableBody = mismatchItems.map((it, idx) => [
+                    String(idx + 1), it.nama, it.qtyOutbound, it.qtyReceived, it.uom, it.description || '-', it.remark || '-'
+                ]);
+
+                doc.autoTable({
+                    startY: y,
+                    head: [['No', 'Nama Barang', 'Qty Outbound', 'Qty Received', 'UOM', 'Description', 'Remark']],
+                    body: tableBody,
+                    theme: 'grid',
+                    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle' },
+                    headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: 9 },
+                        2: { halign: 'center', cellWidth: 22 },
+                        3: { halign: 'center', cellWidth: 22 },
+                        4: { halign: 'center', cellWidth: 14 },
+                        6: { cellWidth: 28 },
+                    },
+                    margin: { left: marginX, right: marginX },
+                });
+
+                let finalY = doc.lastAutoTable.finalY + 18;
+                const pageHeight = doc.internal.pageSize.getHeight();
+                if (finalY > pageHeight - 90) { doc.addPage(); finalY = 30; }
+
+                const sigColW = (pageWidth - marginX * 2) / 2;
+                const sigLabels = ['Diterima oleh,', 'Crew Checking,'];
+                const sigNames = [shipTo || '', crewChecking || ''];
+                sigLabels.forEach((label, i) => {
+                    const x = marginX + i * sigColW;
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(31, 41, 55);
+                    doc.text(label, x, finalY);
+                    doc.line(x, finalY + 18, x + sigColW - 10, finalY + 18);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
+                });
+
+                const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(180, 180, 180);
+                doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
+
+                const fileName = `Received_PO_${noPO || 'PO'}_${tglTerima || ''}.pdf`;
+                doc.save(fileName);
+            } catch (err) {
+                showAlert('error', 'Gagal Generate PDF', err.message);
+            } finally {
+                resetBtn();
+            }
+        }
+
+        // ─── Simpan Receive PO ke GAS (Received_Log + update status Closed) ────────
+        async function simpanReceiveFinal() {
+            const tglTerima = document.getElementById('recv-tgl-terima')?.value || '';
+            const noPO = document.getElementById('recv-no-po')?.value?.trim() || '';
+            const crewPacking = document.getElementById('recv-crew-packing')?.value?.trim() || '';
+            const crewChecking = document.getElementById('recv-crew-checking')?.value?.trim() || '';
+            const orderedBy = document.getElementById('recv-ordered-by')?.value?.trim() || '';
+            const shipTo = document.getElementById('recv-ship')?.value?.trim() || '';
+            const shippingDate = document.getElementById('recv-shipping-date')?.value?.trim() || '';
+
+            if (!tglTerima) { showAlert('warning', 'Data Belum Lengkap', 'Tanggal Terima belum diisi.'); return; }
+            if (!noPO) { showAlert('warning', 'Data Belum Lengkap', 'No. PO belum terisi. Scan QR Code terlebih dahulu.'); return; }
+            if (!crewChecking) { showAlert('warning', 'Data Belum Lengkap', 'Crew Checking belum diisi.'); return; }
+
+            const rows = document.querySelectorAll('#recv-table-body tr');
+            const hasRealRows = Array.from(rows).some(row => row.cells.length >= 5 && !row.querySelector('td[colspan]'));
+            if (!hasRealRows) { showAlert('warning', 'Tabel Kosong', 'Scan QR Code terlebih dahulu untuk mengisi data item.'); return; }
+
+            const items = [];
+            rows.forEach(row => {
+                if (row.cells.length < 6 || row.querySelector('td[colspan]')) return;
+                const cells = row.querySelectorAll('td');
+                const checkSpan = row.querySelector('[id^="recv-check-"]');
+                const qtyRecInput = row.querySelector('.recv-qty-received');
+                const remarkInput = row.querySelector('.recv-remark-input');
+                const status = checkSpan ? (checkSpan.textContent === '✅' ? 'Sesuai' : 'Tidak Sesuai') : '-';
+                items.push({
+                    namaBarang: cells[1].textContent.trim(),
+                    qtyOutbound: cells[2].textContent.trim(),
+                    qtyReceived: qtyRecInput ? qtyRecInput.value : cells[3].textContent.trim(),
+                    uom: cells[4].textContent.trim(),
+                    description: cells[5].textContent.trim(),
+                    remark: remarkInput ? remarkInput.value.trim() : '',
+                    status: status,
+                });
+            });
+
+            const ok = await showConfirm(
+                'Simpan & Receive PO?',
+                `${items.length} item akan disimpan ke Received_Log dan status PO ${noPO} akan diubah menjadi "Closed".`
+            );
+            if (!ok) return;
+
+            const saveBtn = document.querySelector('button[onclick="simpanReceiveFinal()"]');
+            const origHTML = saveBtn ? saveBtn.innerHTML : '';
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Menyimpan...`; }
+
+            const payload = {
+                action: 'simpanReceive',
+                token: sessionToken,
+                noPO,
+                orderedBy,
+                shipTo,
+                shippingDate,
+                tanggalTerima: tglTerima,
+                crewPacking,
+                crewChecking,
+                updatePOStatus: true,
+                newPOStatus: 'Closed',
+                items,
+            };
+
+            try {
+                const response = await fetch(RECEIVE_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload),
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    const statusUpdated = result.statusUpdated === true;
+                    // Update badge di DOM Report Status jika ada
+                    const statusCell = document.getElementById(`status-${noPO}`);
+                    if (statusCell) {
+                        statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-700">Closed</span>`;
+                    }
+                    const rowEl = document.getElementById(`row-${noPO}`);
+                    if (rowEl) { rowEl.classList.remove('hover:bg-amber-50'); rowEl.classList.add('bg-gray-100'); }
+
+                    showAlert('success', '✅ Berhasil Diterima!',
+                        `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? '\nStatus PO ' + noPO + ' → ✅ Closed' : ''}`
+                    );
+
+                    setTimeout(() => {
+                        ['recv-no-po','recv-crew-packing','recv-crew-checking','recv-ordered-by','recv-ship','recv-shipping-date'].forEach(id => {
+                            const el = document.getElementById(id); if (el) el.value = '';
+                        });
+                        document.getElementById('recv-tgl-terima').value = new Date().toISOString().split('T')[0];
+                        document.getElementById('recv-table-body').innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Scan QR Code Delivery Order untuk mengisi data secara otomatis</td></tr>`;
+                        document.getElementById('recv-qr-status').textContent = '';
+                    }, 1500);
+                } else {
+                    showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
+                }
+            } catch (err) {
+                showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
+            } finally {
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Receive`; }
+            }
+        }
+
         // =========================================================================
         // FITUR: SHARE TO WHATSAPP
         // =========================================================================
