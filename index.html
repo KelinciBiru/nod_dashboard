@@ -452,7 +452,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyhxR3x-nYNXzGufO3ehto3k-SKVmTtzZRSt67rojQB0BPQCBajwspxulnlx1IFIG4/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbz5iGo5nT_-57UetCz2PSI6phrJ4fbvGip8XeUouu8FAHvYopqqLAnj7LdQYcuaQtgj/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -809,13 +809,13 @@
             try {
                 let data = [];
                 try {
-                    const res1 = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                    const res1 = await fetch(API_URLS.reportStatus + '?action=getPOData', { redirect: 'follow' });
                     const raw1 = await res1.json();
                     data = Array.isArray(raw1) ? raw1 : [];
                 } catch (_) { }
 
                 if (data.length === 0) {
-                    const res2 = await fetch(API_URLS.reportStatus);
+                    const res2 = await fetch(API_URLS.reportStatus, { redirect: 'follow' });
                     const raw2 = await res2.json();
                     data = Array.isArray(raw2) ? raw2 : [];
                 }
@@ -1439,7 +1439,7 @@
             // Backend sudah mengelompokkan & mengurutkan rute per Driver
             // (Gold = rute pertama, lalu Zona_Area terdekat / nearest-neighbor).
             try {
-                const res = await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver');
+                const res = await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' });
                 const raw = await res.json();
 
                 // raw = array of rows (dengan header di index 0)
@@ -2687,7 +2687,7 @@
             statusEl.className = 'text-xs text-amber-500 mt-2 italic';
 
             try {
-                const res = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                const res = await fetch(API_URLS.reportStatus + '?action=getPOData', { redirect: 'follow' });
                 const raw = await res.json();
                 const data = Array.isArray(raw) ? raw : [];
 
@@ -2822,7 +2822,7 @@
             const contentArea = document.getElementById('content-area');
 
             try {
-                const res = await fetch(DELIVERY_GAS_URL + '?action=getDeliveryLogToday');
+                const res = await fetch(DELIVERY_GAS_URL + '?action=getDeliveryLogToday', { redirect: 'follow' });
                 const raw = await res.json();
                 const data = Array.isArray(raw) ? raw : [];
                 const rows = data.slice(1).filter(row => row[1] !== '' && row[1] != null);
@@ -2910,7 +2910,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.stockMaster);
+                const response = await fetch(API_URLS.stockMaster, { redirect: 'follow' });
                 const data = await response.json();
                 const rows = data.slice(3);
                 const HIDDEN_KEYWORDS = ["Descaling Kit", "Sleeve Box"];
@@ -2950,7 +2950,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.reportInventory);
+                const response = await fetch(API_URLS.reportInventory, { redirect: 'follow' });
                 const data = await response.json();
 
                 let tableMingguan = `
@@ -3038,7 +3038,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.planTask);
+                const response = await fetch(API_URLS.planTask, { redirect: 'follow' });
                 const data = await response.json();
                 const taskData = data.slice(1).filter(row =>
                     row[0] && !row[0].toString().includes('Tidak ada tugas aktif') && row[0] !== ''
@@ -3114,7 +3114,7 @@
             setLoading('Memuat data KPI...');
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.reportKPI);
+                const response = await fetch(API_URLS.reportKPI, { redirect: 'follow' });
                 const data = await response.json();
 
                 function renderTable(title, startRow, endRow, colStart, colEnd) {
@@ -3197,7 +3197,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.reportMaintenance);
+                const response = await fetch(API_URLS.reportMaintenance, { redirect: 'follow' });
                 const data = await response.json();
 
                 function createTable(title, headerRow, bodyRows) {
@@ -3254,7 +3254,7 @@
 
             let namaOptions = '<option value="">-- Pilih Nama --</option>';
             try {
-                const res = await fetch(API_URLS.purchaseOrder + '?action=getNames');
+                const res = await fetch(API_URLS.purchaseOrder + '?action=getNames', { redirect: 'follow' });
                 const names = await res.json();
                 if (Array.isArray(names)) {
                     names.filter(n => n && String(n).trim() !== '').forEach(name => {
@@ -3630,7 +3630,7 @@
 
             let namaOptions = '<option value="">-- Pilih Nama --</option>';
             try {
-                const res = await fetch(API_URLS.purchaseOrder + '?action=getNames');
+                const res = await fetch(API_URLS.purchaseOrder + '?action=getNames', { redirect: 'follow' });
                 const names = await res.json();
                 if (Array.isArray(names)) {
                     names.filter(n => n && String(n).trim() !== '').forEach(name => {
@@ -4160,12 +4160,12 @@
                 try {
                     let poData = [];
                     try {
-                        const r   = await fetch(API_URLS.purchaseOrder + '?action=getReturData');
+                        const r   = await fetch(API_URLS.purchaseOrder + '?action=getReturData', { redirect: 'follow' });
                         const raw = await r.json();
                         poData = Array.isArray(raw) ? raw : [];
                     } catch (_) {}
                     if (poData.length === 0) {
-                        const r2   = await fetch(API_URLS.purchaseOrder + '?action=getPOData');
+                        const r2   = await fetch(API_URLS.purchaseOrder + '?action=getPOData', { redirect: 'follow' });
                         const raw2 = await r2.json();
                         poData = Array.isArray(raw2) ? raw2 : [];
                     }
@@ -4549,12 +4549,12 @@
                 try {
                     let poData = [];
                     try {
-                        const r = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                        const r = await fetch(API_URLS.reportStatus + '?action=getPOData', { redirect: 'follow' });
                         const raw = await r.json();
                         poData = Array.isArray(raw) ? raw : [];
                     } catch (_) { }
                     if (poData.length === 0) {
-                        const r2 = await fetch(API_URLS.reportStatus);
+                        const r2 = await fetch(API_URLS.reportStatus, { redirect: 'follow' });
                         const raw2 = await r2.json();
                         poData = Array.isArray(raw2) ? raw2 : [];
                     }
@@ -4832,13 +4832,13 @@
             try {
                 let data = [];
                 try {
-                    const res = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                    const res = await fetch(API_URLS.reportStatus + '?action=getPOData', { redirect: 'follow' });
                     const raw = await res.json();
                     data = Array.isArray(raw) ? raw : [];
                 } catch (_) { }
 
                 if (data.length === 0) {
-                    const res2 = await fetch(API_URLS.reportStatus);
+                    const res2 = await fetch(API_URLS.reportStatus, { redirect: 'follow' });
                     const raw2 = await res2.json();
                     data = Array.isArray(raw2) ? raw2 : [];
                 }
@@ -6247,7 +6247,7 @@
         async function getSourceItems() {
             if (_sourceItemsCache) return _sourceItemsCache;
             try {
-                const res = await fetch(PO_GAS_URL + '?action=getSourceItems');
+                const res = await fetch(PO_GAS_URL + '?action=getSourceItems', { redirect: 'follow' });
                 const data = await res.json();
                 _sourceItemsCache = Array.isArray(data) ? data.filter(Boolean) : [];
             } catch (_) {
@@ -7162,13 +7162,13 @@
                 // ── Fetch PO_Data ──
                 let data = [];
                 try {
-                    const res1 = await fetch(API_URLS.reportStatus + '?action=getPOData');
+                    const res1 = await fetch(API_URLS.reportStatus + '?action=getPOData', { redirect: 'follow' });
                     const raw1 = await res1.json();
                     data = Array.isArray(raw1) ? raw1 : [];
                 } catch (_) { }
 
                 if (data.length === 0) {
-                    const res2 = await fetch(API_URLS.reportStatus);
+                    const res2 = await fetch(API_URLS.reportStatus, { redirect: 'follow' });
                     const raw2 = await res2.json();
                     data = Array.isArray(raw2) ? raw2 : [];
                 }
@@ -7176,7 +7176,7 @@
                 // ── Fetch Retur_Data untuk No. RO yang Open ──
                 let retuData = [];
                 try {
-                    const retuRes = await fetch(API_URLS.purchaseOrder + '?action=getReturData');
+                    const retuRes = await fetch(API_URLS.purchaseOrder + '?action=getReturData', { redirect: 'follow' });
                     const retuRaw = await retuRes.json();
                     retuData = Array.isArray(retuRaw) ? retuRaw : [];
                 } catch (_) { }
@@ -7711,7 +7711,7 @@
         // =========================================================================
         // RECEIVE PO — URL GAS TERPISAH (bukan PO_GAS_URL)
         // =========================================================================
-        const RECEIVE_GAS_URL = 'https://script.google.com/macros/s/AKfycbwuGaC6W1j8SxzxW1YOyNeqceyPWg1c2JqgLVay33lxvo6-NddFJZsc_53jCeNFOXxT/exec'; // Ganti dengan URL GAS Receive PO
+        const RECEIVE_GAS_URL = PO_GAS_URL; // Digabung ke GAS yang sama
 
         // =========================================================================
         // HALAMAN: RECEIVE PO
