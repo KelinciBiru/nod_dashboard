@@ -452,7 +452,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbw7g1vpeBYdf7GHtdB7bJfz5bGnlOy9ZlPiK_8S5AlTBJ6ajirbztCDG7MWkeQ4MOUZ/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxZG6G_Ujr33s8yN5COzD4y1ImDBbH8rtA3igAoAC5xcd1TBea0qsNu9Dopag9f61UB/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_wXqEt8btIytESdl1uYH6TTOjzhmEMSexNY_NVZo9FlBWpbCxVjyvm4MZHqcMoK9y/exec';
@@ -1348,8 +1348,19 @@
                         camModal.id = 'inline-cam-modal';
                         camModal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
                         camModal.innerHTML = `
-                            <video id="inline-cam-video" autoplay playsinline muted
-                                style="width:100%;max-height:70vh;object-fit:cover;border-radius:8px;"></video>
+                            <div style="position:relative;width:100%;max-height:70vh;">
+                                <video id="inline-cam-video" autoplay playsinline muted
+                                    style="width:100%;max-height:70vh;object-fit:cover;border-radius:8px;"></video>
+                                <button id="inline-cam-flip"
+                                    title="Ganti Kamera"
+                                    style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.5);">
+                                    🔄
+                                </button>
+                                <div id="inline-cam-facing-label"
+                                    style="position:absolute;top:10px;left:10px;background:rgba(0,0,0,0.45);color:#fff;font-size:11px;padding:3px 9px;border-radius:12px;">
+                                    📷 Kamera Belakang
+                                </div>
+                            </div>
                             <div style="display:flex;gap:12px;margin-top:16px;">
                                 <button id="inline-cam-capture"
                                     style="background:#22c55e;color:#fff;font-weight:700;font-size:22px;border:none;border-radius:50%;width:64px;height:64px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.4);">
@@ -1364,7 +1375,16 @@
                         document.body.appendChild(camModal);
 
                         let camStream = null;
-                        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+                        let currentFacing = 'environment'; // mulai dengan kamera belakang
+
+                        const startStream = (facing) => {
+                            if (camStream) camStream.getTracks().forEach(t => t.stop());
+                            const label = document.getElementById('inline-cam-facing-label');
+                            if (label) label.textContent = facing === 'environment' ? '📷 Kamera Belakang' : '🤳 Kamera Depan';
+                            navigator.mediaDevices.getUserMedia({
+                                video: { facingMode: { ideal: facing } },
+                                audio: false
+                            })
                             .then(s => {
                                 camStream = s;
                                 const vid = document.getElementById('inline-cam-video');
@@ -1375,6 +1395,16 @@
                                 if (document.getElementById('inline-cam-modal')) document.body.removeChild(camModal);
                                 photoInput.click();
                             });
+                        };
+
+                        // Mulai dengan kamera belakang
+                        startStream(currentFacing);
+
+                        // Tombol flip kamera depan ↔ belakang
+                        document.getElementById('inline-cam-flip').onclick = () => {
+                            currentFacing = currentFacing === 'environment' ? 'user' : 'environment';
+                            startStream(currentFacing);
+                        };
 
                         document.getElementById('inline-cam-capture').onclick = () => {
                             const video  = document.getElementById('inline-cam-video');
@@ -1386,7 +1416,13 @@
                             if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
                             if (h > MAX_H) { w = Math.round(w * MAX_H / h); h = MAX_H; }
                             canvas.width = w; canvas.height = h;
-                            canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+                            // Mirror jika kamera depan agar hasil tidak terbalik
+                            const ctx = canvas.getContext('2d');
+                            if (currentFacing === 'user') {
+                                ctx.translate(w, 0);
+                                ctx.scale(-1, 1);
+                            }
+                            ctx.drawImage(video, 0, 0, w, h);
                             const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
                             if (camStream) camStream.getTracks().forEach(t => t.stop());
                             if (document.getElementById('inline-cam-modal')) document.body.removeChild(camModal);
@@ -2044,6 +2080,27 @@
             const tglKonfirmasi = tglDiterima || getTanggalWIB();
 
             try {
+                // ── Auto-kompres foto jika base64 terlalu besar (> 1.5 MB) ──────────────
+                // GAS memiliki batas payload ~6MB, tapi upload Drive lebih stabil jika < 1.5MB
+                let fotoPayload = photoBase64 || '';
+                if (fotoPayload && fotoPayload.length > 1500 * 1024) {
+                    // Re-kompres dengan quality lebih rendah sampai ukuran aman
+                    await new Promise(resolveCompress => {
+                        const img2 = new Image();
+                        img2.onload = () => {
+                            const cv = document.createElement('canvas');
+                            const MAX_W = 1024, MAX_H = 768;
+                            let w2 = img2.width, h2 = img2.height;
+                            if (w2 > MAX_W) { h2 = Math.round(h2 * MAX_W / w2); w2 = MAX_W; }
+                            if (h2 > MAX_H) { w2 = Math.round(w2 * MAX_H / h2); h2 = MAX_H; }
+                            cv.width = w2; cv.height = h2;
+                            cv.getContext('2d').drawImage(img2, 0, 0, w2, h2);
+                            fotoPayload = cv.toDataURL('image/jpeg', 0.55);
+                            resolveCompress();
+                        };
+                        img2.src = fotoPayload;
+                    });
+                }
                 const res = await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
@@ -2065,10 +2122,8 @@
                         lokasiTibaLat : lat,
                         lokasiTibaLng : lng,
                         lokasiTibaMapsUrl : mapsUrl,
-                        // fotoBukti dikirim sebagai base64 JPEG — GAS harus simpan ke kolom Q sheet Delivery_Log
-                        // Jika header kolom Q belum ada, GAS wajib membuat header "Foto Bukti (URL)" di baris 1 kolom Q
-                        fotoBukti     : photoBase64 || '',
-                        savePhotoToColumnQ : true  // instruksi GAS: simpan URL foto ke kolom Q Delivery_Log
+                        fotoBukti     : fotoPayload,
+                        savePhotoToColumnQ : true
                     })
                 });
                 const result = await res.json();
@@ -8321,19 +8376,30 @@
                     const statusCell = document.getElementById(`status-${noPO}`);
                     if (statusCell) {
                         if (newPOStatus === 'Closed') {
-                            statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-700">Closed</span>`;
+                            statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Closed</span>`;
                         } else {
                             statusCell.innerHTML = `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Done</span>`;
                         }
                     }
                     const rowEl = document.getElementById(`row-${noPO}`);
                     if (rowEl) {
-                        rowEl.classList.remove('hover:bg-amber-50', 'bg-emerald-50');
+                        rowEl.classList.remove('hover:bg-amber-50', 'bg-blue-50', 'bg-emerald-50');
                         if (newPOStatus === 'Closed') {
-                            rowEl.classList.add('bg-gray-100');
+                            rowEl.classList.add('bg-gray-50', 'opacity-60');
                         } else {
                             rowEl.classList.add('bg-emerald-50');
                         }
+                    }
+                    // Update tombol aksi di baris yang sama jika ada
+                    const actionBtn = document.getElementById(`btn-${noPO}`);
+                    if (actionBtn && newPOStatus === 'Closed') {
+                        actionBtn.outerHTML = `<button id="btn-${noPO}" onclick="removePORow('${noPO}')"
+                            class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1 mx-auto">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            Remove
+                           </button>`;
                     }
 
                     const statusMsg = newPOStatus === 'Closed'
