@@ -5652,18 +5652,41 @@
                     if (!cols) continue;
 
                     // ── Distribusikan token ke kolom ──
-                    // Setiap token → kolom dengan X terdekat
+                    // Setiap token → kolom dengan X terdekat, TAPI dibatasi berdasarkan
+                    // tipe kontennya agar potongan nama barang (mis. mengandung "-" atau "&")
+                    // yang jatuh di area X kolom Qty/UOM tidak "nyasar" ke kolom tersebut.
+                    // - Token angka murni → hanya boleh masuk kolom Qty/No
+                    // - Token yang cocok dengan daftar UOM → hanya boleh masuk kolom UOM
+                    // - Token teks lainnya (termasuk "-", "&", dsb) → hanya boleh masuk
+                    //   kolom Nama/Description, TIDAK PERNAH ke Qty/UOM
                     const colKeys = Object.keys(cols); // ['no','name','qty','uom','desc']
                     const buckets = {};
                     colKeys.forEach(k => buckets[k] = []);
 
                     for (const tk of rows[ri].tokens) {
+                        const s = tk.str.trim();
+                        if (!s) continue;
+
+                        const isNumericToken = /^\d+(?:[.,]\d+)?$/.test(s);
+                        const isPureUomToken = !isNumericToken && isUOM(s);
+
+                        let allowedCols;
+                        if (isPureUomToken) {
+                            allowedCols = colKeys.filter(k => k === 'uom');
+                        } else if (isNumericToken) {
+                            allowedCols = colKeys.filter(k => k === 'qty' || k === 'no');
+                        } else {
+                            // Teks murni (huruf, "-", "&", dll) → hanya kolom Nama/Description
+                            allowedCols = colKeys.filter(k => k === 'name' || k === 'desc');
+                        }
+                        if (!allowedCols || allowedCols.length === 0) allowedCols = colKeys;
+
                         let bestCol = null, bestDist = Infinity;
-                        for (const k of colKeys) {
+                        for (const k of allowedCols) {
                             const d = Math.abs(tk.x - cols[k]);
                             if (d < bestDist) { bestDist = d; bestCol = k; }
                         }
-                        if (bestCol) buckets[bestCol].push(tk.str.trim());
+                        if (bestCol) buckets[bestCol].push(s);
                     }
 
                     const namaArr = (buckets.name || []).filter(s => !/^\d+\.?$/.test(s));
