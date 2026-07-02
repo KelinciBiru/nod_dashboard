@@ -4167,8 +4167,12 @@
 
             const input = tr.querySelector('.po-item-nama');
             const list = tr.querySelector('.autocomplete-list');
+            const idInput = tr.querySelector('.po-item-id');
             attachItemAutocomplete(input, list, tr, tbody, {
-                onEnterNoList: () => { if (input.value.trim()) tambahBarisFormRetur(); }
+                onEnterNoList: () => { if (input.value.trim()) tambahBarisFormRetur(); },
+                // Begitu Nama Barang dipilih dari dropdown (sumber: sheet "LIST"),
+                // kolom ID otomatis terisi dengan ID pasangannya (kolom A di LIST).
+                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
             });
 
             input.focus();
@@ -4641,8 +4645,12 @@
             // Autocomplete logic (dropdown mengambang di luar tabel, tetap bisa diketik untuk mencari)
             const input = tr.querySelector('.po-item-nama');
             const list = tr.querySelector('.autocomplete-list');
+            const idInput = tr.querySelector('.po-item-id');
             attachItemAutocomplete(input, list, tr, tbody, {
-                onEnterNoList: () => { if (input.value.trim()) tambahBarisFormPO(); }
+                onEnterNoList: () => { if (input.value.trim()) tambahBarisFormPO(); },
+                // Begitu Nama Barang dipilih dari dropdown (sumber: sheet "LIST"),
+                // kolom ID otomatis terisi dengan ID pasangannya (kolom A di LIST).
+                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
             });
 
             input.focus();
@@ -6542,12 +6550,27 @@
 
         let _sourceItemsCache = null;
 
+        // Daftar item (ID + Nama Barang) diambil dari sheet "LIST" (kolom A = ID,
+        // kolom B = Nama Barang) lewat endpoint GAS ?action=getSourceItems.
+        // Sheet "LIST" kolom B sendiri sumbernya dari sheet "Source" kolom C —
+        // itu urusan spreadsheet/back-end, di sisi frontend cukup konsumsi hasil
+        // akhirnya sebagai pasangan {id, nama}.
+        // Dibuat tahan banting: kalau back-end lama masih kirim array string
+        // biasa (tanpa ID), tetap dianggap valid — id-nya saja yang kosong.
         async function getSourceItems() {
             if (_sourceItemsCache) return _sourceItemsCache;
             try {
                 const res = await fetch(PO_GAS_URL + '?action=getSourceItems', { redirect: 'follow' });
                 const data = await res.json();
-                _sourceItemsCache = Array.isArray(data) ? data.filter(Boolean) : [];
+                _sourceItemsCache = Array.isArray(data)
+                    ? data.filter(Boolean).map(d => {
+                        if (typeof d === 'string') return { id: '', nama: d };
+                        return {
+                            id: d.id != null ? String(d.id) : (d.ID != null ? String(d.ID) : ''),
+                            nama: d.nama || d.Nama || d['Nama Barang'] || d.name || ''
+                        };
+                    }).filter(d => d.nama && String(d.nama).trim() !== '')
+                    : [];
             } catch (_) {
                 _sourceItemsCache = [];
             }
@@ -6715,16 +6738,21 @@
                 vv.addEventListener('scroll', onScrollOrResize);
             }
 
+            // item di sini adalah object {id, nama} (lihat getSourceItems). Nama
+            // barang tetap yang ditampilkan & dicari di dropdown, tapi id-nya
+            // disimpan di li.dataset.id supaya bisa dipakai untuk auto-isi
+            // kolom ID begitu barisnya dipilih (lewat klik ataupun Enter).
             function renderList(filtered) {
                 list.innerHTML = '';
                 if (filtered.length === 0) { hideList(); return; }
                 filtered.forEach(item => {
                     const li = document.createElement('li');
-                    li.textContent = item;
+                    li.textContent = item.nama;
+                    li.dataset.id = item.id || '';
                     li.className = 'px-3 py-2.5 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition border-b border-gray-50 last:border-b-0';
                     li.onmousedown = (e) => {
                         e.preventDefault();
-                        input.value = item;
+                        input.value = item.nama;
                         syncTitle();
                         hideList();
                         onSelect(item);
@@ -6738,7 +6766,7 @@
                 const q = input.value.trim().toLowerCase();
                 const items = await getSourceItems();
                 const filtered = q
-                    ? items.filter(i => i.toLowerCase().includes(q)).slice(0, maxResults)
+                    ? items.filter(i => i.nama.toLowerCase().includes(q)).slice(0, maxResults)
                     : items.slice(0, maxResults);
                 renderList(filtered);
             }
@@ -6765,7 +6793,12 @@
                     if (isListVisible) {
                         e.preventDefault();
                         const toSelect = active || lis[0];
-                        if (toSelect) { input.value = toSelect.textContent; syncTitle(); hideList(); onSelect(toSelect.textContent); }
+                        if (toSelect) {
+                            input.value = toSelect.textContent;
+                            syncTitle();
+                            hideList();
+                            onSelect({ id: toSelect.dataset.id || '', nama: toSelect.textContent });
+                        }
                     } else if (opts.onEnterNoList) {
                         e.preventDefault();
                         opts.onEnterNoList(e);
@@ -7174,14 +7207,19 @@
                 }
             }
 
-            // ── Cocokkan setiap item QR ke source items (stock master) ──
+            // ── Cocokkan setiap item QR ke source items (stock master dari sheet LIST) ──
             const resolvedItems = qrItems.map(q => {
-                let matched = sourceItems.find(i => i.toLowerCase() === q.nama.toLowerCase());
+                let matched = sourceItems.find(i => i.nama.toLowerCase() === q.nama.toLowerCase());
                 if (!matched) matched = sourceItems.find(i =>
-                    i.toLowerCase().includes(q.nama.toLowerCase()) ||
-                    q.nama.toLowerCase().includes(i.toLowerCase())
+                    i.nama.toLowerCase().includes(q.nama.toLowerCase()) ||
+                    q.nama.toLowerCase().includes(i.nama.toLowerCase())
                 );
-                return { label: matched || q.nama, matched: !!matched, original: q.nama, id: q.id || '' };
+                return {
+                    label: matched ? matched.nama : q.nama,
+                    matched: !!matched,
+                    original: q.nama,
+                    id: q.id || (matched && matched.id) || ''
+                };
             });
 
             playScanBeep();
