@@ -364,16 +364,6 @@
                         Process PO
                     </button>
 
-                    <!-- Catalogue Baru -->
-                    <button id="menu-catalogue" onclick="navTo('Catalogue')"
-                        class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 6h16M4 10h16M4 14h10M4 18h10" />
-                        </svg>
-                        Catalogue
-                    </button>
-
 
                 </nav>
 
@@ -663,7 +653,6 @@
                 document.getElementById('menu-po').classList.add('hidden');
                 document.getElementById('menu-process-po').classList.add('hidden');
                 document.getElementById('menu-process-inbound').classList.add('hidden');
-                document.getElementById('menu-catalogue').classList.add('hidden');
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
                 // Buka submenu Team Delivery otomatis
                 document.getElementById('team-delivery-sub').classList.remove('hidden');
@@ -1005,11 +994,6 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Team Delivery" hanya dapat diakses oleh Admin dan Driver.');
                 return;
             }
-            // ── AKSES KONTROL: Catalogue hanya untuk ADMIN, WAREHOUSE, dan PO_User ──
-            if (pageName === 'Catalogue' && currentUserRole === 'DRIVER') {
-                showAlert('error', 'Akses Ditolak', 'Menu "Catalogue" hanya dapat diakses oleh Admin, Team Warehouse, dan PO User.');
-                return;
-            }
             const titles = {
                 'Dashboard': 'Dashboard',
                 'Stock Master': 'Stock Master',
@@ -1024,8 +1008,7 @@
                 'Process PO': 'Proses PO Masuk',
                 'Process Inbound': 'Process Inbound',
                 'Route': 'Team Delivery - Route',
-                'Report Finish': 'Team Delivery - Report Finish',
-                'Catalogue': 'Catalogue'
+                'Report Finish': 'Team Delivery - Report Finish'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -1056,7 +1039,6 @@
                 case 'Process Inbound': await showProcessInbound(); break;
                 case 'Route': await showTeamDeliveryRoute(); break;
                 case 'Report Finish': await showTeamDeliveryReportFinish(); break;
-                case 'Catalogue': showCatalogue(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -1073,19 +1055,6 @@
             <img src="https://lh3.googleusercontent.com/d/19epa7IlpjqaS0f7F_WEgDZSwhriLpikp"
                  alt="Dashboard Image"
                  class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">`;
-        }
-
-        // =========================================================================
-        // HALAMAN: CATALOGUE
-        // Akses: ADMIN, WAREHOUSE, PO_User (belum dikembangkan)
-        // =========================================================================
-        function showCatalogue() {
-            document.getElementById('content-area').innerHTML = `
-            <h1 class="text-3xl font-semibold text-gray-700 mb-6">Catalogue</h1>
-            <div class="bg-white rounded-2xl shadow-md p-10 text-center border border-gray-100">
-                <p class="text-xl font-semibold text-amber-600">Ciluuuukbaaaa....</p>
-                <p class="mt-2 text-gray-600">Halaman ini masih dalam tahap pengembangan ya preeen. sabaar yaaah</p>
-            </div>`;
         }
 
         // =========================================================================
@@ -5148,6 +5117,8 @@
                     <option value="Helmi">Helmi</option>
                     <option value="Raka">Raka</option>
                     <option value="Imam Suhada">Imam Suhada</option>
+                    <option value="Reza">Reza</option>
+                    <option value="Ilham">Ilham</option>
                 </select>
             </div>
         </div>
