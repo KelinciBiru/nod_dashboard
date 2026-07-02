@@ -3520,17 +3520,18 @@
                     <table class="w-full text-xs border-collapse">
                         <thead>
                             <tr class="bg-gray-800 text-white">
-                                <th class="p-2 text-left rounded-tl-lg" style="min-width:220px">Item</th>
-                                <th class="p-2 text-center" style="width:70px">Qty</th>
+                                <th class="p-2 text-left rounded-tl-lg" style="min-width:100px">ID</th>
+                                <th class="p-2 text-left" style="min-width:280px">Item</th>
+                                <th class="p-2 text-center" style="min-width:90px">Qty</th>
                                 <th class="p-2 text-center" style="width:110px">UOM</th>
-                                <th class="p-2 text-left" style="min-width:140px">Description</th>
-                                <th class="p-2 text-left" style="min-width:140px">Note</th>
+                                <th class="p-2 text-left" style="min-width:160px">Description</th>
+                                <th class="p-2 text-left" style="min-width:160px">Note</th>
                                 <th class="p-2 text-center rounded-tr-lg" style="width:50px">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="po-item-table-body">
                             <tr data-placeholder>
-                                <td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td>
+                                <td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3579,6 +3580,7 @@
             if (tbody) {
                 tbody.querySelectorAll('tr:not([data-placeholder])').forEach(tr => {
                     items.push({
+                        id: tr.querySelector('.po-item-id')?.value || '',
                         nama: tr.querySelector('.po-item-nama')?.value || '',
                         qty: tr.querySelector('.po-item-qty')?.value || '',
                         uom: tr.querySelector('.po-item-uom')?.value || '',
@@ -3623,6 +3625,7 @@
                     const tbody = document.getElementById('po-item-table-body');
                     const tr = tbody.querySelector('tr:last-child');
                     if (!tr) return;
+                    if (tr.querySelector('.po-item-id')) tr.querySelector('.po-item-id').value = item.id || '';
                     if (tr.querySelector('.po-item-nama')) { const el = tr.querySelector('.po-item-nama'); el.value = item.nama || ''; el.title = el.value; }
                     if (tr.querySelector('.po-item-qty')) tr.querySelector('.po-item-qty').value = item.qty || '1';
                     if (tr.querySelector('.po-item-uom')) tr.querySelector('.po-item-uom').value = item.uom || '';
@@ -3786,7 +3789,7 @@
 
             // Kosongkan tabel item, kembalikan placeholder
             if (tbody) {
-                tbody.innerHTML = '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
             }
 
             updatePOPreview();
@@ -3902,17 +3905,18 @@
                     <table class="w-full text-xs border-collapse">
                         <thead>
                             <tr class="bg-gray-800 text-white">
-                                <th class="p-2 text-left rounded-tl-lg" style="min-width:220px">Item</th>
-                                <th class="p-2 text-center" style="width:70px">Qty</th>
+                                <th class="p-2 text-left rounded-tl-lg" style="min-width:100px">ID</th>
+                                <th class="p-2 text-left" style="min-width:280px">Item</th>
+                                <th class="p-2 text-center" style="min-width:90px">Qty</th>
                                 <th class="p-2 text-center" style="width:110px">UOM</th>
-                                <th class="p-2 text-left" style="min-width:140px">Description</th>
-                                <th class="p-2 text-left" style="min-width:140px">Note</th>
+                                <th class="p-2 text-left" style="min-width:160px">Description</th>
+                                <th class="p-2 text-left" style="min-width:160px">Note</th>
                                 <th class="p-2 text-center rounded-tr-lg" style="width:50px">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="retur-item-table-body">
                             <tr data-placeholder>
-                                <td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td>
+                                <td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td>
                             </tr>
                         </tbody>
                     </table>
@@ -4092,7 +4096,7 @@
             if (labelEl)  labelEl.textContent = 'Klik "Download PDF" untuk membuat & melampirkan file';
 
             if (tbody) {
-                tbody.innerHTML = '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
             }
 
             updateReturPreview();
@@ -4114,23 +4118,29 @@
             tr.className = `${bg} border-b border-gray-100`;
 
             tr.innerHTML = `
+                <td class="p-2 align-top">
+                    <input type="text"
+                        class="po-item-id w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                        style="min-height:42px;"
+                        placeholder="ID">
+                </td>
                 <td class="p-2 font-medium relative">
                     <div class="relative">
                         <div class="po-item-nama-wrap relative">
                             <input type="text"
-                                class="po-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
-                                style="min-height:42px; text-overflow:ellipsis;"
+                                class="po-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white whitespace-normal"
+                                style="min-height:42px;"
                                 placeholder="Ketik atau pilih item..."
                                 autocomplete="off">
                             <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </div>
-                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-full min-w-[220px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-full min-w-[280px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
                 </td>
                 <td class="p-2 text-center">
-                    <input type="number" min="1" value="1" class="po-item-qty w-full p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
+                    <input type="number" min="1" value="1" class="po-item-qty w-full p-1.5 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none" style="min-width:70px">
                 </td>
                 <td class="p-2 text-center">
                     <select class="po-item-uom w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px; min-width:80px;">
@@ -4170,7 +4180,7 @@
             if (!tbody) return;
             tr.remove();
             if (tbody.querySelectorAll('tr').length === 0) {
-                tbody.innerHTML = '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
             }
         }
 
@@ -4181,6 +4191,7 @@
             if (tbody) {
                 tbody.querySelectorAll('tr:not([data-placeholder])').forEach(tr => {
                     items.push({
+                        id: tr.querySelector('.po-item-id')?.value || '',
                         nama: tr.querySelector('.po-item-nama')?.value || '',
                         qty: tr.querySelector('.po-item-qty')?.value || '',
                         uom: tr.querySelector('.po-item-uom')?.value || '',
@@ -4224,6 +4235,7 @@
                     const tbody = document.getElementById('retur-item-table-body');
                     const tr = tbody.querySelector('tr:last-child');
                     if (!tr) return;
+                    if (tr.querySelector('.po-item-id')) tr.querySelector('.po-item-id').value = item.id || '';
                     if (tr.querySelector('.po-item-nama')) { const el = tr.querySelector('.po-item-nama'); el.value = item.nama || ''; el.title = el.value; }
                     if (tr.querySelector('.po-item-qty')) tr.querySelector('.po-item-qty').value = item.qty || '1';
                     if (tr.querySelector('.po-item-uom')) tr.querySelector('.po-item-uom').value = item.uom || '';
@@ -4577,23 +4589,29 @@
             tr.className = `${bg} border-b border-gray-100`;
 
             tr.innerHTML = `
+                <td class="p-2 align-top">
+                    <input type="text"
+                        class="po-item-id w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                        style="min-height:42px;"
+                        placeholder="ID">
+                </td>
                 <td class="p-2 font-medium relative">
                     <div class="relative">
                         <div class="po-item-nama-wrap relative">
                             <input type="text"
-                                class="po-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
-                                style="min-height:42px; text-overflow:ellipsis;"
+                                class="po-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white whitespace-normal"
+                                style="min-height:42px;"
                                 placeholder="Ketik atau pilih item..."
                                 autocomplete="off">
                             <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </div>
-                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-full min-w-[220px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-full min-w-[280px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
                 </td>
                 <td class="p-2 text-center">
-                    <input type="number" min="1" value="1" class="po-item-qty w-full p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none">
+                    <input type="number" min="1" value="1" class="po-item-qty w-full p-1.5 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none" style="min-width:70px">
                 </td>
                 <td class="p-2 text-center">
                     <select class="po-item-uom w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px; min-width:80px;">
@@ -4636,7 +4654,7 @@
             if (!tbody) return;
             tr.remove();
             if (tbody.querySelectorAll('tr').length === 0) {
-                tbody.innerHTML = '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
             }
         }
 
@@ -4695,11 +4713,12 @@
             rows.forEach(row => {
                 const nama = row.querySelector('.po-item-nama')?.value?.trim() || '';
                 if (!nama) return;
+                const id = row.querySelector('.po-item-id')?.value?.trim() || '';
                 const qty = row.querySelector('.po-item-qty')?.value || '1';
                 const uom = row.querySelector('.po-item-uom')?.value || '-';
                 const description = row.querySelector('.po-item-desc')?.value || '-';
                 const note = row.querySelector('.po-item-note')?.value?.trim() || '';
-                items.push({ nama, qty, uom, description, note });
+                items.push({ id, nama, qty, uom, description, note });
             });
 
             if (items.length === 0) {
@@ -4851,6 +4870,7 @@
             // ── Tabel Item ──
             const tableBody = items.map((it, idx) => [
                 String(idx + 1),
+                it.id || '-',
                 it.nama,
                 it.qty || '-',
                 it.uom || '-',
@@ -4860,16 +4880,17 @@
 
             doc.autoTable({
                 startY: y,
-                head: [['No', 'Item', 'Qty', 'UOM', 'Description', 'Note']],
+                head: [['No', 'ID', 'Item', 'Qty', 'UOM', 'Description', 'Note']],
                 body: tableBody,
                 theme: 'grid',
-                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle' },
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 9 },
-                    2: { halign: 'center', cellWidth: 16 },
-                    3: { halign: 'center', cellWidth: 18 },
-                    5: { cellWidth: 35 },
+                    0: { halign: 'center', cellWidth: 8 },
+                    1: { halign: 'center', cellWidth: 18 },
+                    3: { halign: 'center', cellWidth: 14 },
+                    4: { halign: 'center', cellWidth: 16 },
+                    6: { cellWidth: 32 },
                 },
                 margin: { left: marginX, right: marginX },
             });
@@ -5095,8 +5116,8 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">NO. PO <span class="text-green-600">(Open)</span></label>
-                <div class="flex items-center gap-2">
-                    <select id="proc-no-po-select" class="flex-1 min-w-0 p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
+                <div class="flex items-center gap-2 min-w-0">
+                    <select id="proc-no-po-select" class="flex-1 min-w-0 w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
                         <option value="">— Pilih No. PO (opsional) —</option>
                     </select>
                     <button id="btn-refresh-po" onclick="loadOpenPOList()" title="Refresh daftar PO"
@@ -5117,9 +5138,6 @@
                     <option value="Helmi">Helmi</option>
                     <option value="Raka">Raka</option>
                     <option value="Imam Suhada">Imam Suhada</option>
-                    <option value="Reza">Reza</option>
-                    <option value="Ilham">Ilham</option>
-                    <option value="Gio">Gio</option>
                 </select>
             </div>
         </div>
@@ -5155,7 +5173,8 @@
                 <table class="w-full text-xs border-collapse">
                     <thead>
                         <tr class="bg-gray-800 text-white">
-                            <th class="p-2 text-left rounded-tl-lg" style="min-width:200px">Nama Barang</th>
+                            <th class="p-2 text-left rounded-tl-lg" style="min-width:100px">ID</th>
+                            <th class="p-2 text-left" style="min-width:260px">Nama Barang</th>
                             <th class="p-2 text-center">Qty PO</th>
                             <th class="p-2 text-center">Qty Outbound</th>
                             <th class="p-2 text-center">UOM</th>
@@ -5166,7 +5185,7 @@
                         </tr>
                     </thead>
                     <tbody id="proc-table-body">
-                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
+                        <tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5621,9 +5640,29 @@
                     if (hasName && hasQty && hdrIdx === -1) {
                         hdrIdx = ri;
                         cols = {};
-                        for (const tk of rows[ri].tokens) {
+                        // Kumpulkan token header dari baris ini SEKALIGUS baris-baris
+                        // terdekat (atas/bawah, dalam jarak ~16pt) — beberapa PDF
+                        // memecah label header sempit (mis. "No") jadi 2 baris terpisah
+                        // ("N" lalu "o") karena kolomnya terlalu sempit untuk 1 baris.
+                        // Tanpa ini, kolom "No" tidak pernah terdeteksi (cols.no undefined)
+                        // sehingga token nomor urut baris data bisa salah nyasar ke kolom lain.
+                        const hdrTokens = [...rows[ri].tokens];
+                        for (const other of rows) {
+                            if (other === rows[ri]) continue;
+                            if (Math.abs(other.y - rows[ri].y) > 16) continue;
+                            for (const tk of other.tokens) {
+                                const up = tk.str.toUpperCase().trim();
+                                if (up === 'N' || up === 'O' || up === 'NO' || up === 'NO.') {
+                                    hdrTokens.push(tk);
+                                }
+                            }
+                        }
+                        for (const tk of hdrTokens) {
                             const up = tk.str.toUpperCase().trim();
-                            if (up === 'NO' || up === 'NO.') cols.no = tk.x;
+                            if (up === 'NO' || up === 'NO.' || up === 'N' || up === 'O') {
+                                if (cols.no === undefined) cols.no = tk.x;
+                            }
+                            else if (up === 'ID') cols.id = tk.x;
                             else if (/^(NAME|ITEM|NAMA|PRODUCT|KETERANGAN)$/.test(up)) cols.name = tk.x;
                             else if (/^(QTY|QUANTITY|JUMLAH)$/.test(up)) cols.qty = tk.x;
                             else if (/^(UOM|UNIT|SATUAN)$/.test(up)) cols.uom = tk.x;
@@ -5631,8 +5670,8 @@
                         }
                         // Jika NAME tidak terdeteksi exact, ambil kolom terlebar (kemungkinan nama barang)
                         if (cols.name === undefined && cols.qty !== undefined) {
-                            // Kolom paling kiri setelah NO adalah NAME
-                            const noX = cols.no !== undefined ? cols.no : 0;
+                            // Kolom paling kiri setelah NO/ID adalah NAME
+                            const noX = Math.max(cols.no !== undefined ? cols.no : 0, cols.id !== undefined ? cols.id : 0);
                             const leftmost = rows[ri].tokens
                                 .filter(t => t.x > noX + 10 && t.x < cols.qty - 10)
                                 .sort((a, b) => a.x - b.x)[0];
@@ -5670,16 +5709,52 @@
                         const s = tk.str.trim();
                         if (!s) continue;
 
+                        // Kadang PDF meng-generate satu baris ID + Nama Barang sebagai
+                        // SATU text-run (tanpa terpisah jadi token berbeda), contoh:
+                        // "P41002 NOD. Machine Black/Black Selling". Jika ini terjadi dan
+                        // tabel punya kolom ID, pisahkan kode ID di depan dari nama barangnya
+                        // supaya keduanya masuk kolom yang benar.
+                        if (colKeys.includes('id')) {
+                            const compositeMatch = s.match(/^([A-Z]{1,5}[-.]?\d{3,}[A-Z0-9-]*)\s+(.+)$/);
+                            if (compositeMatch) {
+                                buckets.id.push(compositeMatch[1]);
+                                buckets.name.push(compositeMatch[2]);
+                                continue;
+                            }
+                        }
+
                         const isNumericToken = /^\d+(?:[.,]\d+)?$/.test(s);
                         const isPureUomToken = !isNumericToken && isUOM(s);
+                        // Kode ID barang: kombinasi huruf+angka tanpa spasi, mis. "P41002",
+                        // "SKU-1234", dsb. Token seperti ini HARUS masuk kolom ID (jika ada),
+                        // jangan sampai "nyasar" ke kolom Nama Barang hanya karena jaraknya
+                        // lebih dekat secara horizontal.
+                        const isIdCodeToken = !isNumericToken && !isPureUomToken &&
+                            /^[A-Z]{1,5}[-.]?\d{2,}[A-Z0-9-]*$/i.test(s) && /\d/.test(s) && /[A-Za-z]/.test(s);
 
                         let allowedCols;
                         if (isPureUomToken) {
                             allowedCols = colKeys.filter(k => k === 'uom');
                         } else if (isNumericToken) {
+                            // Angka murni (mis. nomor urut baris) → HANYA kolom No/Qty.
+                            // "id" sengaja TIDAK diikutkan di sini: kode ID barang selalu
+                            // mengandung huruf (lihat isIdCodeToken di bawah), jadi token
+                            // angka murni tidak pernah benar-benar milik kolom ID — kalau
+                            // diikutkan, nomor urut baris bisa "nyasar" ke kolom ID hanya
+                            // karena kebetulan lebih dekat secara horizontal.
                             allowedCols = colKeys.filter(k => k === 'qty' || k === 'no');
+                        } else if (isIdCodeToken && colKeys.includes('id')) {
+                            // Paksa ke kolom ID, tidak boleh ke Nama/Description
+                            allowedCols = ['id'];
                         } else {
-                            // Teks murni (huruf, "-", "&", dll) → hanya kolom Nama/Description
+                            // Teks murni (huruf, "-", "&", dll) → kolom Nama/Description saja.
+                            // "id" TIDAK diikutkan: kolom ID hanya diisi lewat jalur
+                            // isIdCodeToken di atas. Jika teks nama barang (mis. "NOD.
+                            // Machine Black/Black Selling") ikut bersaing untuk kolom ID
+                            // berdasarkan jarak X semata, ia bisa salah nyasar ke kolom ID
+                            // ketika posisi X-nya kebetulan lebih dekat ke header ID
+                            // daripada ke header Nama Barang (umum terjadi jika header
+                            // Nama Barang diberi padding/indentasi lebih besar dari datanya).
                             allowedCols = colKeys.filter(k => k === 'name' || k === 'desc');
                         }
                         if (!allowedCols || allowedCols.length === 0) allowedCols = colKeys;
@@ -5692,11 +5767,26 @@
                         if (bestCol) buckets[bestCol].push(s);
                     }
 
-                    const namaArr = (buckets.name || []).filter(s => !/^\d+\.?$/.test(s));
-                    const namaStr = namaArr.join(' ').trim();
+                    let namaArr = (buckets.name || []).filter(s => !/^\d+\.?$/.test(s));
                     const qtyRaw = (buckets.qty || []).join(' ').trim();
                     const uomRaw = (buckets.uom || []).join(' ').trim();
                     const descRaw = (buckets.desc || []).join(' ').trim();
+                    let idStr = (buckets.id || []).join(' ').trim();
+
+                    // Safety net: jika kolom ID tidak terdeteksi sama sekali di header
+                    // (mis. header PDF tidak punya kolom "ID" eksplisit), kode ID barang
+                    // bisa saja ikut tertampung di bucket Nama Barang — baik sebagai elemen
+                    // terpisah, maupun menyatu dalam satu string "P41002 NOD. Machine...".
+                    if (!idStr && namaArr.length > 0) {
+                        const idCodeRe = /^([A-Z]{1,5}[-.]?\d{3,}[A-Z0-9-]*)(?:\s+(.+))?$/i;
+                        const m0 = namaArr[0].match(idCodeRe);
+                        if (m0 && /\d/.test(m0[1]) && /[A-Za-z]/.test(m0[1])) {
+                            idStr = m0[1];
+                            const rest = m0[2] ? [m0[2], ...namaArr.slice(1)] : namaArr.slice(1);
+                            namaArr = rest;
+                        }
+                    }
+                    const namaStr = namaArr.join(' ').trim();
 
                     // Validasi: nama barang tidak boleh kosong atau hanya angka
                     if (!namaStr || /^\d+$/.test(namaStr)) continue;
@@ -5734,7 +5824,7 @@
                         desc = found || classifyDescription(namaStr);
                     }
 
-                    items.push({ nama_barang: namaStr, qty_po: qty, uom, description: desc });
+                    items.push({ id: idStr, nama_barang: namaStr, qty_po: qty, uom, description: desc });
                 }
             }
 
@@ -5821,6 +5911,7 @@
                         ).join('');
                         return `
                         <tr class="${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-100">
+                            <td class="p-2" contenteditable="true">${item.id || ''}</td>
                             <td class="p-2 font-medium" contenteditable="true">${item.nama_barang || ''}</td>
                             <td class="p-2 text-center font-semibold text-gray-700">${item.qty_po || ''}</td>
                             <td class="p-2 text-center">
@@ -5842,12 +5933,13 @@
                 } else {
                     tbody.innerHTML = `
                         <tr class="bg-yellow-50 border-b border-yellow-200">
-                            <td colspan="8" class="p-3 text-center text-xs text-yellow-700">
+                            <td colspan="9" class="p-3 text-center text-xs text-yellow-700">
                                 ⚠️ Item tidak terdeteksi otomatis. Silakan isi manual atau periksa format PDF.<br>
                                 <span class="text-gray-400 text-[10px]">Ekstrak: ${rawText.substring(0, 200).replace(/[\r\n]+/g, ' ')}...</span>
                             </td>
                         </tr>
                         <tr class="bg-white border-b border-gray-100">
+                            <td class="p-2" contenteditable="true">-</td>
                             <td class="p-2 font-medium" contenteditable="true">-</td>
                             <td class="p-2 text-center" contenteditable="true">0</td>
                             <td class="p-2 text-center">
@@ -5893,7 +5985,7 @@
         function recalcQtyPcs(row) {
             const tds = row.querySelectorAll('td');
             const qtyInput = row.querySelector('input[type="number"]');
-            const uomCell = tds[3];  // kolom UOM selalu index 3
+            const uomCell = tds[4];  // kolom UOM (index 4, setelah kolom ID & Nama Barang)
             const qtyPcsCell = row.querySelector('.qty-pcs-cell');
             if (!qtyInput || !uomCell || !qtyPcsCell) return;
             const qty = parseFloat(qtyInput.value) || 0;
@@ -5930,7 +6022,7 @@
                 row.remove();
                 const tbody = document.getElementById('proc-table-body');
                 if (tbody && tbody.querySelectorAll('tr:not([data-placeholder])').length === 0) {
-                    tbody.innerHTML = `<tr data-placeholder><td colspan="8" class="p-6 text-center text-gray-400 italic">Tabel kosong — klik "Tambah Baris" untuk isi manual.</td></tr>`;
+                    tbody.innerHTML = `<tr data-placeholder><td colspan="9" class="p-6 text-center text-gray-400 italic">Tabel kosong — klik "Tambah Baris" untuk isi manual.</td></tr>`;
                 }
             }, 200);
         }
@@ -5962,12 +6054,14 @@
                 if (tds.length < 5) return;
 
                 const namaInput = row.querySelector('.nama-barang-input');
-                const nama = namaInput ? namaInput.value.trim() : tds[0].textContent.trim();
+                const nama = namaInput ? namaInput.value.trim() : tds[1].textContent.trim();
                 if (!nama || nama === '-') return;
 
-                const qtyOutInput = tds[2] ? tds[2].querySelector('input') : null;
-                const qty = qtyOutInput ? qtyOutInput.value : (tds[2] ? tds[2].textContent.trim() : '');
-                const uom = tds[3] ? tds[3].textContent.trim() : '';
+                const idInput = row.querySelector('.item-id-input');
+                const id = idInput ? idInput.value.trim() : (tds[0] ? tds[0].textContent.trim() : '');
+                const qtyOutInput = tds[3] ? tds[3].querySelector('input') : null;
+                const qty = qtyOutInput ? qtyOutInput.value : (tds[3] ? tds[3].textContent.trim() : '');
+                const uom = tds[4] ? tds[4].textContent.trim() : '';
                 const descSel = tds[5] ? tds[5].querySelector('select') : null;
                 const description = descSel ? descSel.value : (tds[5] ? tds[5].textContent.trim() : '');
                 const serialInput = row.querySelector('.serial-number-input');
@@ -5978,7 +6072,7 @@
                 const remarkInput = row.querySelector('.remark-po-input');
                 const remark = remarkInput ? remarkInput.value.trim() : '';
 
-                items.push({ nama, qty, uom, description, remark, serialNumber, idDevice });
+                items.push({ id, nama, qty, uom, description, remark, serialNumber, idDevice });
             });
 
             if (items.length === 0) {
@@ -6117,6 +6211,7 @@
             // ── Tabel Item ──
             const tableBody = items.map((it, idx) => [
                 String(idx + 1),
+                it.id || '-',
                 it.nama,
                 it.qty || '-',
                 it.uom || '-',
@@ -6126,16 +6221,17 @@
 
             doc.autoTable({
                 startY: y,
-                head: [['No', 'Nama Barang', 'Qty', 'UOM', 'Description', 'Remark']],
+                head: [['No', 'ID', 'Nama Barang', 'Qty', 'UOM', 'Description', 'Remark']],
                 body: tableBody,
                 theme: 'grid',
-                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle' },
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 9 },
-                    2: { halign: 'center', cellWidth: 18 },
-                    3: { halign: 'center', cellWidth: 18 },
-                    5: { cellWidth: 30 },
+                    0: { halign: 'center', cellWidth: 8 },
+                    1: { halign: 'center', cellWidth: 18 },
+                    3: { halign: 'center', cellWidth: 16 },
+                    4: { halign: 'center', cellWidth: 16 },
+                    6: { cellWidth: 28 },
                 },
                 margin: { left: marginX, right: marginX },
             });
@@ -6225,6 +6321,7 @@
                     const uom  = it.uom  || '';
                     const nama = it.nama || '-';
                     lines.push((i + 1) + '. ' + nama + ' - ' + qty + (uom ? ' ' + uom : ''));
+                    if (it.id)          lines.push('   ID: ' + it.id);
                     if (it.description) lines.push('   Desc: ' + it.description);
                     if (it.remark)      lines.push('   Ket: ' + it.remark);
                 });
@@ -6695,11 +6792,14 @@
             const rowId = 'row-' + Date.now();
             tr.setAttribute('data-rowid', rowId);
             tr.innerHTML = `
-                <td class="p-2 font-medium relative" style="min-width:200px">
+                <td class="p-2" style="min-width:100px">
+                    <input type="text" class="item-id-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID">
+                </td>
+                <td class="p-2 font-medium relative" style="min-width:260px">
                     <div class="relative">
                         <input type="text"
-                            class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
-                            style="min-height:42px; min-width:180px; text-overflow:ellipsis;"
+                            class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white whitespace-normal"
+                            style="min-height:42px; min-width:220px;"
                             placeholder="Ketik atau pilih nama barang..."
                             autocomplete="off">
                         <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
@@ -6801,7 +6901,8 @@
                 <table class="w-full text-xs border-collapse">
                     <thead>
                         <tr class="bg-gray-800 text-white">
-                            <th class="p-2 text-left rounded-tl-lg" style="min-width:200px">Nama Barang</th>
+                            <th class="p-2 text-left rounded-tl-lg" style="min-width:100px">ID</th>
+                            <th class="p-2 text-left" style="min-width:260px">Nama Barang</th>
                             <th class="p-2 text-center">Qty</th>
                             <th class="p-2 text-left" style="min-width:140px">Serial Number</th>
                             <th class="p-2 text-left" style="min-width:120px">Remark</th>
@@ -6810,7 +6911,7 @@
                     </thead>
                     <tbody id="inb-table-body">
                         <tr data-placeholder>
-                            <td colspan="5" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td>
+                            <td colspan="6" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -6847,6 +6948,7 @@
             if (tbody) {
                 tbody.querySelectorAll('tr:not([data-placeholder])').forEach(tr => {
                     items.push({
+                        id: tr.querySelector('.item-id-input')?.value || '',
                         nama: tr.querySelector('.nama-barang-input')?.value || '',
                         qty: tr.querySelector('.qty-input')?.value || '',
                         serial: tr.querySelector('.serial-input')?.value || '',
@@ -6879,6 +6981,7 @@
                     const tbody = document.getElementById('inb-table-body');
                     const tr = tbody.querySelector('tr:last-child');
                     if (!tr) return;
+                    if (tr.querySelector('.item-id-input')) tr.querySelector('.item-id-input').value = item.id || '';
                     if (tr.querySelector('.nama-barang-input')) { const el = tr.querySelector('.nama-barang-input'); el.value = item.nama || ''; el.title = el.value; }
                     if (tr.querySelector('.qty-input')) tr.querySelector('.qty-input').value = item.qty || '1';
                     if (tr.querySelector('.serial-input')) tr.querySelector('.serial-input').value = item.serial || '';
@@ -6915,7 +7018,7 @@
         }
 
         /** Tambah baris kosong ke tabel Detail Inbound, dengan autocomplete Nama Barang */
-        function tambahBarisInbound(prefillName = '', prefillQty = 1) {
+        function tambahBarisInbound(prefillName = '', prefillQty = 1, prefillId = '') {
             const tbody = document.getElementById('inb-table-body');
             if (!tbody) return;
             const placeholder = tbody.querySelector('tr[data-placeholder]');
@@ -6925,11 +7028,14 @@
             const tr = document.createElement('tr');
             tr.className = `${bg} border-b border-gray-100`;
             tr.innerHTML = `
-                <td class="p-2 font-medium relative" style="min-width:200px">
+                <td class="p-2" style="min-width:100px">
+                    <input type="text" value="${String(prefillId).replace(/"/g, '&quot;')}" class="item-id-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID">
+                </td>
+                <td class="p-2 font-medium relative" style="min-width:260px">
                     <div class="relative">
                         <input type="text" value="${prefillName.replace(/"/g, '&quot;')}"
-                            class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white"
-                            style="min-height:42px; min-width:180px; text-overflow:ellipsis;"
+                            class="nama-barang-input w-full text-sm border border-gray-300 rounded-lg py-2.5 px-2.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white whitespace-normal"
+                            style="min-height:42px; min-width:220px;"
                             placeholder="Ketik atau pilih nama barang..." autocomplete="off">
                         <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
                     </div>
@@ -6957,7 +7063,7 @@
                 row.remove();
                 const tbody = document.getElementById('inb-table-body');
                 if (tbody && tbody.querySelectorAll('tr').length === 0) {
-                    tbody.innerHTML = `<tr data-placeholder><td colspan="5" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>`;
+                    tbody.innerHTML = `<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>`;
                 }
             }, 200);
         }
@@ -7034,41 +7140,48 @@
             try {
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                    // Format: ["Item A", "Item B", ...]
-                    qrItems = parsed.map(i => String(i).trim()).filter(Boolean);
+                    // Format: ["Item A", "Item B", ...] atau [{nama_barang, id}, ...]
+                    qrItems = parsed.map(i => {
+                        if (i && typeof i === 'object') {
+                            return { nama: String(i.nama_barang || i.nama || i.name || '').trim(), id: i.id || i.id_barang || '' };
+                        }
+                        return { nama: String(i).trim(), id: '' };
+                    }).filter(i => i.nama);
                 } else if (parsed && typeof parsed === 'object') {
                     // Format: { items: [...] } atau { nama_barang: "...", ... }
                     if (Array.isArray(parsed.items)) {
                         qrItems = parsed.items.map(i =>
-                            typeof i === 'object' ? (i.nama_barang || i.nama || i.name || String(i)) : String(i)
-                        ).filter(Boolean);
+                            typeof i === 'object'
+                                ? { nama: String(i.nama_barang || i.nama || i.name || '').trim(), id: i.id || i.id_barang || '' }
+                                : { nama: String(i).trim(), id: '' }
+                        ).filter(i => i.nama);
                     } else if (parsed.nama_barang || parsed.nama || parsed.name) {
-                        qrItems = [parsed.nama_barang || parsed.nama || parsed.name];
+                        qrItems = [{ nama: parsed.nama_barang || parsed.nama || parsed.name, id: parsed.id || parsed.id_barang || '' }];
                     } else {
-                        qrItems = [raw];
+                        qrItems = [{ nama: raw, id: '' }];
                     }
                 } else {
-                    qrItems = [raw];
+                    qrItems = [{ nama: raw, id: '' }];
                 }
             } catch (_) {
                 // Teks biasa — bisa dipisah newline atau koma
                 if (raw.includes('\n')) {
-                    qrItems = raw.split('\n').map(s => s.trim()).filter(Boolean);
+                    qrItems = raw.split('\n').map(s => s.trim()).filter(Boolean).map(nama => ({ nama, id: '' }));
                 } else if (raw.includes('|')) {
-                    qrItems = raw.split('|').map(s => s.trim()).filter(Boolean);
+                    qrItems = raw.split('|').map(s => s.trim()).filter(Boolean).map(nama => ({ nama, id: '' }));
                 } else {
-                    qrItems = [raw];
+                    qrItems = [{ nama: raw, id: '' }];
                 }
             }
 
             // ── Cocokkan setiap item QR ke source items (stock master) ──
             const resolvedItems = qrItems.map(q => {
-                let matched = sourceItems.find(i => i.toLowerCase() === q.toLowerCase());
+                let matched = sourceItems.find(i => i.toLowerCase() === q.nama.toLowerCase());
                 if (!matched) matched = sourceItems.find(i =>
-                    i.toLowerCase().includes(q.toLowerCase()) ||
-                    q.toLowerCase().includes(i.toLowerCase())
+                    i.toLowerCase().includes(q.nama.toLowerCase()) ||
+                    q.nama.toLowerCase().includes(i.toLowerCase())
                 );
-                return { label: matched || q, matched: !!matched, original: q };
+                return { label: matched || q.nama, matched: !!matched, original: q.nama, id: q.id || '' };
             });
 
             playScanBeep();
@@ -7089,7 +7202,7 @@
             }
 
             // ── Tambahkan item yang dipilih ke tabel ──
-            selectedItems.forEach(({ nama, qty }) => tambahBarisInbound(nama, qty));
+            selectedItems.forEach(({ nama, qty, id }) => tambahBarisInbound(nama, qty, id));
 
             if (statusEl) {
                 statusEl.textContent = `✅ ${selectedItems.length} item ditambahkan ke tabel. Klik Scan untuk lanjut.`;
@@ -7236,7 +7349,8 @@
                         const idx = cb.id.replace('inb-item-cb-', '');
                         const qtyInput = modal.querySelector(`.inb-qty-input[data-item-idx="${idx}"]`);
                         const qty = qtyInput ? Math.max(1, parseInt(qtyInput.value) || 1) : 1;
-                        return { nama: cb.value, qty };
+                        const id = validItems[parseInt(idx, 10)]?.id || '';
+                        return { nama: cb.value, qty, id };
                     });
                     modal.remove();
                     resolve(selected);
@@ -7278,12 +7392,14 @@
             rows.forEach(row => {
                 if (row.hasAttribute('data-placeholder')) return;
                 const namaInput = row.querySelector('.nama-barang-input');
+                const idInput = row.querySelector('.item-id-input');
                 const qtyInput = row.querySelector('.qty-input');
                 const serialInput = row.querySelector('.serial-input');
                 const remarkInput = row.querySelector('.remark-input');
                 const nama = namaInput ? namaInput.value.trim() : '';
                 if (!nama) return;
                 items.push({
+                    id: idInput ? idInput.value.trim() : '',
                     namaBarang: nama,
                     qty: qtyInput ? qtyInput.value : '',
                     serialNumber: serialInput ? serialInput.value.trim() : '',
@@ -7333,7 +7449,7 @@
                     document.getElementById('inb-category').value = '';
                     document.getElementById('inb-tanggal').value = today;
                     document.getElementById('inb-table-body').innerHTML =
-                        '<tr data-placeholder><td colspan="5" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>';
+                        '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>';
                     _clearDraft(DRAFT_KEYS.processInbound);
                 } else {
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
@@ -7745,7 +7861,7 @@
             }, 300);
         }
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyGwyUjZc55K3reYqInjLHDF8wbYNukdAWhRJhWSgZv8MfCnDbMD6HnwohmkE-cf0NX/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxn-EFq9BuCEVGur0YsyMAt9AyvRHj96mK-tm1ObKsFMqLzzI3ZMSBKOI_iXNb5Iz4D/exec";
 
         async function simpanOutboundFinal() {
             const orderedByEl = document.getElementById('proc-ordered-by');
@@ -7773,7 +7889,7 @@
 
             const rows = document.querySelectorAll('#proc-table-body tr');
             // Cek apakah ada baris valid (bukan hanya placeholder)
-            const hasRealRows = Array.from(rows).some(row => row.cells.length >= 5 &&
+            const hasRealRows = Array.from(rows).some(row => row.cells.length >= 6 &&
                 !row.querySelector('td[colspan]'));
             if (!hasRealRows) {
                 showAlert('warning', 'Tabel Kosong', 'Import PDF terlebih dahulu untuk mengisi data item PO.');
@@ -7783,21 +7899,24 @@
             // ── Kumpulkan data items dari tabel ──
             const items = [];
             rows.forEach(row => {
-                if (row.cells.length < 5 || row.querySelector('td[colspan]')) return;
+                if (row.cells.length < 6 || row.querySelector('td[colspan]')) return;
                 const qtyOutboundInput = row.querySelector('input[type="number"]');
                 const descSelect = row.querySelector('select');
+                const idInput = row.querySelector('.item-id-input');
                 const namaBarangInput = row.querySelector('.nama-barang-input');
                 const serialNumberInput = row.querySelector('.serial-number-input');
                 const idDeviceInput = row.querySelector('.id-device-input');
-                const namaBarang = namaBarangInput ? namaBarangInput.value.trim() : row.cells[0].innerText.trim();
-                const qtyPO = row.cells[1].innerText.trim();
+                const id = idInput ? idInput.value.trim() : row.cells[0].innerText.trim();
+                const namaBarang = namaBarangInput ? namaBarangInput.value.trim() : row.cells[1].innerText.trim();
+                const qtyPO = row.cells[2].innerText.trim();
                 if (!namaBarang || namaBarang === '-') return; // skip baris kosong
                 items.push({
+                    id: id,
                     namaBarang: namaBarang,
                     qtyPO: qtyPO,
-                    qtyOutbound: qtyOutboundInput ? qtyOutboundInput.value : row.cells[2].innerText.trim(),
-                    uom: row.cells[3].innerText.trim(),
-                    description: descSelect ? descSelect.value : row.cells[4].innerText.trim(),
+                    qtyOutbound: qtyOutboundInput ? qtyOutboundInput.value : row.cells[3].innerText.trim(),
+                    uom: row.cells[4].innerText.trim(),
+                    description: descSelect ? descSelect.value : row.cells[5].innerText.trim(),
                     serialNumber: serialNumberInput ? serialNumberInput.value.trim() : '',
                     idDevice: idDeviceInput ? idDeviceInput.value.trim() : '',
                 });
@@ -7893,7 +8012,7 @@
                         const poSelect = document.getElementById('proc-no-po-select');
                         if (poSelect) poSelect.value = '';
                         document.getElementById('proc-table-body').innerHTML =
-                            '<tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
+                            '<tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
                         _clearDraft(DRAFT_KEYS.processPO);
                     }, 1500);
 
@@ -7996,7 +8115,8 @@
                     <thead>
                         <tr class="bg-gray-800 text-white">
                             <th class="p-2 text-center rounded-tl-lg" style="width:36px">✓/✗</th>
-                            <th class="p-2 text-left" style="min-width:200px">Nama Barang</th>
+                            <th class="p-2 text-left" style="min-width:100px">ID</th>
+                            <th class="p-2 text-left" style="min-width:260px">Nama Barang</th>
                             <th class="p-2 text-center">Qty Outbound</th>
                             <th class="p-2 text-center">Qty Received</th>
                             <th class="p-2 text-center">UOM</th>
@@ -8005,7 +8125,7 @@
                         </tr>
                     </thead>
                     <tbody id="recv-table-body">
-                        <tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Scan QR Code Delivery Order untuk mengisi data secara otomatis</td></tr>
+                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Scan QR Code Delivery Order untuk mengisi data secara otomatis</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -8034,7 +8154,7 @@
             const tbody = document.getElementById('recv-table-body');
             if (!tbody) return;
             if (!items || items.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Tidak ada item ditemukan dalam QR Code.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Tidak ada item ditemukan dalam QR Code.</td></tr>`;
                 return;
             }
             tbody.innerHTML = '';
@@ -8044,10 +8164,12 @@
                 tr.className = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50';
                 tr.dataset.idx = idx;
                 tr.dataset.qtyOutbound = qtyOut;
+                tr.dataset.id = it.id || '';
                 tr.innerHTML = `
                     <td class="p-2 text-center align-middle">
                         <span id="recv-check-${idx}" class="text-base font-bold">—</span>
                     </td>
+                    <td class="p-2 align-middle text-gray-500 recv-id-cell">${escapeHtml(it.id || '-')}</td>
                     <td class="p-2 align-middle font-medium text-gray-800">${escapeHtml(it.nama || '-')}</td>
                     <td class="p-2 text-center align-middle text-gray-700">${escapeHtml(String(it.qty || '-'))}</td>
                     <td class="p-2 text-center align-middle">
@@ -8112,7 +8234,9 @@
                     if (itemMatch) {
                         if (currentItem) result.items.push(currentItem);
                         const uomDesc = (itemMatch[4] || '').trim();
-                        currentItem = { nama: itemMatch[2].trim(), qty: itemMatch[3], uom: uomDesc, description: '' };
+                        currentItem = { id: '', nama: itemMatch[2].trim(), qty: itemMatch[3], uom: uomDesc, description: '' };
+                    } else if (line.startsWith('ID:') && currentItem) {
+                        currentItem.id = line.replace('ID:', '').trim();
                     } else if (line.startsWith('Desc:') && currentItem) {
                         currentItem.description = line.replace('Desc:', '').trim();
                     } else if (line.startsWith('Ket:') && currentItem) {
@@ -8217,15 +8341,16 @@
                 const checkSpan = row.querySelector('[id^="recv-check-"]');
                 if (!checkSpan || checkSpan.textContent !== '❌') return;
                 const cells = row.querySelectorAll('td');
-                if (cells.length < 6) return;
+                if (cells.length < 7) return;
                 const qtyRecInput = row.querySelector('.recv-qty-received');
                 const remarkInput = row.querySelector('.recv-remark-input');
                 mismatchItems.push({
-                    nama: cells[1].textContent.trim(),
-                    qtyOutbound: cells[2].textContent.trim(),
-                    qtyReceived: qtyRecInput ? qtyRecInput.value : cells[3].textContent.trim(),
-                    uom: cells[4].textContent.trim(),
-                    description: cells[5].textContent.trim(),
+                    id: cells[1].textContent.trim(),
+                    nama: cells[2].textContent.trim(),
+                    qtyOutbound: cells[3].textContent.trim(),
+                    qtyReceived: qtyRecInput ? qtyRecInput.value : cells[4].textContent.trim(),
+                    uom: cells[5].textContent.trim(),
+                    description: cells[6].textContent.trim(),
                     remark: remarkInput ? remarkInput.value.trim() : '',
                 });
             });
@@ -8312,22 +8437,23 @@
                 y += Math.max(infoLeft.length, infoRight.length) * lineH + 6;
 
                 const tableBody = mismatchItems.map((it, idx) => [
-                    String(idx + 1), it.nama, it.qtyOutbound, it.qtyReceived, it.uom, it.description || '-', it.remark || '-'
+                    String(idx + 1), it.id || '-', it.nama, it.qtyOutbound, it.qtyReceived, it.uom, it.description || '-', it.remark || '-'
                 ]);
 
                 doc.autoTable({
                     startY: y,
-                    head: [['No', 'Nama Barang', 'Qty Outbound', 'Qty Received', 'UOM', 'Description', 'Remark']],
+                    head: [['No', 'ID', 'Nama Barang', 'Qty Outbound', 'Qty Received', 'UOM', 'Description', 'Remark']],
                     body: tableBody,
                     theme: 'grid',
-                    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle' },
+                    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                     headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', halign: 'center' },
                     columnStyles: {
-                        0: { halign: 'center', cellWidth: 9 },
-                        2: { halign: 'center', cellWidth: 22 },
-                        3: { halign: 'center', cellWidth: 22 },
-                        4: { halign: 'center', cellWidth: 14 },
-                        6: { cellWidth: 28 },
+                        0: { halign: 'center', cellWidth: 8 },
+                        1: { halign: 'center', cellWidth: 16 },
+                        3: { halign: 'center', cellWidth: 18 },
+                        4: { halign: 'center', cellWidth: 18 },
+                        5: { halign: 'center', cellWidth: 12 },
+                        7: { cellWidth: 24 },
                     },
                     margin: { left: marginX, right: marginX },
                 });
@@ -8376,23 +8502,24 @@
             if (!crewChecking) { showAlert('warning', 'Data Belum Lengkap', 'Crew Checking belum diisi.'); return; }
 
             const rows = document.querySelectorAll('#recv-table-body tr');
-            const hasRealRows = Array.from(rows).some(row => row.cells.length >= 5 && !row.querySelector('td[colspan]'));
+            const hasRealRows = Array.from(rows).some(row => row.cells.length >= 6 && !row.querySelector('td[colspan]'));
             if (!hasRealRows) { showAlert('warning', 'Tabel Kosong', 'Scan QR Code terlebih dahulu untuk mengisi data item.'); return; }
 
             const items = [];
             rows.forEach(row => {
-                if (row.cells.length < 6 || row.querySelector('td[colspan]')) return;
+                if (row.cells.length < 7 || row.querySelector('td[colspan]')) return;
                 const cells = row.querySelectorAll('td');
                 const checkSpan = row.querySelector('[id^="recv-check-"]');
                 const qtyRecInput = row.querySelector('.recv-qty-received');
                 const remarkInput = row.querySelector('.recv-remark-input');
                 const status = checkSpan ? (checkSpan.textContent === '✅' ? 'Sesuai' : 'Tidak Sesuai') : '-';
                 items.push({
-                    namaBarang: cells[1].textContent.trim(),
-                    qtyOutbound: cells[2].textContent.trim(),
-                    qtyReceived: qtyRecInput ? qtyRecInput.value : cells[3].textContent.trim(),
-                    uom: cells[4].textContent.trim(),
-                    description: cells[5].textContent.trim(),
+                    id: cells[1].textContent.trim(),
+                    namaBarang: cells[2].textContent.trim(),
+                    qtyOutbound: cells[3].textContent.trim(),
+                    qtyReceived: qtyRecInput ? qtyRecInput.value : cells[4].textContent.trim(),
+                    uom: cells[5].textContent.trim(),
+                    description: cells[6].textContent.trim(),
                     remark: remarkInput ? remarkInput.value.trim() : '',
                     status: status,
                 });
