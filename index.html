@@ -3109,6 +3109,14 @@
         let _catalogueData = null;          // { categories: [...], itemsByCategory: { kategori: [...] } }
         let _catalogueActiveCategory = null; // kategori yang sedang aktif dipilih user
 
+        // Mode pemilihan barang untuk dikirim ke Form PO ("PO") atau Form RO ("RO").
+        // null berarti Catalogue sedang dalam tampilan normal (tanpa checkbox).
+        let _catalogueSelectionMode = null;
+        // key -> { id, name, uom, category } untuk barang yang sudah dicentang.
+        // Menggunakan Map (bukan direset tiap render) supaya pilihan tetap tersimpan
+        // walau user berpindah-pindah kategori sebelum klik "Request".
+        let _catalogueSelection = new Map();
+
         async function showCatalogue() {
             setLoading();
             try {
@@ -3188,6 +3196,9 @@
                     </svg>
                 </div>`;
 
+            const isSelecting = !!_catalogueSelectionMode;
+            const modeLabel = _catalogueSelectionMode === 'RO' ? 'Return Order' : 'Request Order';
+
             const items = itemsByCategory[_catalogueActiveCategory] || [];
             let cardsHtml = '';
             for (const item of items) {
@@ -3197,29 +3208,223 @@
                          onerror="handleCatalogueImgError(this)">`
                     : `<div class="w-full aspect-square flex items-center justify-center rounded-lg mb-3 bg-gray-100 text-gray-400 text-xs text-center px-2">Oops Gambarnya lagi dibuat dulu yah</div>`;
 
+                const itemKey = `${_catalogueActiveCategory}|${item.id}|${item.name}`;
+                const isChecked = _catalogueSelection.has(itemKey);
+                const existingQty = isChecked ? (_catalogueSelection.get(itemKey).qty || 1) : 1;
+                const checkboxHtml = isSelecting ? `
+                    <input type="checkbox" class="cat-select-checkbox absolute top-2 left-2 z-10 h-4 w-4 accent-indigo-600 cursor-pointer bg-white rounded shadow"
+                        data-key="${escapeHtml(itemKey)}"
+                        data-id="${escapeHtml(item.id)}"
+                        data-name="${escapeHtml(item.name)}"
+                        data-uom="${escapeHtml(item.uom || '')}"
+                        data-category="${escapeHtml(_catalogueActiveCategory)}"
+                        onclick="event.stopPropagation()"
+                        onchange="toggleCatalogueItemCheck(this)"
+                        ${isChecked ? 'checked' : ''}>` : '';
+
+                // Kotak isian Qty ditempatkan sejalur dengan konten kartu (sebelum teks UOM),
+                // hanya aktif/terlihat saat kartu tersebut sedang dicentang (isChecked).
+                const qtyHtml = isSelecting ? `
+                    <div class="flex items-center gap-1.5 mt-1.5 ${isChecked ? '' : 'hidden'} cat-select-qty-wrap">
+                        <label class="text-[10px] text-gray-400 font-semibold">Qty</label>
+                        <input type="number" min="1" value="${existingQty}"
+                            class="cat-select-qty w-14 text-xs text-center border border-gray-300 rounded shadow-sm bg-white py-0.5 focus:ring-1 focus:ring-indigo-400 outline-none"
+                            data-key="${escapeHtml(itemKey)}"
+                            onclick="event.stopPropagation()"
+                            oninput="updateCatalogueItemQty(this)">
+                    </div>` : '';
+
                 cardsHtml += `
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3 hover:shadow-md transition">
+                <div class="cat-card relative bg-white rounded-xl shadow-sm border ${isSelecting ? 'border-indigo-200' : 'border-gray-200'} p-3 hover:shadow-md transition ${isSelecting ? 'cursor-pointer' : ''}"
+                    ${isSelecting ? `onclick="const cb=this.querySelector('.cat-select-checkbox'); if(cb){ cb.checked=!cb.checked; cb.dispatchEvent(new Event('change')); }"` : ''}>
+                    ${checkboxHtml}
                     ${imageBlock}
                     <p class="text-[10px] text-black font-mono mb-0.5">${escapeHtml(item.id)}</p>
                     <p class="text-sm font-semibold text-gray-700 leading-snug">${escapeHtml(item.name)}</p>
+                    ${qtyHtml}
                     ${item.uom ? `<p class="text-[10px] text-amber-600 font-semibold mt-1">${escapeHtml(item.uom)}</p>` : ''}
                 </div>`;
             }
 
+            const actionButtonsHtml = isSelecting ? `
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button onclick="cancelCatalogueSelection()"
+                        class="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-600 text-sm font-semibold rounded-xl shadow-sm border border-gray-200 transition">
+                        Batal
+                    </button>
+                    <button id="catalogue-request-btn" onclick="sendCatalogueSelectionToForm()" disabled
+                        class="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow transition opacity-50 cursor-not-allowed">
+                        Request
+                    </button>
+                </div>` : `
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button onclick="showCatalogueAddModal()"
+                        class="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl shadow transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Tambah Produk
+                    </button>
+                    <div class="relative" id="catalogue-order-dropdown">
+                        <button onclick="toggleCatalogueOrderMenu()"
+                            class="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow transition">
+                            Order Barang
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="catalogue-order-menu" class="hidden absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                            <button onclick="startCatalogueSelection('PO')"
+                                class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition">Request Order</button>
+                            <button onclick="startCatalogueSelection('RO')"
+                                class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition">Return Order</button>
+                        </div>
+                    </div>
+                </div>`;
+
+            const subtitleHtml = isSelecting
+                ? `<p class="text-sm text-indigo-600 font-semibold mb-4">Mode ${modeLabel}: centang barang yang ingin ditambahkan, lalu klik "Request".</p>`
+                : `<p class="text-sm text-gray-500 mb-4">Pilih kategori untuk melihat daftar barang.</p>`;
+
             contentArea.innerHTML = `
             <div class="flex items-start justify-between gap-3 mb-1">
                 <h1 class="text-3xl font-semibold text-gray-700">Catalogue</h1>
-                <button onclick="showCatalogueAddModal()"
-                    class="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl shadow transition flex-shrink-0">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Tambah Produk
-                </button>
+                ${actionButtonsHtml}
             </div>
-            <p class="text-sm text-gray-500 mb-4">Pilih kategori untuk melihat daftar barang.</p>
+            ${subtitleHtml}
             <div class="mb-6">${categoryDropdown}</div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">${cardsHtml || '<p class="text-gray-400 text-sm col-span-full">Tidak ada barang pada kategori ini.</p>'}</div>`;
+
+            if (isSelecting) updateCatalogueRequestBtnLabel();
+        }
+
+        /** Buka/tutup menu dropdown "Order Barang" (Request Order / Return Order) di Catalogue */
+        function toggleCatalogueOrderMenu() {
+            const menu = document.getElementById('catalogue-order-menu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        /** Mulai mode pemilihan barang Catalogue. mode: 'PO' (Request Order) atau 'RO' (Return Order) */
+        function startCatalogueSelection(mode) {
+            _catalogueSelectionMode = mode;
+            _catalogueSelection = new Map();
+            renderCatalogue();
+        }
+
+        /** Batalkan mode pemilihan barang Catalogue, kembali ke tampilan normal */
+        function cancelCatalogueSelection() {
+            _catalogueSelectionMode = null;
+            _catalogueSelection = new Map();
+            renderCatalogue();
+        }
+
+        /** Dipanggil saat checkbox kecil di pojok kiri atas kartu Catalogue dicentang/dilepas */
+        function toggleCatalogueItemCheck(checkboxEl) {
+            const { key, id, name, uom, category } = checkboxEl.dataset;
+            const card = checkboxEl.closest('.cat-card');
+            const qtyInput = card ? card.querySelector('.cat-select-qty') : null;
+            const qtyWrap = card ? card.querySelector('.cat-select-qty-wrap') : null;
+
+            if (checkboxEl.checked) {
+                let qty = qtyInput ? parseInt(qtyInput.value, 10) : 1;
+                if (!qty || qty < 1) qty = 1;
+                _catalogueSelection.set(key, { id, name, uom, category, qty });
+                if (qtyInput) qtyInput.value = qty;
+                if (qtyWrap) qtyWrap.classList.remove('hidden');
+            } else {
+                _catalogueSelection.delete(key);
+                if (qtyWrap) qtyWrap.classList.add('hidden');
+            }
+            updateCatalogueRequestBtnLabel();
+        }
+
+        /** Dipanggil saat nilai kotak Qty pada kartu Catalogue yang sedang dicentang diubah */
+        function updateCatalogueItemQty(qtyInput) {
+            const key = qtyInput.dataset.key;
+            let qty = parseInt(qtyInput.value, 10);
+            if (!qty || qty < 1) qty = 1;
+            qtyInput.value = qty;
+            if (_catalogueSelection.has(key)) {
+                const entry = _catalogueSelection.get(key);
+                entry.qty = qty;
+                _catalogueSelection.set(key, entry);
+            }
+        }
+
+        /** Perbarui label & status enable/disable tombol "Request" sesuai jumlah barang tercentang */
+        function updateCatalogueRequestBtnLabel() {
+            const btn = document.getElementById('catalogue-request-btn');
+            if (!btn) return;
+            const count = _catalogueSelection.size;
+            btn.textContent = count > 0 ? `Request (${count})` : 'Request';
+            btn.disabled = count === 0;
+            btn.classList.toggle('opacity-50', count === 0);
+            btn.classList.toggle('cursor-not-allowed', count === 0);
+        }
+
+        /**
+         * Kirim barang-barang yang sudah dicentang di Catalogue ke tabel item pada
+         * "Form PO" (Purchase Order) atau "Form RO" (Form Return Order), sesuai mode
+         * yang dipilih sebelumnya lewat dropdown "Order Barang".
+         */
+        async function sendCatalogueSelectionToForm() {
+            const items = Array.from(_catalogueSelection.values());
+            if (items.length === 0) {
+                showAlert('warning', 'Belum Ada Barang', 'Centang minimal satu barang untuk dikirim.');
+                return;
+            }
+
+            const mode = _catalogueSelectionMode;
+            const targetPage = mode === 'RO' ? 'Form Return Order' : 'Purchase Order';
+            const tbodyId = mode === 'RO' ? 'retur-item-table-body' : 'po-item-table-body';
+            const addRowFn = mode === 'RO' ? tambahBarisFormRetur : tambahBarisFormPO;
+
+            // Reset mode & pilihan Catalogue supaya saat kembali ke Catalogue kondisinya bersih
+            _catalogueSelectionMode = null;
+            _catalogueSelection = new Map();
+
+            navTo(targetPage);
+
+            // Tunggu sampai form target (Form PO / Form RO) selesai dirender di DOM,
+            // karena showFormPO()/showFormRetur() bersifat async (fetch data dulu).
+            const tbodyEl = await new Promise(resolve => {
+                let attempts = 0;
+                const check = () => {
+                    const el = document.getElementById(tbodyId);
+                    attempts++;
+                    if (el || attempts > 100) resolve(el);
+                    else setTimeout(check, 50);
+                };
+                check();
+            });
+            if (!tbodyEl) return;
+
+            items.forEach(item => {
+                addRowFn();
+                const tbody = document.getElementById(tbodyId);
+                const tr = tbody ? tbody.querySelector('tr:last-child') : null;
+                if (!tr) return;
+                const idEl = tr.querySelector('.po-item-id');
+                const namaEl = tr.querySelector('.po-item-nama');
+                const qtyEl = tr.querySelector('.po-item-qty');
+                const uomEl = tr.querySelector('.po-item-uom');
+                const descEl = tr.querySelector('.po-item-desc');
+                if (idEl) idEl.value = item.id || '';
+                if (namaEl) { namaEl.value = item.name || ''; namaEl.title = namaEl.value; }
+                if (qtyEl && item.qty) qtyEl.value = item.qty;
+                if (uomEl && item.uom) {
+                    const match = Array.from(uomEl.options).find(o => o.value.toLowerCase() === String(item.uom).toLowerCase());
+                    if (match) uomEl.value = match.value;
+                }
+                // Isi otomatis "Description" berdasarkan kategori barang di Catalogue,
+                // jika nama kategori tersebut cocok dengan salah satu opsi Description yang ada.
+                if (descEl && item.category) {
+                    const matchDesc = Array.from(descEl.options).find(o => o.value.toLowerCase() === String(item.category).toLowerCase());
+                    if (matchDesc) descEl.value = matchDesc.value;
+                }
+            });
+
+            showAlert('success', 'Barang Ditambahkan', `${items.length} barang dari Catalogue berhasil ditambahkan ke ${mode === 'RO' ? 'Form RO' : 'Form PO'}.`);
         }
 
         /** Ganti kategori aktif di halaman Catalogue lalu render ulang */
