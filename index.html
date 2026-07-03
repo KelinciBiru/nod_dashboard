@@ -3198,6 +3198,9 @@
 
             const isSelecting = !!_catalogueSelectionMode;
             const modeLabel = _catalogueSelectionMode === 'RO' ? 'Return Order' : 'Request Order';
+            // Fitur "Request Order" / "Return Order" (dropdown "Order Barang") hanya
+            // boleh diakses oleh ADMIN dan PO_User.
+            const canUseCatalogueOrder = (currentUserRole === 'ADMIN' || currentUserRole === 'PO_User');
 
             const items = itemsByCategory[_catalogueActiveCategory] || [];
             let cardsHtml = '';
@@ -3252,6 +3255,13 @@
                         class="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-gray-50 text-gray-600 text-sm font-semibold rounded-xl shadow-sm border border-gray-200 transition">
                         Batal
                     </button>
+                    <button id="catalogue-check-btn" onclick="showCatalogueCheckModal()"
+                        class="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-indigo-50 text-indigo-600 text-sm font-semibold rounded-xl shadow-sm border border-indigo-200 transition">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Check
+                    </button>
                     <button id="catalogue-request-btn" onclick="sendCatalogueSelectionToForm()" disabled
                         class="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl shadow transition opacity-50 cursor-not-allowed">
                         Request
@@ -3265,6 +3275,7 @@
                         </svg>
                         Tambah Produk
                     </button>
+                    ${canUseCatalogueOrder ? `
                     <div class="relative" id="catalogue-order-dropdown">
                         <button onclick="toggleCatalogueOrderMenu()"
                             class="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow transition">
@@ -3279,7 +3290,7 @@
                             <button onclick="startCatalogueSelection('RO')"
                                 class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition">Return Order</button>
                         </div>
-                    </div>
+                    </div>` : ''}
                 </div>`;
 
             const subtitleHtml = isSelecting
@@ -3306,6 +3317,12 @@
 
         /** Mulai mode pemilihan barang Catalogue. mode: 'PO' (Request Order) atau 'RO' (Return Order) */
         function startCatalogueSelection(mode) {
+            // ── AKSES KONTROL: fitur Request Order/Return Order di Catalogue
+            // hanya untuk ADMIN dan PO_User ──
+            if (!(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
+                showAlert('error', 'Akses Ditolak', 'Fitur "Request Order" / "Return Order" hanya dapat diakses oleh Admin dan PO User.');
+                return;
+            }
             _catalogueSelectionMode = mode;
             _catalogueSelection = new Map();
             renderCatalogue();
@@ -3366,6 +3383,11 @@
          * Kirim barang-barang yang sudah dicentang di Catalogue ke tabel item pada
          * "Form PO" (Purchase Order) atau "Form RO" (Form Return Order), sesuai mode
          * yang dipilih sebelumnya lewat dropdown "Order Barang".
+         *
+         * Catatan: navigasi ke halaman target di-await LANGSUNG (bukan lewat polling
+         * cek elemen), supaya render form benar-benar selesai dulu sebelum baris-baris
+         * item ditambahkan satu per satu. Dengan begitu jumlah barang yang bisa dikirim
+         * tidak terbatas (berapa pun banyaknya barang yang dicentang, semua akan masuk).
          */
         async function sendCatalogueSelectionToForm() {
             const items = Array.from(_catalogueSelection.values());
@@ -3383,27 +3405,29 @@
             _catalogueSelectionMode = null;
             _catalogueSelection = new Map();
 
-            navTo(targetPage);
+            // Replikasi bagian navigasi dari navTo() tapi di-await langsung ke fungsi
+            // penampil halamannya (showFormPO / showFormRetur), supaya kita pasti tahu
+            // kapan render form selesai sebelum mulai menambah baris item.
+            document.getElementById('page-title').textContent = (targetPage === 'Purchase Order') ? 'Form Purchase Order' : 'Form Return Order';
+            setActiveNav(targetPage);
+            sessionStorage.setItem('currentPage', targetPage);
+            if (window.innerWidth < 768 && sidebarOpen) toggleSidebar();
 
-            // Tunggu sampai form target (Form PO / Form RO) selesai dirender di DOM,
-            // karena showFormPO()/showFormRetur() bersifat async (fetch data dulu).
-            const tbodyEl = await new Promise(resolve => {
-                let attempts = 0;
-                const check = () => {
-                    const el = document.getElementById(tbodyId);
-                    attempts++;
-                    if (el || attempts > 100) resolve(el);
-                    else setTimeout(check, 50);
-                };
-                check();
-            });
-            if (!tbodyEl) return;
+            if (mode === 'RO') {
+                await showFormRetur();
+            } else {
+                await showFormPO();
+            }
 
-            items.forEach(item => {
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+
+            // Tambahkan baris untuk SEMUA barang yang dicentang, tidak dibatasi jumlahnya.
+            for (const item of items) {
                 addRowFn();
-                const tbody = document.getElementById(tbodyId);
-                const tr = tbody ? tbody.querySelector('tr:last-child') : null;
-                if (!tr) return;
+                const currentTbody = document.getElementById(tbodyId);
+                const tr = currentTbody ? currentTbody.querySelector('tr:last-child') : null;
+                if (!tr) continue;
                 const idEl = tr.querySelector('.po-item-id');
                 const namaEl = tr.querySelector('.po-item-nama');
                 const qtyEl = tr.querySelector('.po-item-qty');
@@ -3422,9 +3446,71 @@
                     const matchDesc = Array.from(descEl.options).find(o => o.value.toLowerCase() === String(item.category).toLowerCase());
                     if (matchDesc) descEl.value = matchDesc.value;
                 }
-            });
+            }
 
             showAlert('success', 'Barang Ditambahkan', `${items.length} barang dari Catalogue berhasil ditambahkan ke ${mode === 'RO' ? 'Form RO' : 'Form PO'}.`);
+        }
+
+        /**
+         * Tampilkan popup berisi daftar barang yang sudah dicentang di Catalogue,
+         * lengkap dengan ID, Nama Barang, Qty, UOM, dan Kategori masing-masing.
+         */
+        function showCatalogueCheckModal() {
+            const old = document.getElementById('catalogue-check-modal');
+            if (old) old.remove();
+
+            const items = Array.from(_catalogueSelection.values());
+
+            const rowsHtml = items.length > 0
+                ? items.map(it => `
+                    <tr class="border-b border-gray-100">
+                        <td class="p-2 text-xs font-mono text-gray-600 whitespace-nowrap">${escapeHtml(it.id)}</td>
+                        <td class="p-2 text-sm text-gray-700">${escapeHtml(it.name)}</td>
+                        <td class="p-2 text-xs text-center text-gray-700">${escapeHtml(String(it.qty || 1))}</td>
+                        <td class="p-2 text-xs text-center text-gray-700">${escapeHtml(it.uom || '-')}</td>
+                        <td class="p-2 text-xs text-gray-700">${escapeHtml(it.category || '-')}</td>
+                    </tr>`).join('')
+                : `<tr><td colspan="5" class="p-6 text-center text-gray-400 italic text-sm">Belum ada barang yang dicentang.</td></tr>`;
+
+            const modal = document.createElement('div');
+            modal.id = 'catalogue-check-modal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4';
+            modal.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col">
+                <div class="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
+                    <div>
+                        <p class="font-bold text-gray-800 text-base">Barang Tercentang</p>
+                        <p class="text-xs text-gray-400">${items.length} barang siap dikirim</p>
+                    </div>
+                    <button onclick="document.getElementById('catalogue-check-modal').remove()"
+                        class="text-gray-400 hover:text-gray-600 transition flex-shrink-0">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-y-auto p-4">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+                                <th class="p-2">ID</th>
+                                <th class="p-2">Nama Barang</th>
+                                <th class="p-2 text-center">Qty</th>
+                                <th class="p-2 text-center">UOM</th>
+                                <th class="p-2">Kategori</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+                <div class="p-4 border-t border-gray-100 flex justify-end flex-shrink-0">
+                    <button onclick="document.getElementById('catalogue-check-modal').remove()"
+                        class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition">
+                        Tutup
+                    </button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
         }
 
         /** Ganti kategori aktif di halaman Catalogue lalu render ulang */
