@@ -3158,7 +3158,16 @@
 
             if (categories.length === 0) {
                 contentArea.innerHTML = `
-                <h1 class="text-3xl font-semibold text-gray-700 mb-4">Catalogue</h1>
+                <div class="flex items-center justify-between mb-4">
+                    <h1 class="text-3xl font-semibold text-gray-700">Catalogue</h1>
+                    <button onclick="showCatalogueAddModal()"
+                        class="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl shadow transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Tambah Produk
+                    </button>
+                </div>
                 <p class="text-gray-500">Belum ada data catalogue di sheet.</p>`;
                 return;
             }
@@ -3191,7 +3200,16 @@
             }
 
             contentArea.innerHTML = `
-            <h1 class="text-3xl font-semibold text-gray-700 mb-1">Catalogue</h1>
+            <div class="flex items-start justify-between gap-3 mb-1">
+                <h1 class="text-3xl font-semibold text-gray-700">Catalogue</h1>
+                <button onclick="showCatalogueAddModal()"
+                    class="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl shadow transition flex-shrink-0">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Tambah Produk
+                </button>
+            </div>
             <p class="text-sm text-gray-500 mb-4">Pilih kategori untuk melihat daftar barang.</p>
             <div class="flex flex-wrap gap-2 mb-6">${headerButtons}</div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">${cardsHtml || '<p class="text-gray-400 text-sm col-span-full">Tidak ada barang pada kategori ini.</p>'}</div>`;
@@ -3201,6 +3219,198 @@
         function selectCatalogueCategory(cat) {
             _catalogueActiveCategory = cat;
             renderCatalogue();
+        }
+
+        /**
+         * Tampilkan modal "Tambah Produk" untuk menambah item baru ke Catalogue.
+         * Foto (jika ada) di-resize/compress di browser, dikirim sebagai base64 ke
+         * GAS backend Catalogue, yang akan meng-upload ke folder Google Drive dan
+         * menuliskan baris baru (Kategori, ID, Nama Barang, UOM, URL Foto,
+         * Ditambahkan oleh) ke sheet "Catalogue".
+         */
+        function showCatalogueAddModal() {
+            const old = document.getElementById('catalogue-add-modal');
+            if (old) old.remove();
+
+            const existingCategories = (_catalogueData && _catalogueData.categories) ? _catalogueData.categories : [];
+            const datalistOptions = existingCategories.map(c => `<option value="${escapeHtml(c)}">`).join('');
+
+            const modal = document.createElement('div');
+            modal.id = 'catalogue-add-modal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4';
+            modal.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">🛒</span>
+                    <div>
+                        <p class="font-bold text-gray-800 text-base">Tambah Produk Catalogue</p>
+                        <p class="text-xs text-gray-400">Data akan dicatat di sheet "Catalogue"</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Category <span class="text-red-500">*</span></label>
+                        <input id="cat-add-category" type="text" list="cat-add-category-list"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            placeholder="mis. Minuman, Snack, dll..." />
+                        <datalist id="cat-add-category-list">${datalistOptions}</datalist>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">ID <span class="text-red-500">*</span></label>
+                        <input id="cat-add-id" type="text"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            placeholder="ID Barang..." />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Nama Barang <span class="text-red-500">*</span></label>
+                        <input id="cat-add-nama" type="text"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            placeholder="Nama produk..." />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">UOM</label>
+                        <input id="cat-add-uom" type="text"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            placeholder="mis. PCS, BOX, KG..." />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Upload Foto Produk</label>
+                        <div id="cat-add-photo-preview" class="hidden mb-2 relative">
+                            <img id="cat-add-photo-img"
+                                class="w-full rounded-xl object-cover border border-amber-200"
+                                style="max-height:160px;" alt="Foto produk" />
+                            <button type="button" id="cat-add-photo-retake"
+                                class="absolute top-1.5 right-1.5 bg-white/90 hover:bg-white text-xs font-semibold text-gray-600 px-2 py-1 rounded-lg shadow transition">
+                                🔄 Ganti Foto
+                            </button>
+                        </div>
+                        <button type="button" id="cat-add-photo-btn"
+                            class="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:border-amber-300 hover:text-amber-600 transition">
+                            <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            <span id="cat-add-photo-label">Pilih / Ambil Foto</span>
+                        </button>
+                        <input type="file" id="cat-add-photo-input" accept="image/*" class="hidden" />
+                        <p id="cat-add-photo-status" class="text-[11px] text-gray-400 mt-1 italic hidden"></p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Ditambahkan oleh <span class="text-red-500">*</span></label>
+                        <input id="cat-add-oleh" type="text"
+                            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            placeholder="Nama Anda..." />
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="cat-add-submit"
+                        class="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition">Simpan
+                    </button>
+                    <button id="cat-add-close"
+                        class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition">
+                        Batal
+                    </button>
+                </div>
+            </div>`;
+
+            document.body.appendChild(modal);
+
+            // ── State foto produk (base64, sudah di-resize/compress) ──
+            let photoBase64 = null;
+
+            const photoInput   = document.getElementById('cat-add-photo-input');
+            const photoBtn     = document.getElementById('cat-add-photo-btn');
+            const photoPreview = document.getElementById('cat-add-photo-preview');
+            const photoImg     = document.getElementById('cat-add-photo-img');
+            const photoStatus  = document.getElementById('cat-add-photo-status');
+            const photoRetake  = document.getElementById('cat-add-photo-retake');
+
+            photoBtn.addEventListener('click', () => photoInput.click());
+            if (photoRetake) photoRetake.addEventListener('click', () => photoInput.click());
+
+            photoInput.addEventListener('change', () => {
+                const file = photoInput.files && photoInput.files[0];
+                if (!file) return;
+                photoStatus.classList.remove('hidden');
+                photoStatus.textContent = 'Memproses foto...';
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_W = 1024, MAX_H = 1024;
+                        let w = img.width, h = img.height;
+                        if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+                        if (h > MAX_H) { w = Math.round(w * MAX_H / h); h = MAX_H; }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        photoBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        photoImg.src = photoBase64;
+                        photoPreview.classList.remove('hidden');
+                        photoBtn.classList.add('hidden');
+                        photoStatus.textContent = `✅ Foto siap (${(photoBase64.length / 1024).toFixed(0)} KB)`;
+                    };
+                    img.onerror = () => { photoStatus.textContent = '❌ Gagal memuat foto.'; };
+                    img.src = reader.result;
+                };
+                reader.onerror = () => { photoStatus.textContent = '❌ Gagal membaca file.'; };
+                reader.readAsDataURL(file);
+            });
+
+            document.getElementById('cat-add-close').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+            document.getElementById('cat-add-submit').addEventListener('click', async () => {
+                const category         = document.getElementById('cat-add-category').value.trim();
+                const idBarang         = document.getElementById('cat-add-id').value.trim();
+                const namaBarang       = document.getElementById('cat-add-nama').value.trim();
+                const uom               = document.getElementById('cat-add-uom').value.trim();
+                const ditambahkanOleh   = document.getElementById('cat-add-oleh').value.trim();
+
+                if (!category || !idBarang || !namaBarang || !ditambahkanOleh) {
+                    showAlert('error', 'Data Belum Lengkap', 'Mohon isi Category, ID, Nama Barang, dan Ditambahkan oleh.');
+                    return;
+                }
+
+                const submitBtn = document.getElementById('cat-add-submit');
+                submitBtn.disabled = true;
+                submitBtn.textContent = '⏳ Menyimpan...';
+
+                try {
+                    const res = await fetch(CATALOGUE_GAS_URL, {
+                        method: 'POST',
+                        redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({
+                            action: 'addCatalogueItem',
+                            token: sessionToken,
+                            category,
+                            idBarang,
+                            namaBarang,
+                            uom,
+                            fotoBase64: photoBase64 || '',
+                            ditambahkanOleh
+                        })
+                    });
+                    const result = await res.json();
+
+                    if (result.success) {
+                        modal.remove();
+                        _catalogueData = null; // paksa reload data dari sheet saat kembali ke Catalogue
+                        showAlert('success', '✅ Produk Ditambahkan', `${namaBarang} berhasil ditambahkan ke katalog.`);
+                        await showCatalogue();
+                    } else {
+                        throw new Error(result.message || 'Gagal menyimpan data ke sheet Catalogue.');
+                    }
+                } catch (err) {
+                    showAlert('error', 'Gagal Menyimpan', err.message || String(err));
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '💾 Simpan';
+                }
+            });
         }
 
         // =========================================================================
