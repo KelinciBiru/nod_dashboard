@@ -7201,7 +7201,10 @@
 
             const input = tr.querySelector('.nama-barang-input');
             const list = tr.querySelector('.autocomplete-list');
-            attachItemAutocomplete(input, list, tr, tbody);
+            const idInput = tr.querySelector('.item-id-input');
+            attachItemAutocomplete(input, list, tr, tbody, {
+                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
+            });
 
             if (!prefillName) input.focus();
             return tr;
