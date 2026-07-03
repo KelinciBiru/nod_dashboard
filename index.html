@@ -861,11 +861,11 @@
 
                 contentEl.innerHTML = filteredRows.map(row => {
                     const noPO = row[1] || '-';
-                    const nama = row[2] || '-';
+                    const shipTo = row[3] || '-';
                     return `
                     <div class="p-3 hover:bg-blue-50 transition">
-                        <p class="text-sm font-semibold text-gray-700 font-mono">${noPO}</p>
-                        <p class="text-xs text-gray-500">${nama}</p>
+                        <p class="text-sm font-semibold text-gray-700">${shipTo}</p>
+                        <p class="text-xs text-gray-500 font-mono">${noPO}</p>
                         <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${targetStatus}</span>
                     </div>`;
                 }).join('');
@@ -4744,7 +4744,7 @@
             const placeholder = tbody.querySelector('tr[data-placeholder]');
             if (placeholder) placeholder.remove();
 
-            const DESCRIPTION_OPTIONS = ['Supplies', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Machine Event'];
+            const DESCRIPTION_OPTIONS = ['Supplies', 'B2B Capsule', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Sparepart', 'Other', 'Machine Hampers', 'Equipment'];
             const UOM_OPTIONS = ['Pcs', 'Box', 'Unit', 'Pack', 'Karton', 'Kg', 'Ltr', 'Lusin', 'Set', 'Roll', 'Sheet', 'Btl', 'Dus', 'Meter'];
             const descOpts = DESCRIPTION_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
             const uomOpts = UOM_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
@@ -5219,7 +5219,7 @@
             const placeholder = tbody.querySelector('tr[data-placeholder]');
             if (placeholder) placeholder.remove();
 
-            const DESCRIPTION_OPTIONS = ['Supplies', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Machine Event'];
+            const DESCRIPTION_OPTIONS = ['Supplies', 'B2B Capsule', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Sparepart', 'Other', 'Machine Hampers', 'Equipment'];
             const UOM_OPTIONS = ['Pcs', 'Box', 'Unit', 'Pack', 'Karton', 'Kg', 'Ltr', 'Lusin', 'Set', 'Roll', 'Sheet', 'Btl', 'Dus', 'Meter'];
             const descOpts = DESCRIPTION_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
             const uomOpts = UOM_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
@@ -5998,7 +5998,7 @@
         /**
          * VALID DESCRIPTION list
          */
-        const VALID_DESC = ['Capsule Selling', 'Sampling', 'Machine Selling', 'Machine Display', 'Machine Event', 'Supplies'];
+        const VALID_DESC = ['Capsule Selling', 'B2B Capsule', 'Sampling', 'Machine Selling', 'Machine Display', 'Machine Event', 'Supplies'];
 
         function isUOM(s) {
             return VALID_UOM.some(u => u.toLowerCase() === s.trim().toLowerCase());
@@ -6014,6 +6014,7 @@
         function classifyDescription(namaBarang) {
             const n = namaBarang.toUpperCase();
             if (/CAPSUL/.test(n)) return 'Capsule Selling';
+            if (/B2B/.test(n)) return 'B2B Capsule';
             if (/DISPLAY|DEMO|SHOWROOM/.test(n)) return 'Machine Display';
             if (/MACHINE|MESIN|COFFEE MAKER|BREWER|ESPRESSO/.test(n)) return 'Machine Selling';
             if (/SAMPL|TESTER|TRIAL/.test(n)) return 'Sampling';
@@ -6547,7 +6548,7 @@
 
                 // ── Isi tabel items ──
                 const tbody = document.getElementById('proc-table-body');
-                const DESCRIPTION_OPTIONS = ['Supplies', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling'];
+                const DESCRIPTION_OPTIONS = ['Supplies', 'B2B Capsule', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Sparepart', 'Other', 'Machine Hampers', 'Equipment'];
                 if (parsed.items && parsed.items.length > 0) {
                     tbody.innerHTML = parsed.items.map((item, idx) => {
                         const descOpts = DESCRIPTION_OPTIONS.map(o =>
@@ -6593,8 +6594,9 @@
                             <td class="p-2 text-center" contenteditable="true">pcs</td>
                             <td class="p-2">
                                 <select class="w-full text-xs border border-gray-200 rounded p-1 bg-white">
-                                    <option>Supplies</option><option>Sampling</option><option>Machine Selling</option>
+                                    <option>Supplies</option><option>B2B Capsule</option><option>Sampling</option><option>Machine Selling</option>
                                     <option>Machine Display</option><option>Capsule Selling</option>
+                                    <option>Sparepart</option><option>Other</option><option>Machine Hampers</option><option>Equipment</option>
                                 </select>
                             </td>
                             <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
@@ -7451,7 +7453,7 @@
             const tbody = document.getElementById('proc-table-body'); if (!tbody) return;
             const placeholder = tbody.querySelector('tr[data-placeholder], tr td[colspan]');
             if (placeholder) placeholder.closest('tr').remove();
-            const DESCRIPTION_OPTIONS = ['Supplies', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Machine Event'];
+            const DESCRIPTION_OPTIONS = ['Supplies', 'B2B Capsule', 'Sampling', 'Machine Selling', 'Machine Display', 'Capsule Selling', 'Sparepart', 'Other', 'Machine Hampers', 'Equipment'];
             const descOpts = DESCRIPTION_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
             const bg = tbody.querySelectorAll('tr').length % 2 === 0 ? 'bg-white' : 'bg-gray-50';
             const tr = document.createElement('tr');
