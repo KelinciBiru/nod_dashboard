@@ -3172,14 +3172,21 @@
                 return;
             }
 
-            const headerButtons = categories.map(cat => {
+            const categoryOptions = categories.map(cat => {
                 const active = cat === _catalogueActiveCategory;
-                const catEsc = cat.replace(/'/g, "\\'");
-                return `<button onclick="selectCatalogueCategory('${catEsc}')"
-                    class="px-4 py-2 rounded-xl text-sm font-semibold transition ${active ? 'bg-amber-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-amber-50 hover:text-amber-600'}">
-                    ${escapeHtml(cat)}
-                </button>`;
+                return `<option value="${escapeHtml(cat)}" ${active ? 'selected' : ''}>${escapeHtml(cat)}</option>`;
             }).join('');
+
+            const categoryDropdown = `
+                <div class="relative w-full sm:w-72">
+                    <select onchange="selectCatalogueCategory(this.value)"
+                        class="w-full appearance-none px-4 py-2.5 pr-10 rounded-xl text-sm font-semibold bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none cursor-pointer hover:bg-amber-50">
+                        ${categoryOptions}
+                    </select>
+                    <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>`;
 
             const items = itemsByCategory[_catalogueActiveCategory] || [];
             let cardsHtml = '';
@@ -3211,7 +3218,7 @@
                 </button>
             </div>
             <p class="text-sm text-gray-500 mb-4">Pilih kategori untuk melihat daftar barang.</p>
-            <div class="flex flex-wrap gap-2 mb-6">${headerButtons}</div>
+            <div class="mb-6">${categoryDropdown}</div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">${cardsHtml || '<p class="text-gray-400 text-sm col-span-full">Tidak ada barang pada kategori ini.</p>'}</div>`;
         }
 
