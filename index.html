@@ -3434,10 +3434,12 @@
             if (!tbody) return;
 
             // Tambahkan baris untuk SEMUA barang yang dicentang, tidak dibatasi jumlahnya.
+            // PENTING: addRowFn(false) dipanggil dengan autoFocus=false supaya baris yang
+            // diisi otomatis dari Catalogue TIDAK men-focus kotak "Item"-nya. Kalau di-focus,
+            // dropdown daftar barang (autocomplete) ikut kebuka padahal datanya sudah terisi
+            // dan pengguna belum klik kotak itu sendiri.
             for (const item of items) {
-                addRowFn();
-                const currentTbody = document.getElementById(tbodyId);
-                const tr = currentTbody ? currentTbody.querySelector('tr:last-child') : null;
+                const tr = addRowFn(false);
                 if (!tr) continue;
                 const idEl = tr.querySelector('.po-item-id');
                 const namaEl = tr.querySelector('.po-item-nama');
@@ -3457,6 +3459,10 @@
                     const matchDesc = Array.from(descEl.options).find(o => o.value.toLowerCase() === String(item.category).toLowerCase());
                     if (matchDesc) descEl.value = matchDesc.value;
                 }
+                // Pengaman tambahan: pastikan dropdown autocomplete-nya benar-benar
+                // tertutup (jaga-jaga kalau ada event lain yang sempat membukanya).
+                const listEl = tr.querySelector('.autocomplete-list');
+                if (listEl) listEl.classList.add('hidden');
             }
 
             showAlert('success', 'Barang Ditambahkan', `${items.length} barang dari Catalogue berhasil ditambahkan ke ${mode === 'RO' ? 'Form RO' : 'Form PO'}.`);
@@ -4795,7 +4801,7 @@
             updateReturPreview();
         }
 
-        function tambahBarisFormRetur() {
+        function tambahBarisFormRetur(autoFocus = true) {
             const tbody = document.getElementById('retur-item-table-body');
             if (!tbody) return;
             const placeholder = tbody.querySelector('tr[data-placeholder]');
@@ -4868,7 +4874,8 @@
                 onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
             });
 
-            input.focus();
+            if (autoFocus) input.focus();
+            return tr;
         }
 
         function hapusBarisFormRetur(btn) {
@@ -5270,7 +5277,7 @@
         // END FORM PENGEMBALIAN BARANG (RETUR)
         // =========================================================================
 
-        function tambahBarisFormPO() {
+        function tambahBarisFormPO(autoFocus = true) {
             const tbody = document.getElementById('po-item-table-body');
             if (!tbody) return;
             const placeholder = tbody.querySelector('tr[data-placeholder]');
@@ -5346,7 +5353,8 @@
                 onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
             });
 
-            input.focus();
+            if (autoFocus) input.focus();
+            return tr;
         }
 
         function hapusBarisFormPO(btn) {
