@@ -9395,45 +9395,70 @@
         // Sebelumnya: refresh browser selalu mereset currentUserRole (in-memory)
         // sehingga user terlempar kembali ke halaman login, walau sebelumnya
         // sudah login dan sedang mengisi form / melihat Route.
-        // Sekarang: role & token disimpan di sessionStorage (bertahan selama tab
-        // terbuka, otomatis hilang saat tab/browser ditutup). Token DIVALIDASI
-        // ULANG ke server setiap refresh — kalau token sudah kedaluwarsa/dicabut,
-        // user otomatis dilempar kembali ke halaman login (tidak cukup hanya
-        // punya nilai di sessionStorage, harus benar-benar valid di server).
-        (async function restoreSessionOnLoad() {
+        //
+        // OPTIMISTIC RESTORE (sekarang): begitu ada role & token tersimpan di
+        // sessionStorage, app langsung ditampilkan SEKETIKA tanpa menunggu
+        // balasan server (tidak ada lagi jeda "Memeriksa..." apalagi kelihatan
+        // halaman login sekilas). Validasi token ke server tetap jalan di
+        // belakang layar (untuk keamanan), tapi hasilnya baru dipakai untuk
+        // memutuskan apakah user perlu di-logout paksa — bukan syarat untuk
+        // menampilkan app.
+        //
+        // - Token terbukti tidak valid/dicabut di server → baru logout paksa.
+        // - Gagal terhubung ke server (mis. GAS cold-start/lemot/offline
+        //   sesaat) → JANGAN logout. User tetap dianggap sah memakai sesi yang
+        //   tersimpan, supaya refresh tidak pernah terasa "lempar balik ke
+        //   login" hanya gara-gara koneksi lambat. Draft form (Form PO, dll.)
+        //   juga tidak pernah ikut terhapus dalam skenario ini.
+        function restoreSessionOnLoad() {
             const savedRole  = sessionStorage.getItem('currentUserRole');
             const savedToken = sessionStorage.getItem('sessionToken');
             if (!savedRole || !savedToken) return; // belum pernah login → tampilkan halaman login
 
-            try {
-                const res = await fetch(PO_GAS_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: 'validateSession', token: savedToken })
-                });
-                const data = await res.json();
-                if (data && data.success && data.role === savedRole) {
-                    currentUserRole = savedRole;
-                    sessionToken = savedToken;
-                    // Restore nama driver dari sesi sebelumnya
-                    if (savedRole === 'DRIVER') {
-                        currentDriverName = sessionStorage.getItem('currentDriverName') || '';
-                    }
-                    startApp();
-                } else {
-                    sessionStorage.removeItem('currentUserRole');
-                    sessionStorage.removeItem('sessionToken');
-                    sessionStorage.removeItem('currentDriverName');
-                }
-            } catch (e) {
-                // Gagal terhubung — biarkan user login ulang manual daripada
-                // memberi akses berdasarkan asumsi.
-                sessionStorage.removeItem('currentUserRole');
-                sessionStorage.removeItem('sessionToken');
-                sessionStorage.removeItem('currentDriverName');
+            // 1) Tampilkan app SEKARANG JUGA pakai data tersimpan (optimistic).
+            currentUserRole = savedRole;
+            sessionToken = savedToken;
+            if (savedRole === 'DRIVER') {
+                currentDriverName = sessionStorage.getItem('currentDriverName') || '';
             }
-        })();
+            startApp();
+
+            // 2) Validasi token ke server di belakang layar (tidak memblokir UI).
+            fetch(PO_GAS_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'validateSession', token: savedToken })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    const stillValid = data && data.success && data.role === savedRole;
+                    if (!stillValid) {
+                        // Token benar-benar sudah tidak valid/dicabut di server →
+                        // baru lempar ke login.
+                        sessionStorage.removeItem('currentUserRole');
+                        sessionStorage.removeItem('sessionToken');
+                        sessionStorage.removeItem('currentDriverName');
+                        currentUserRole = '';
+                        sessionToken = null;
+                        currentDriverName = '';
+                        const app = document.getElementById('app-container');
+                        app.classList.add('hidden');
+                        app.classList.remove('flex');
+                        document.getElementById('login-page').classList.remove('hidden');
+                        const err = document.getElementById('loginError');
+                        if (err) {
+                            err.textContent = 'Sesi telah berakhir, silakan login kembali.';
+                            err.classList.remove('hidden');
+                        }
+                    }
+                })
+                .catch(() => {
+                    // Gagal terhubung — biarkan user tetap memakai sesi yang ada,
+                    // jangan paksa logout hanya karena koneksi/GAS lemot.
+                });
+        }
+        restoreSessionOnLoad();
     </script>
 
     <!-- ═══ MODAL KAMERA QR — PERMANEN (tidak ikut innerHTML) ═══ -->
