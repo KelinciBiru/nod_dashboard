@@ -7378,8 +7378,19 @@
                 list.style.maxHeight = listMaxH + 'px';
             }
 
+            // Registry global supaya cuma ADA SATU dropdown autocomplete yang
+            // boleh terbuka dalam satu waktu di seluruh halaman. Tanpa ini,
+            // dropdown milik baris lain yang belum sempat ke-hide (mis. karena
+            // event blur-nya telat/gagal) bisa numpuk bareng dropdown baris
+            // yang sedang aktif dan muncul di posisi yang salah/tidak beraturan.
+            if (!window.__acHideFns) window.__acHideFns = [];
+
             function hideList() { list.classList.add('hidden'); stopAutoReposition(); }
+            window.__acHideFns.push(hideList);
+
             function showList() {
+                // Tutup dulu semua dropdown autocomplete lain sebelum membuka punya kita.
+                window.__acHideFns.forEach(fn => { if (fn !== hideList) fn(); });
                 list.classList.remove('hidden');
                 positionList();
                 // Reposisi sekali lagi setelah keyboard HP selesai animasi muncul,
@@ -7424,6 +7435,10 @@
                     if (vv) {
                         vv.removeEventListener('resize', onScrollOrResize);
                         vv.removeEventListener('scroll', onScrollOrResize);
+                    }
+                    if (window.__acHideFns) {
+                        const idx = window.__acHideFns.indexOf(hideList);
+                        if (idx !== -1) window.__acHideFns.splice(idx, 1);
                     }
                 }
             });
@@ -7475,7 +7490,21 @@
             }
 
             input.addEventListener('input', refresh);
-            input.addEventListener('focus', refresh);
+            input.addEventListener('focus', async () => {
+                const val = input.value.trim();
+                if (val) {
+                    // Kalau isi kotak ini sudah PERSIS sama dengan salah satu nama
+                    // barang di katalog (baik karena user sudah pilih sebelumnya,
+                    // ataupun karena barisnya sudah diisi otomatis dari Catalogue),
+                    // anggap sudah "terisi lengkap" dan JANGAN buka dropdown lagi
+                    // hanya karena user klik/fokus ke kotak itu. Dropdown akan tetap
+                    // muncul lagi begitu user benar-benar mengetik (event 'input').
+                    const items = await getSourceItems();
+                    const isExactMatch = items.some(i => (i.nama || '').trim().toLowerCase() === val.toLowerCase());
+                    if (isExactMatch) return;
+                }
+                refresh();
+            });
             input.addEventListener('blur', () => { setTimeout(hideList, 150); });
 
             input.addEventListener('keydown', (e) => {
