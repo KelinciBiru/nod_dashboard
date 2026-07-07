@@ -8841,6 +8841,23 @@
             </div>
         </div>
 
+        <!-- Import PDF Delivery Order -->
+        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
+            <label class="block text-xs font-bold text-gray-500 mb-2">IMPORT PDF DELIVERY ORDER</label>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="file" id="recv-pdfFile" accept="application/pdf" class="w-full sm:flex-1 text-sm border border-gray-300 rounded p-1.5">
+                <button id="btn-recv-extract" onclick="handleReceivePDFTextExtract()"
+                    class="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition">
+                    <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Ekstrak Teks PDF
+                </button>
+            </div>
+            <p id="recv-import-status" class="text-xs text-gray-400 mt-1"></p>
+            <div id="recv-import-qr-canvas" class="hidden"></div>
+        </div>
+
         <!-- Baris: Tanggal Terima + No PO -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
@@ -8900,7 +8917,7 @@
                         </tr>
                     </thead>
                     <tbody id="recv-table-body">
-                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Scan QR Code Delivery Order untuk mengisi data secara otomatis</td></tr>
+                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Scan QR Code atau Import PDF Delivery Order untuk mengisi data secara otomatis</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -9033,6 +9050,542 @@
             setVal('recv-shipping-date', doData.shippingDate);
             renderReceiveTableRows(doData.items);
             document.getElementById('recv-qr-status').textContent = '✅ Data berhasil diisi dari QR Code Delivery Order.';
+        }
+
+        // ─── Import PDF Delivery Order: decode QR Code dari halaman PDF ───────────
+        // Menggunakan pdf.js untuk merender tiap halaman PDF ke canvas, lalu
+        // library html5-qrcode (scanFile) untuk membaca QR Code pada gambar hasil
+        // render. Teks hasil decode QR mempunyai format yang sama persis dengan
+        // hasil scan kamera, sehingga bisa memakai parser yang sama
+        // (parseDeliveryOrderQRText) dan fungsi pengisi form yang sama
+        // (fillReceivePOFromQR) — data & tabel otomatis terisi seperti pada
+        // menu Process PO.
+        async function handleReceivePDFImport() {
+            const fileInput = document.getElementById('recv-pdfFile');
+            const statusEl = document.getElementById('recv-import-status');
+            const btnImport = document.getElementById('btn-recv-import');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showAlert('warning', 'Pilih File', 'Silakan pilih file PDF Delivery Order terlebih dahulu.');
+                return;
+            }
+
+            const originalBtnHtml = btnImport.innerHTML;
+            btnImport.disabled = true;
+            btnImport.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Memproses...`;
+            statusEl.textContent = 'Membaca file PDF...';
+            statusEl.className = 'text-xs text-blue-500 mt-1';
+
+            let scanner = null;
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                statusEl.textContent = 'Mencari QR Code pada halaman PDF...';
+
+                scanner = new Html5Qrcode('recv-import-qr-canvas');
+                let decodedText = null;
+
+                // QR Code Delivery Order selalu diletakkan di halaman terakhir
+                // dokumen → scan dari halaman terakhir ke halaman pertama.
+                for (let p = pdf.numPages; p >= 1; p--) {
+                    const page = await pdf.getPage(p);
+                    const viewport = page.getViewport({ scale: 3 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    const ctx = canvas.getContext('2d');
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+
+                    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                    if (!blob) continue;
+                    const imgFile = new File([blob], `page-${p}.png`, { type: 'image/png' });
+
+                    try {
+                        decodedText = await scanner.scanFile(imgFile, false);
+                        if (decodedText) break;
+                    } catch (errPage) {
+                        continue; // QR tidak ditemukan di halaman ini, coba halaman lain
+                    }
+                }
+
+                if (!decodedText) {
+                    throw new Error('QR Code tidak ditemukan pada file PDF. Pastikan file adalah Delivery Order yang dihasilkan sistem ini.');
+                }
+
+                const doData = parseDeliveryOrderQRText(decodedText);
+                fillReceivePOFromQR(doData);
+
+                const itemCount = doData.items ? doData.items.length : 0;
+                statusEl.textContent = `✅ Berhasil — ${itemCount} item ditemukan${doData.noPO ? ' — No. PO: ' + doData.noPO : ''}. Data dapat diedit langsung.`;
+                statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
+
+            } catch (err) {
+                statusEl.textContent = '❌ Gagal: ' + err.message;
+                statusEl.className = 'text-xs text-red-500 mt-1';
+                showAlert('error', 'Gagal Import', 'Terjadi kesalahan saat memproses PDF: ' + err.message);
+            } finally {
+                if (scanner) { try { scanner.clear(); } catch (_) {} }
+                btnImport.disabled = false;
+                btnImport.innerHTML = originalBtnHtml;
+            }
+        }
+
+        // ─── Ekstrak Teks PDF Delivery Order (tanpa QR Code) ───────────────────
+        // Membaca konten teks PDF langsung via pdf.js getTextContent(), lalu
+        // mem-parse metadata + tabel item berdasarkan posisi koordinat token.
+        async function handleReceivePDFTextExtract() {
+            const fileInput = document.getElementById('recv-pdfFile');
+            const statusEl = document.getElementById('recv-import-status');
+            const btnExtract = document.getElementById('btn-recv-extract');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showAlert('warning', 'Pilih File', 'Silakan pilih file PDF Delivery Order terlebih dahulu.');
+                return;
+            }
+
+            const originalBtnHtml = btnExtract.innerHTML;
+            btnExtract.disabled = true;
+            btnExtract.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Mengekstrak...`;
+            statusEl.textContent = 'Membaca teks dari file PDF...';
+            statusEl.className = 'text-xs text-blue-500 mt-1';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                // Kumpulkan semua token dengan posisi X,Y dari seluruh halaman
+                const allTokens = [];
+                for (let p = 1; p <= pdf.numPages; p++) {
+                    const page = await pdf.getPage(p);
+                    const tc = await page.getTextContent();
+                    const vp = page.getViewport({ scale: 1 });
+                    for (const item of tc.items) {
+                        if (!item.str || !item.str.trim()) continue;
+                        allTokens.push({
+                            str: item.str.trim(),
+                            x: Math.round(item.transform[4]),
+                            y: Math.round(vp.height - item.transform[5]),
+                            page: p
+                        });
+                    }
+                }
+
+                if (allTokens.length === 0) {
+                    throw new Error('PDF tidak mengandung teks yang dapat dibaca. Pastikan PDF bukan hasil scan gambar.');
+                }
+
+                statusEl.textContent = 'Mem-parse data dari teks PDF...';
+
+                // Debug: log semua token untuk troubleshooting
+                console.group('[Receive PO] PDF Text Extract Debug');
+                console.log('Total tokens:', allTokens.length);
+                console.table(allTokens.slice(0, 80).map(t => ({ page: t.page, x: t.x, y: t.y, str: t.str })));
+
+                const doData = parseDeliveryOrderPDFText(allTokens);
+
+                console.log('Parsed result:', JSON.parse(JSON.stringify(doData)));
+                console.groupEnd();
+
+                // Isi form Receive PO
+                fillReceivePOFromQR(doData);
+
+                const itemCount = doData.items ? doData.items.length : 0;
+                const filledFields = [doData.noPO, doData.crewPacking, doData.orderedBy, doData.shipTo, doData.shippingDate].filter(Boolean).length;
+                statusEl.textContent = `✅ Berhasil — ${filledFields} field & ${itemCount} item ditemukan${doData.noPO ? ' — No. PO: ' + doData.noPO : ''}.`;
+                statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
+
+            } catch (err) {
+                statusEl.textContent = '❌ Gagal: ' + err.message;
+                statusEl.className = 'text-xs text-red-500 mt-1';
+                showAlert('error', 'Gagal Ekstrak PDF', 'Terjadi kesalahan saat mengekstrak PDF: ' + err.message);
+            } finally {
+                btnExtract.disabled = false;
+                btnExtract.innerHTML = originalBtnHtml;
+            }
+        }
+
+        /**
+         * Parse Delivery Order PDF dari token-token teks (koordinat X,Y).
+         * PENTING: Proses PER HALAMAN karena koordinat Y reset tiap halaman.
+         * Halaman 1: metadata + header tabel + sebagian data
+         * Halaman 2+: lanjutan data tabel (mungkin ada header ulang)
+         */
+        function parseDeliveryOrderPDFText(tokens) {
+            const result = { noPO: '', tglProses: '', crewPacking: '', orderedBy: '', shipTo: '', shippingDate: '', items: [] };
+            if (!tokens || tokens.length === 0) return result;
+
+            // ── 1. Kelompokkan token PER HALAMAN ──
+            const pages = new Map();
+            for (const tk of tokens) {
+                const p = tk.page || 1;
+                if (!pages.has(p)) pages.set(p, []);
+                pages.get(p).push(tk);
+            }
+            const pageNums = Array.from(pages.keys()).sort((a, b) => a - b);
+            console.log('[DO Parser] Pages:', pageNums, '| Tokens per page:', pageNums.map(p => pages.get(p).length));
+
+            // Helper: buat rows dari token satu halaman (Y bucket 6px)
+            function buildRows(pageTokens) {
+                const rowMap = new Map();
+                for (const tk of pageTokens) {
+                    const bucket = Math.round(tk.y / 6) * 6;
+                    if (!rowMap.has(bucket)) rowMap.set(bucket, []);
+                    rowMap.get(bucket).push(tk);
+                }
+                return Array.from(rowMap.entries())
+                    .sort((a, b) => a[0] - b[0])
+                    .map(([y, tks]) => ({ y, tokens: tks.sort((a, b) => a.x - b.x) }));
+            }
+
+            // ── 2. EKSTRAK METADATA dari halaman pertama ──
+            // Strategi: gunakan posisi X untuk pisahkan kolom kiri vs kanan
+            // PDF DO punya 2 kolom info: kiri (x < midpoint) dan kanan (x >= midpoint)
+            // Kiri: Tanggal Proses PO, No. PO, Crew Packing
+            // Kanan: Ordered By, Ship To, Shipping Date
+            const page1Rows = buildRows(pages.get(pageNums[0]));
+            console.log('[DO Parser] Page 1 rows:', page1Rows.length);
+            page1Rows.forEach((r, i) => console.log(`  P1 Row ${i} (y=${r.y}):`, r.tokens.map(t => `[x=${t.x}]"${t.str}"`).join(' | ')));
+
+            // Hitung midpoint X dari token halaman 1
+            const p1Xs = pages.get(pageNums[0]).map(t => t.x);
+            const p1MaxX = Math.max(...p1Xs);
+            const midX = p1MaxX / 2;
+            console.log('[DO Parser] Midpoint X:', midX, '| Max X:', p1MaxX);
+
+            // Label patterns untuk kiri dan kanan
+            const LEFT_LABELS = [
+                { pattern: /Tanggal\s*Proses\s*PO/i, key: 'tglProses' },
+                { pattern: /No\.?\s*PO/i, key: 'noPO' },
+                { pattern: /Crew\s*Packing/i, key: 'crewPacking' },
+            ];
+            const RIGHT_LABELS = [
+                { pattern: /Ordered\s*By/i, key: 'orderedBy' },
+                { pattern: /Ship\s*To/i, key: 'shipTo' },
+                { pattern: /Shipping\s*Date/i, key: 'shippingDate' },
+            ];
+
+            // Proses setiap baris halaman 1 untuk metadata
+            for (const row of page1Rows) {
+                const rowText = row.tokens.map(t => t.str).join(' ').toUpperCase();
+                // Stop jika sudah mencapai header tabel
+                if (rowText.includes('NAMA BARANG') || (rowText.includes('NAMA') && rowText.includes('QTY'))) break;
+                if (/DISIAPKAN|DIKIRIM|DITERIMA/.test(rowText)) break;
+
+                // Pisahkan token kiri dan kanan berdasarkan midpoint X
+                const leftTokens = row.tokens.filter(t => t.x < midX);
+                const rightTokens = row.tokens.filter(t => t.x >= midX);
+                const leftText = leftTokens.map(t => t.str).join(' ');
+                const rightText = rightTokens.map(t => t.str).join(' ');
+
+                // Helper: ekstrak nilai setelah label dari teks
+                function extractValue(text, labelPattern) {
+                    const m = text.match(new RegExp(labelPattern.source + '\\s*:?\\s*(.+)', 'i'));
+                    if (m && m[1]) {
+                        let v = m[1].trim();
+                        // Buang trailing ':' saja
+                        if (v === ':') return '';
+                        // Buang ':' di awal
+                        v = v.replace(/^:\s*/, '').trim();
+                        return v.length > 1 ? v : '';
+                    }
+                    return '';
+                }
+
+                // Cek label kiri
+                for (const { pattern, key } of LEFT_LABELS) {
+                    if (!result[key] && pattern.test(leftText)) {
+                        const val = extractValue(leftText, pattern);
+                        if (val) result[key] = val;
+                    }
+                }
+                // Cek label kanan
+                for (const { pattern, key } of RIGHT_LABELS) {
+                    if (!result[key] && pattern.test(rightText)) {
+                        const val = extractValue(rightText, pattern);
+                        if (val) result[key] = val;
+                    }
+                }
+
+                // Cek No. PO dari header kanan atas ("No. PO: EV-01072026-001" sebagai 1 token di x>midX)
+                if (!result.noPO) {
+                    for (const tk of row.tokens) {
+                        const m = tk.str.match(/No\.?\s*PO\s*[:\-]\s*(\S+)/i);
+                        if (m && m[1].length > 2) { result.noPO = m[1]; break; }
+                    }
+                }
+            }
+
+            // Bersihkan No. PO
+            if (result.noPO) result.noPO = result.noPO.split(/\s+/)[0];
+
+            console.log('[DO Parser] Metadata:', { noPO: result.noPO, tglProses: result.tglProses, crewPacking: result.crewPacking, orderedBy: result.orderedBy, shipTo: result.shipTo, shippingDate: result.shippingDate });
+
+            // ── 3. DETEKSI POSISI KOLOM TABEL dari halaman 1 ──
+            let colPositions = {};
+            let tableHeaderY = -1;
+
+            // Cari baris header tabel: yang mengandung "Nama Barang" dan "Qty" di joined text
+            for (let ri = 0; ri < page1Rows.length; ri++) {
+                const rowText = page1Rows[ri].tokens.map(t => t.str).join(' ').toUpperCase();
+                const hasName = rowText.includes('NAMA BARANG') || (rowText.includes('NAMA') && rowText.includes('BARANG'));
+                const hasQty = /\bQTY\b|\bQUANTITY\b/.test(rowText);
+
+                if (hasName && hasQty) {
+                    tableHeaderY = page1Rows[ri].y;
+                    // Kumpulkan semua token header (termasuk baris berdekatan untuk header terpecah seperti "N"+"o")
+                    const hdrTokens = [...page1Rows[ri].tokens];
+                    for (const other of page1Rows) {
+                        if (other === page1Rows[ri]) continue;
+                        if (Math.abs(other.y - page1Rows[ri].y) > 20) continue;
+                        hdrTokens.push(...other.tokens);
+                    }
+
+                    // Sort header tokens by X position
+                    hdrTokens.sort((a, b) => a.x - b.x);
+                    console.log('[DO Parser] Header tokens:', hdrTokens.map(t => `[x=${t.x}]"${t.str}"`).join(' | '));
+
+                    // Build joined text from all header tokens for column detection
+                    const hdrText = hdrTokens.map(t => t.str).join(' ').toUpperCase();
+
+                    // Strategi: assign kolom berdasarkan urutan X dari token yang dikenali
+                    // Urutan kolom DO PDF: No | ID | Nama Barang | Qty | UOM | Description | Remark
+                    const colOrder = ['no', 'id', 'name', 'qty', 'uom', 'desc', 'remark'];
+
+                    for (const tk of hdrTokens) {
+                        const up = tk.str.toUpperCase().trim();
+                        // Cek setiap token terhadap semua kemungkinan label
+                        if (/^(NO|NO\.)$/.test(up) && colPositions.no === undefined) colPositions.no = tk.x;
+                        else if (/^N$/.test(up) && colPositions.no === undefined) colPositions.no = tk.x;
+                        else if (/^O$/.test(up) && colPositions.no !== undefined && !colPositions._no_o) colPositions._no_o = tk.x; // second part of split "N"+"o"
+                        else if (/^ID$/.test(up) && colPositions.id === undefined) colPositions.id = tk.x;
+                        else if (up.includes('NAMA') && up.includes('BARANG') && colPositions.name === undefined) colPositions.name = tk.x;
+                        else if (/^NAMA$/.test(up) && colPositions.name === undefined) colPositions.name = tk.x;
+                        else if (/^BARANG$/.test(up) && colPositions.name !== undefined && !colPositions._nama_barang) colPositions._nama_barang = true; // second part
+                        else if (/^(NAME|ITEM|PRODUCT)$/.test(up) && colPositions.name === undefined) colPositions.name = tk.x;
+                        else if (/^(QTY|QUANTITY|JUMLAH)$/.test(up) && colPositions.qty === undefined) colPositions.qty = tk.x;
+                        else if (/^(UOM|UNIT|SATUAN)$/.test(up) && colPositions.uom === undefined) colPositions.uom = tk.x;
+                        else if (/^(DESCRIPTION|DESC|DESKRIPSI|KETERANGAN)$/.test(up) && colPositions.desc === undefined) colPositions.desc = tk.x;
+                        else if (/^(REMARK|CATATAN|KET\.|KET)$/.test(up) && colPositions.remark === undefined) colPositions.remark = tk.x;
+                    }
+
+                    // Handle "Nama" and "Barang" as separate tokens
+                    if (colPositions.name === undefined) {
+                        for (const tk of hdrTokens) {
+                            const up = tk.str.toUpperCase().trim();
+                            if (/^NAMA$/.test(up)) {
+                                colPositions.name = tk.x;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Bersihkan temporary keys
+                    delete colPositions._no_o;
+                    delete colPositions._nama_barang;
+
+                    // Fallback: jika NAME masih tidak terdeteksi, cari token antara ID/No dan Qty
+                    if (colPositions.name === undefined && colPositions.qty !== undefined) {
+                        const noX = Math.max(colPositions.no || 0, colPositions.id || 0);
+                        const candidates = hdrTokens
+                            .filter(t => t.x > noX + 5 && t.x < colPositions.qty - 5)
+                            .filter(t => !/^(NO|NO\.|N|O|ID|QTY|QUANTITY|UOM|UNIT|SATUAN|DESCRIPTION|DESC|REMARK|CATATAN|KET)$/i.test(t.str.trim()))
+                            .sort((a, b) => a.x - b.x);
+                        if (candidates.length > 0) colPositions.name = candidates[0].x;
+                    }
+
+                    // Fallback: jika ID tidak terdeteksi tapi No dan Name ada
+                    // ID kolom berada di antara No dan Nama Barang
+                    if (colPositions.id === undefined && colPositions.no !== undefined && colPositions.name !== undefined) {
+                        const candidates = hdrTokens
+                            .filter(t => t.x > colPositions.no + 5 && t.x < colPositions.name - 5)
+                            .sort((a, b) => a.x - b.x);
+                        if (candidates.length > 0) colPositions.id = candidates[0].x;
+                    }
+
+                    console.log('[DO Parser] Table header at P1 y=' + tableHeaderY, 'colPositions:', colPositions);
+                    break;
+                }
+            }
+
+            // ── 4. BACA DATA ITEM DARI SEMUA HALAMAN ──
+            const STOP_KW = ['DISIAPKAN', 'DIKIRIM', 'DITERIMA', 'NOTES', 'NOTE', 'CATATAN',
+                'TOTAL', 'SUBTOTAL', 'TANDA TANGAN', 'APPROVED', 'AUTHORIZED', 'SIGNATURE',
+                'GENERATED BY', 'YOUR ALL-IN-ONE'];
+
+            // Valid UOM dan Description untuk sequential parsing
+            const VALID_UOM_SET = new Set(['BOX','PCS','UNIT','KARTON','PACK','KG','LTR','L','LUSIN','SET',
+                'ROLL','SHEET','BTL','DUS','PAK','CTN','EA','BH','BUAH','LEMBAR',
+                'M','METER','CAN','TIN','BAG','SCK','POUCH','KTN','BOTOL','SACHET']);
+            const VALID_DESC_SET = new Set(['CAPSULE SELLING','B2B CAPSULE','SAMPLING',
+                'MACHINE SELLING','MACHINE DISPLAY','MACHINE EVENT','SUPPLIES']);
+
+            // Fungsi: cek apakah baris ini adalah header tabel (untuk skip di halaman 2+)
+            function isTableHeader(row) {
+                const t = row.tokens.map(t => t.str).join(' ').toUpperCase();
+                const hasName = t.includes('NAMA BARANG') || (t.includes('NAMA') && t.includes('BARANG'));
+                const hasQty = /\bQTY\b|\bQUANTITY\b/.test(t);
+                return hasName && hasQty;
+            }
+
+            // Fungsi: cek apakah baris merupakan stop keyword (signature, footer, dll)
+            function isStopRow(row) {
+                const t = row.tokens.map(t => t.str).join(' ').toUpperCase().trim();
+                return STOP_KW.some(k => t.startsWith(k));
+            }
+
+            // Fungsi: cek apakah baris adalah header/footer halaman (judul, info box, dll)
+            function isPageChrome(row) {
+                const t = row.tokens.map(t => t.str).join(' ').toUpperCase();
+                return /DELIVERY ORDER/.test(t) ||
+                    /No\.?\s*PO\s*:/.test(t) ||
+                    /TANGGAL\s*PROSES/.test(t) ||
+                    /CREW\s*PACKING/.test(t) ||
+                    /ORDERED\s*BY\s*:/.test(t) ||
+                    /SHIP\s*TO\s*:/.test(t) ||
+                    /SHIPPING\s*DATE\s*:/.test(t);
+            }
+
+            /**
+             * Sequential token parser untuk baris tabel DO.
+             * Urutan kolom DO PDF: No | ID | Nama Barang | Qty | UOM | Description | Remark
+             * Strategi: urutkan token by X, lalu assign secara sekuensial:
+             *   1. Token pertama = No (skip)
+             *   2. Token kedua = ID
+             *   3. Cari Qty (angka) → semua token antara ID dan Qty = Nama Barang
+             *   4. Token setelah Qty = UOM
+             *   5. Token setelah UOM = Description
+             *   6. Token terakhir = Remark
+             */
+            function parseRowSequential(rowTokens) {
+                // Urutkan token berdasarkan X position
+                const sorted = [...rowTokens].sort((a, b) => a.x - b.x);
+                const strs = sorted.map(t => t.str);
+
+                if (strs.length < 4) return null; // Minimal: No, ID/Name, Qty, UOM
+
+                let idx = 0;
+
+                // 1. Token pertama = No (sequence number) → skip
+                if (/^\d+$/.test(strs[idx])) {
+                    idx++;
+                }
+
+                if (idx >= strs.length) return null;
+
+                // 2. Token kedua = ID (biasanya "-" atau kode alfanumerik)
+                const id = strs[idx];
+                idx++;
+
+                // 3. Cari Qty: scan token berikutnya sampai menemukan angka
+                // Semua token antara ID dan Qty = Nama Barang
+                let namaParts = [];
+                let qtyIdx = -1;
+                for (let i = idx; i < strs.length; i++) {
+                    if (/^\d+(?:\.\d+)?$/.test(strs[i])) {
+                        qtyIdx = i;
+                        break;
+                    }
+                    namaParts.push(strs[i]);
+                }
+
+                if (qtyIdx === -1) {
+                    // Qty tidak ditemukan — mungkin baris bukan data item
+                    return null;
+                }
+
+                const nama = namaParts.join(' ').trim();
+                const qty = strs[qtyIdx];
+                let uom = '';
+                let description = '';
+                let remark = '';
+
+                // 4. Token setelah Qty = UOM
+                let nextIdx = qtyIdx + 1;
+                if (nextIdx < strs.length) {
+                    const candidate = strs[nextIdx];
+                    if (VALID_UOM_SET.has(candidate.toUpperCase())) {
+                        uom = candidate;
+                        nextIdx++;
+                    }
+                }
+
+                // 5. Token setelah UOM = Description
+                if (nextIdx < strs.length) {
+                    const candidate = strs[nextIdx];
+                    if (VALID_DESC_SET.has(candidate.toUpperCase())) {
+                        description = candidate;
+                        nextIdx++;
+                    } else if (uom) {
+                        // Mungkin description yang tidak ada di list
+                        // Cek apakah bukan remark (biasanya "-" atau teks pendek)
+                        if (candidate !== '-' && candidate.length > 2 && nextIdx < strs.length - 1) {
+                            description = candidate;
+                            nextIdx++;
+                        }
+                    }
+                }
+
+                // 6. Token sisa = Remark
+                if (nextIdx < strs.length) {
+                    remark = strs.slice(nextIdx).join(' ').trim();
+                }
+
+                return { id, nama, qty, uom, description, remark };
+            }
+
+            if (Object.keys(colPositions).length >= 3) {
+                for (const pageNum of pageNums) {
+                    const pageRows = buildRows(pages.get(pageNum));
+                    let pastHeader = (pageNum === 1) ? false : true;
+
+                    for (const row of pageRows) {
+                        if (!pastHeader) {
+                            if (isTableHeader(row)) pastHeader = true;
+                            continue;
+                        }
+                        if (isTableHeader(row)) continue;
+                        if (isStopRow(row)) break;
+                        if (isPageChrome(row)) continue;
+                        if (row.tokens.length === 0) continue;
+                        // Skip baris pendek (page number, dll)
+                        if (row.tokens.length === 1 && row.tokens[0].str.length < 4) continue;
+
+                        // Parse baris secara sekuensial
+                        const item = parseRowSequential(row.tokens);
+                        if (!item) continue;
+                        if (!item.nama && !item.qty) continue;
+                        // Skip jika hanya nomor urut
+                        if (/^\d{1,3}$/.test(item.nama) && !item.qty) continue;
+
+                        result.items.push({
+                            id: item.id || '',
+                            nama: item.nama || '-',
+                            qty: item.qty || '0',
+                            uom: item.uom || '',
+                            description: item.description || '',
+                            remark: item.remark || ''
+                        });
+                    }
+                }
+
+                console.log('[DO Parser] Total items extracted:', result.items.length);
+            } else {
+                console.warn('[DO Parser] Table header not found or insufficient columns:', colPositions);
+            }
+
+            // ── 5. Bersihkan hasil ──
+            if (result.noPO) result.noPO = result.noPO.split(/\s+/)[0];
+            result.items.forEach(it => {
+                if (it.remark === '-') it.remark = '';
+                if (it.description === '-') it.description = '';
+                if (it.uom === '-') it.uom = '';
+            });
+
+            console.log('[DO Parser] Final result:', JSON.parse(JSON.stringify(result)));
+            return result;
         }
 
         let _recvHtml5QR = null;
