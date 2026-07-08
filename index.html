@@ -5894,6 +5894,30 @@
             </div>
         </div>
 
+        <!-- Tarik PDF Request Order dari Google Drive -->
+        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
+            <label class="block text-xs font-bold text-gray-500 mb-2">TARIK PDF REQUEST ORDER DARI GOOGLE DRIVE</label>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex gap-2 flex-1">
+                    <select id="proc-drive-ro-select" class="flex-1 min-w-0 text-sm border border-gray-300 rounded p-1.5">
+                        <option value="">— Memuat daftar... —</option>
+                    </select>
+                    <button id="btn-proc-drive-refresh" onclick="loadRequestOrderDriveList()" title="Muat ulang daftar"
+                        class="flex-shrink-0 flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold px-3 py-2.5 rounded-lg transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
+                <button id="btn-proc-drive-pull" onclick="handlePullRequestOrderFromDrive()"
+                    class="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition">
+                    <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    Tarik & Ekstrak
+                </button>
+            </div>
+            <p id="proc-drive-status" class="text-xs text-gray-400 mt-1"></p>
+        </div>
+
         <!-- Baris 1b: No PO (Open) + Crew Packing -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
@@ -5999,6 +6023,8 @@
             // Auto-load daftar PO Open setelah halaman ter-render
             loadOpenPOList();
             preloadSourceItems();
+            // Muat daftar file Request Order PDF dari folder Google Drive
+            loadRequestOrderDriveList();
 
             // Restore draft (field utama + isi tabel verifikasi) jika sebelumnya
             // ada proses import/isi manual yang belum sempat diklik "Proses".
@@ -6649,11 +6675,11 @@
         /**
          * Handler utama Import PDF
          */
-        async function handlePDFImport() {
+        async function handlePDFImport(fileOverride) {
             const fileInput = document.getElementById('pdfFile');
             const statusEl = document.getElementById('import-status');
             const btnImport = document.getElementById('btn-import');
-            const file = fileInput.files[0];
+            const file = fileOverride || fileInput.files[0];
 
             if (!file) {
                 showAlert('warning', 'Pilih File', 'Silakan pilih file PDF terlebih dahulu.');
@@ -6763,6 +6789,116 @@
 
         // Fungsi lama handlePDFUpload (biarkan kosong agar tidak error jika dipanggil)
         function handlePDFUpload() { }
+
+        // ─── Muat daftar file PDF Request Order dari folder Google Drive ──────────
+        // Logika sama dengan loadDeliveryOrderDriveList() di menu Receive PO, hanya
+        // action GAS dan target elemen-nya yang berbeda (Request Order, bukan Delivery Order).
+        async function loadRequestOrderDriveList() {
+            const sel = document.getElementById('proc-drive-ro-select');
+            const statusEl = document.getElementById('proc-drive-status');
+            if (!sel) return;
+            sel.innerHTML = `<option value="">— Memuat daftar... —</option>`;
+            if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
+            try {
+                const res = await fetch(WEB_APP_URL + '?action=listRequestOrderPDF', { redirect: 'follow' });
+                const result = await res.json();
+
+                // Bedakan: backend tidak mengenali action / error (result.success bukan true)
+                // vs benar-benar tidak ada file (result.success === true, files kosong).
+                if (!result || result.success !== true) {
+                    console.warn('[listRequestOrderPDF] Respons tidak sesuai — kemungkinan GAS belum di-deploy ulang atau action tidak dikenali:', result);
+                    sel.innerHTML = `<option value="">Gagal memuat daftar (lihat status di bawah)</option>`;
+                    if (statusEl) {
+                        statusEl.textContent = '❌ Backend tidak mengenali action "listRequestOrderPDF". Pastikan Code.gs sudah di-deploy ulang (New Version) setelah ditambahkan.' +
+                            (result && result.message ? ' Detail: ' + result.message : '');
+                        statusEl.className = 'text-xs text-red-500 mt-1';
+                    }
+                    return;
+                }
+
+                const files = Array.isArray(result.files) ? result.files : [];
+
+                if (files.length === 0) {
+                    sel.innerHTML = `<option value="">Belum ada file Request Order di Google Drive</option>`;
+                    if (statusEl) {
+                        statusEl.textContent = 'Folder terbaca, tapi tidak ada PDF dengan nama mengandung "Request_Order". Periksa nama file di Drive.';
+                        statusEl.className = 'text-xs text-amber-500 mt-1';
+                    }
+                    return;
+                }
+
+                // Urutkan dari yang terbaru
+                files.sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
+
+                sel.innerHTML = `<option value="">— Pilih file Request Order —</option>` +
+                    files.map(f => {
+                        const label = f.noPO ? `${f.fileName} (PO: ${f.noPO})` : f.fileName;
+                        return `<option value="${f.fileId}">${label}</option>`;
+                    }).join('');
+            } catch (err) {
+                sel.innerHTML = `<option value="">Gagal memuat daftar</option>`;
+                if (statusEl) {
+                    statusEl.textContent = '❌ Gagal memuat daftar file dari Google Drive: ' + err.message;
+                    statusEl.className = 'text-xs text-red-500 mt-1';
+                }
+            }
+        }
+
+        // ─── Tarik file PDF Request Order terpilih dari Google Drive, lalu ─────────
+        // langsung ekstrak datanya memakai pipeline yang sama seperti Import PDF manual
+        // (handlePDFImport), sehingga otomatis mengisi field & tabel Process PO.
+        async function handlePullRequestOrderFromDrive() {
+            const sel = document.getElementById('proc-drive-ro-select');
+            const statusEl = document.getElementById('proc-drive-status');
+            const btnPull = document.getElementById('btn-proc-drive-pull');
+            const fileId = sel?.value;
+
+            if (!fileId) {
+                showAlert('warning', 'Pilih File', 'Silakan pilih file Request Order dari daftar Google Drive terlebih dahulu.');
+                return;
+            }
+
+            const originalHtml = btnPull.innerHTML;
+            btnPull.disabled = true;
+            btnPull.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Menarik file...`;
+            if (statusEl) {
+                statusEl.textContent = 'Mengambil file PDF dari Google Drive...';
+                statusEl.className = 'text-xs text-blue-500 mt-1';
+            }
+
+            try {
+                const res = await fetch(WEB_APP_URL + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const result = await res.json();
+
+                if (!result || !result.success || !result.base64) {
+                    throw new Error((result && result.message) || 'File tidak ditemukan di Google Drive.');
+                }
+
+                // Konversi base64 menjadi objek File agar bisa dipakai pipeline Import PDF yang sudah ada
+                const byteChars = atob(result.base64);
+                const byteNumbers = new Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const file = new File([blob], result.fileName || 'Request_Order.pdf', { type: 'application/pdf' });
+
+                if (statusEl) {
+                    statusEl.textContent = '✅ File berhasil ditarik dari Google Drive — mengekstrak data...';
+                    statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
+                }
+
+                await handlePDFImport(file);
+            } catch (err) {
+                if (statusEl) {
+                    statusEl.textContent = '❌ Gagal: ' + err.message;
+                    statusEl.className = 'text-xs text-red-500 mt-1';
+                }
+                showAlert('error', 'Gagal Menarik File', 'Terjadi kesalahan saat menarik file dari Google Drive: ' + err.message);
+            } finally {
+                btnPull.disabled = false;
+                btnPull.innerHTML = originalHtml;
+            }
+        }
 
         /**
          * Hitung Qty /pcs untuk satu baris:
@@ -8755,7 +8891,7 @@
             }, 300);
         }
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxn-EFq9BuCEVGur0YsyMAt9AyvRHj96mK-tm1ObKsFMqLzzI3ZMSBKOI_iXNb5Iz4D/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCQdrE3yYQJM7lygHP2xAJfEFdEDxaykm0vMn7pxN9RPBgDFFCynhXJvdE90mJRMGM/exec";
 
         async function simpanOutboundFinal() {
             const orderedByEl = document.getElementById('proc-ordered-by');
