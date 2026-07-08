@@ -5841,7 +5841,7 @@
                     sel.appendChild(opt);
                 });
 
-                // Auto-fill field Ship To ketika user memilih PO dari dropdown
+                // Auto-fill field Ship To + auto-tarik PDF Request Order ketika user memilih PO dari dropdown
                 sel.onchange = function () {
                     const selectedOpt = sel.options[sel.selectedIndex];
                     const shipToVal = selectedOpt?.dataset?.shipTo || '';
@@ -5849,6 +5849,7 @@
                     if (procShipEl && shipToVal) {
                         procShipEl.value = shipToVal;
                     }
+                    _maybeAutoPullRequestOrderForSelectedPO();
                 };
 
                 if (statusEl) {
@@ -5894,8 +5895,8 @@
             </div>
         </div>
 
-        <!-- Tarik PDF Request Order dari Google Drive -->
-        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
+        <!-- Tarik PDF Request Order dari Google Drive (disembunyikan dari tampilan, tetap aktif di background) -->
+        <div class="hidden bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
             <label class="block text-xs font-bold text-gray-500 mb-2">TARIK PDF REQUEST ORDER DARI GOOGLE DRIVE</label>
             <div class="flex flex-col sm:flex-row gap-2">
                 <div class="flex gap-2 flex-1">
@@ -6793,10 +6794,17 @@
         // ─── Muat daftar file PDF Request Order dari folder Google Drive ──────────
         // Logika sama dengan loadDeliveryOrderDriveList() di menu Receive PO, hanya
         // action GAS dan target elemen-nya yang berbeda (Request Order, bukan Delivery Order).
+        // Promise yang resolve setelah daftar file Request Order dari Google Drive
+        // selesai dimuat (berhasil ataupun gagal). Dipakai oleh auto-pull berdasarkan
+        // pilihan No. PO supaya tidak "balapan" dengan proses loading daftar file.
+        window._driveListReadyPromise = Promise.resolve();
+
         async function loadRequestOrderDriveList() {
             const sel = document.getElementById('proc-drive-ro-select');
             const statusEl = document.getElementById('proc-drive-status');
             if (!sel) return;
+            let _resolveDriveListReady;
+            window._driveListReadyPromise = new Promise(res => { _resolveDriveListReady = res; });
             sel.innerHTML = `<option value="">— Memuat daftar... —</option>`;
             if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
             try {
@@ -6813,6 +6821,7 @@
                             (result && result.message ? ' Detail: ' + result.message : '');
                         statusEl.className = 'text-xs text-red-500 mt-1';
                     }
+                    _resolveDriveListReady();
                     return;
                 }
 
@@ -6824,6 +6833,7 @@
                         statusEl.textContent = 'Folder terbaca, tapi tidak ada PDF dengan nama mengandung "Request_Order". Periksa nama file di Drive.';
                         statusEl.className = 'text-xs text-amber-500 mt-1';
                     }
+                    _resolveDriveListReady();
                     return;
                 }
 
@@ -6833,15 +6843,61 @@
                 sel.innerHTML = `<option value="">— Pilih file Request Order —</option>` +
                     files.map(f => {
                         const label = f.noPO ? `${f.fileName} (PO: ${f.noPO})` : f.fileName;
-                        return `<option value="${f.fileId}">${label}</option>`;
+                        return `<option value="${f.fileId}" data-no-po="${escapeHtml(f.noPO || '')}">${label}</option>`;
                     }).join('');
+
+                // Jika user sudah lebih dulu memilih No. PO (mis. dari draft) sebelum
+                // daftar file ini selesai dimuat, coba auto-pull sekarang juga.
+                _resolveDriveListReady();
+                _maybeAutoPullRequestOrderForSelectedPO();
             } catch (err) {
                 sel.innerHTML = `<option value="">Gagal memuat daftar</option>`;
                 if (statusEl) {
                     statusEl.textContent = '❌ Gagal memuat daftar file dari Google Drive: ' + err.message;
                     statusEl.className = 'text-xs text-red-500 mt-1';
                 }
+                _resolveDriveListReady();
             }
+        }
+
+        // ─── Auto-trigger "Tarik & Ekstrak" Request Order berdasarkan No. PO terpilih ──
+        // Dipanggil setiap kali user memilih No. PO (Open) di menu Process PO, supaya
+        // user tidak perlu buka & pilih manual dropdown "Tarik PDF Request Order".
+        async function _maybeAutoPullRequestOrderForSelectedPO() {
+            const noPoSel = document.getElementById('proc-no-po-select');
+            const driveSel = document.getElementById('proc-drive-ro-select');
+            const statusEl = document.getElementById('proc-drive-status');
+            if (!noPoSel || !driveSel) return;
+
+            const noPO = String(noPoSel.value || '').trim();
+            if (!noPO) return; // No. PO dikosongkan — jangan lakukan apa-apa
+
+            // Tunggu daftar file Drive selesai dimuat (hindari race condition saat
+            // halaman baru saja dibuka dan kedua list masih sama-sama loading).
+            await window._driveListReadyPromise;
+
+            // Kalau user sudah keburu ganti pilihan No. PO selagi menunggu, batalkan.
+            if (String(noPoSel.value || '').trim() !== noPO) return;
+
+            const matchOpt = [...driveSel.options].find(
+                o => o.value && String(o.dataset.noPo || '').trim().toLowerCase() === noPO.toLowerCase()
+            );
+
+            if (!matchOpt) {
+                if (statusEl) {
+                    statusEl.textContent = `⚠️ Tidak ditemukan file Request Order untuk PO "${noPO}" di Google Drive. Silakan pilih manual jika file sudah tersedia.`;
+                    statusEl.className = 'text-xs text-amber-500 mt-1';
+                }
+                return;
+            }
+
+            // Kalau file yang cocok sudah pernah ditarik & diekstrak (misalnya user
+            // baru saja menekan tombol manual), jangan tarik ulang otomatis.
+            if (driveSel.value === matchOpt.value && driveSel.dataset.lastPulled === matchOpt.value) return;
+
+            driveSel.value = matchOpt.value;
+            driveSel.dataset.lastPulled = matchOpt.value;
+            await handlePullRequestOrderFromDrive();
         }
 
         // ─── Tarik file PDF Request Order terpilih dari Google Drive, lalu ─────────
@@ -6886,7 +6942,9 @@
                     statusEl.textContent = '✅ File berhasil ditarik dari Google Drive — mengekstrak data...';
                     statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
                 }
+                showAlert('success', 'Berhasil Ditarik', `File Request Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
 
+                sel.dataset.lastPulled = fileId;
                 await handlePDFImport(file);
             } catch (err) {
                 if (statusEl) {
@@ -9113,8 +9171,8 @@
             <div id="recv-import-qr-canvas" class="hidden"></div>
         </div>
 
-        <!-- Tarik PDF Delivery Order dari Google Drive -->
-        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
+        <!-- Tarik PDF Delivery Order dari Google Drive (disembunyikan dari tampilan, tetap aktif di background) -->
+        <div class="hidden bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
             <label class="block text-xs font-bold text-gray-500 mb-2">TARIK PDF DELIVERY ORDER DARI GOOGLE DRIVE</label>
             <div class="flex flex-col sm:flex-row gap-2">
                 <div class="flex gap-2 flex-1">
@@ -9135,6 +9193,23 @@
                 </button>
             </div>
             <p id="recv-drive-status" class="text-xs text-gray-400 mt-1"></p>
+        </div>
+
+        <!-- No PO (Done) — otomatis menarik Delivery Order dari Google Drive -->
+        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
+            <label class="block text-xs font-bold text-gray-500 mb-2">NO. PO <span class="text-green-600">(Done)</span></label>
+            <div class="flex items-center gap-2 min-w-0">
+                <select id="recv-no-po-select" class="flex-1 min-w-0 w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
+                    <option value="">— Pilih No. PO (opsional) —</option>
+                </select>
+                <button id="btn-recv-refresh-po" onclick="loadDonePOList()" title="Refresh daftar PO"
+                    class="flex-shrink-0 p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-500">
+                    <svg id="btn-recv-refresh-po-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
+            </div>
+            <p id="recv-po-list-status" class="text-xs text-gray-400 mt-1"></p>
         </div>
 
         <!-- Baris: Tanggal Terima + No PO -->
@@ -9220,6 +9295,8 @@
     `;
             // Muat daftar file Delivery Order PDF dari folder Google Drive
             loadDeliveryOrderDriveList();
+            // Muat daftar No. PO berstatus "Done" untuk auto-tarik Delivery Order
+            loadDonePOList();
         }
 
         // ─── Render baris tabel Receive PO dari data item ───────────────────────────
@@ -9492,10 +9569,17 @@
         // Folder Drive ID: 1oBApn8WUj2jPRXPh5GtrXRvYWzzbS3g1 (dikelola di GAS backend).
         // Setiap kali PDF Delivery Order dibuat di menu "Process PO", salinannya
         // otomatis ter-upload ke folder ini sehingga bisa ditarik di sini.
+        // Promise yang resolve setelah daftar file Delivery Order dari Google Drive
+        // selesai dimuat (berhasil ataupun gagal). Dipakai oleh auto-pull berdasarkan
+        // pilihan No. PO (Done) supaya tidak "balapan" dengan proses loading daftar file.
+        window._doDriveListReadyPromise = Promise.resolve();
+
         async function loadDeliveryOrderDriveList() {
             const sel = document.getElementById('recv-drive-do-select');
             const statusEl = document.getElementById('recv-drive-status');
             if (!sel) return;
+            let _resolveDoDriveListReady;
+            window._doDriveListReadyPromise = new Promise(res => { _resolveDoDriveListReady = res; });
             sel.innerHTML = `<option value="">— Memuat daftar... —</option>`;
             if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
             try {
@@ -9505,6 +9589,7 @@
 
                 if (files.length === 0) {
                     sel.innerHTML = `<option value="">Belum ada file Delivery Order di Google Drive</option>`;
+                    _resolveDoDriveListReady();
                     return;
                 }
 
@@ -9514,14 +9599,20 @@
                 sel.innerHTML = `<option value="">— Pilih file Delivery Order —</option>` +
                     files.map(f => {
                         const label = f.noPO ? `${f.fileName} (PO: ${f.noPO})` : f.fileName;
-                        return `<option value="${f.fileId}">${label}</option>`;
+                        return `<option value="${f.fileId}" data-no-po="${escapeHtml(f.noPO || '')}">${label}</option>`;
                     }).join('');
+
+                // Jika user sudah lebih dulu memilih No. PO (Done) sebelum daftar file ini
+                // selesai dimuat, coba auto-pull sekarang juga.
+                _resolveDoDriveListReady();
+                _maybeAutoPullDeliveryOrderForSelectedPO();
             } catch (err) {
                 sel.innerHTML = `<option value="">Gagal memuat daftar</option>`;
                 if (statusEl) {
                     statusEl.textContent = '❌ Gagal memuat daftar file dari Google Drive: ' + err.message;
                     statusEl.className = 'text-xs text-red-500 mt-1';
                 }
+                _resolveDoDriveListReady();
             }
         }
 
@@ -9566,7 +9657,9 @@
                     statusEl.textContent = '✅ File berhasil ditarik dari Google Drive — mengekstrak data...';
                     statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
                 }
+                showAlert('success', 'Berhasil Ditarik', `File Delivery Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
 
+                sel.dataset.lastPulled = fileId;
                 await handleReceivePDFTextExtract(file);
             } catch (err) {
                 if (statusEl) {
@@ -9578,6 +9671,141 @@
                 btnPull.disabled = false;
                 btnPull.innerHTML = originalHtml;
             }
+        }
+
+        // =========================================================================
+        // LOAD DAFTAR PO STATUS "DONE" UNTUK DROPDOWN DI RECEIVE PO
+        // =========================================================================
+        async function loadDonePOList() {
+            const sel = document.getElementById('recv-no-po-select');
+            const statusEl = document.getElementById('recv-po-list-status');
+            if (!sel) return;
+
+            if (statusEl) { statusEl.textContent = 'Memuat daftar PO...'; statusEl.className = 'text-xs text-blue-500 mt-1'; }
+
+            // ── Spinner pada tombol refresh ──
+            const refreshBtn = document.getElementById('btn-recv-refresh-po');
+            const refreshIcon = document.getElementById('btn-recv-refresh-po-icon');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                if (refreshIcon) refreshIcon.classList.add('hidden');
+                let rSpinner = refreshBtn.querySelector('.refresh-spinner');
+                if (!rSpinner) {
+                    rSpinner = document.createElement('span');
+                    rSpinner.className = 'refresh-spinner inline-block w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin';
+                    refreshBtn.appendChild(rSpinner);
+                }
+            }
+            const resetRefreshBtn = () => {
+                if (!refreshBtn) return;
+                refreshBtn.disabled = false;
+                const sp = refreshBtn.querySelector('.refresh-spinner');
+                if (sp) sp.remove();
+                if (refreshIcon) refreshIcon.classList.remove('hidden');
+            };
+
+            try {
+                let data = [];
+                try {
+                    data = await cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData');
+                    data = Array.isArray(data) ? data : [];
+                } catch (_) { }
+
+                if (data.length === 0) {
+                    try {
+                        data = await cachedFetch(API_URLS.reportStatus, 'reportStatusFallback');
+                        data = Array.isArray(data) ? data : [];
+                    } catch (_) { }
+                }
+
+                // Filter hanya yang status "Done" DAN No. PO-nya sesuai bulan berjalan.
+                // Format No. PO mengandung tanggal DDMMYYYY (mis. "OT-06072026-004" = 06-07-2026).
+                // Kalau pola tanggal tidak ditemukan pada No. PO, tetap ditampilkan (fallback aman).
+                const now = new Date();
+                const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+                const curYear = String(now.getFullYear());
+                const donePOs = data.slice(1).filter(row => {
+                    const noPO = String(row[1] || '').trim();
+                    const status = String(row[4] || '').trim().toLowerCase();
+                    if (noPO === '' || status !== 'done') return false;
+                    const m = noPO.match(/-(\d{2})(\d{2})(\d{4})-/);
+                    if (!m) return true; // pola tanggal tidak dikenali — jangan disembunyikan
+                    const [, , mm, yyyy] = m;
+                    return mm === curMonth && yyyy === curYear;
+                });
+
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">— Pilih No. PO (opsional) —</option>';
+                donePOs.forEach(row => {
+                    const noPO   = String(row[1] || '').trim();
+                    const shipTo = String(row[3] || '').trim();
+                    const opt = document.createElement('option');
+                    opt.value = noPO;
+                    opt.dataset.shipTo = shipTo;
+                    opt.textContent = noPO + (shipTo ? ' — ' + shipTo : '');
+                    if (noPO === currentVal) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+
+                // Auto-tarik PDF Delivery Order ketika user memilih No. PO dari dropdown
+                sel.onchange = function () {
+                    _maybeAutoPullDeliveryOrderForSelectedPO();
+                };
+
+                if (statusEl) {
+                    const monthLabel = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                    if (donePOs.length > 0) {
+                        statusEl.textContent = `✅ ${donePOs.length} PO Done tersedia (bulan ${monthLabel}).`;
+                        statusEl.className = 'text-xs text-green-600 mt-1';
+                    } else {
+                        statusEl.textContent = `Tidak ada PO berstatus Done untuk bulan ${monthLabel}.`;
+                        statusEl.className = 'text-xs text-gray-400 mt-1';
+                    }
+                }
+                resetRefreshBtn();
+            } catch (err) {
+                if (statusEl) { statusEl.textContent = '❌ Gagal memuat: ' + err.message; statusEl.className = 'text-xs text-red-500 mt-1'; }
+                resetRefreshBtn();
+            }
+        }
+
+        // ─── Auto-trigger "Tarik & Ekstrak" Delivery Order berdasarkan No. PO terpilih ──
+        // Dipanggil setiap kali user memilih No. PO (Done) di menu Receive PO, supaya
+        // user tidak perlu buka & pilih manual dropdown "Tarik PDF Delivery Order".
+        async function _maybeAutoPullDeliveryOrderForSelectedPO() {
+            const noPoSel = document.getElementById('recv-no-po-select');
+            const driveSel = document.getElementById('recv-drive-do-select');
+            const statusEl = document.getElementById('recv-drive-status');
+            if (!noPoSel || !driveSel) return;
+
+            const noPO = String(noPoSel.value || '').trim();
+            if (!noPO) return; // No. PO dikosongkan — jangan lakukan apa-apa
+
+            // Tunggu daftar file Drive selesai dimuat (hindari race condition saat
+            // halaman baru saja dibuka dan kedua list masih sama-sama loading).
+            await window._doDriveListReadyPromise;
+
+            // Kalau user sudah keburu ganti pilihan No. PO selagi menunggu, batalkan.
+            if (String(noPoSel.value || '').trim() !== noPO) return;
+
+            const matchOpt = [...driveSel.options].find(
+                o => o.value && String(o.dataset.noPo || '').trim().toLowerCase() === noPO.toLowerCase()
+            );
+
+            if (!matchOpt) {
+                if (statusEl) {
+                    statusEl.textContent = `⚠️ Tidak ditemukan file Delivery Order untuk PO "${noPO}" di Google Drive. Silakan pilih manual jika file sudah tersedia.`;
+                    statusEl.className = 'text-xs text-amber-500 mt-1';
+                }
+                return;
+            }
+
+            // Kalau file yang cocok sudah pernah ditarik & diekstrak, jangan tarik ulang otomatis.
+            if (driveSel.value === matchOpt.value && driveSel.dataset.lastPulled === matchOpt.value) return;
+
+            driveSel.value = matchOpt.value;
+            driveSel.dataset.lastPulled = matchOpt.value;
+            await handlePullDeliveryOrderFromDrive();
         }
 
         /**
