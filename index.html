@@ -9236,7 +9236,7 @@
 
         <!-- No PO (Done) — otomatis menarik Delivery Order dari Google Drive -->
         <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
-            <label class="block text-xs font-bold text-gray-500 mb-2">NO. PO <span class="text-green-600">(Done)</span></label>
+            <label class="block text-xs font-bold text-gray-500 mb-2">NO. PO <span class="text-green-600">(Receive)</span></label>
             <div class="flex items-center gap-2 min-w-0">
                 <select id="recv-no-po-select" class="flex-1 min-w-0 w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
                     <option value="">— Pilih No. PO (opsional) —</option>
@@ -9787,10 +9787,10 @@
                 if (statusEl) {
                     const monthLabel = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
                     if (donePOs.length > 0) {
-                        statusEl.textContent = `✅ ${donePOs.length} PO Done tersedia (bulan ${monthLabel}).`;
+                        statusEl.textContent = `✅ ${donePOs.length} PO Receive tersedia (bulan ${monthLabel}).`;
                         statusEl.className = 'text-xs text-green-600 mt-1';
                     } else {
-                        statusEl.textContent = `Tidak ada PO berstatus Done untuk bulan ${monthLabel}.`;
+                        statusEl.textContent = `Tidak ada PO Recieve untuk bulan ${monthLabel}.`;
                         statusEl.className = 'text-xs text-gray-400 mt-1';
                     }
                 }
