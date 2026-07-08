@@ -91,6 +91,26 @@
     </div>
 
     <!-- =====================================================================
+         MODAL PREVIEW PDF (Receive PO)
+    ====================================================================== -->
+    <div id="pdf-preview-overlay" class="hidden fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[85vh] flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200 flex-shrink-0">
+                <div>
+                    <h3 id="pdf-preview-title" class="text-base font-bold text-gray-800">Preview PDF</h3>
+                    <p id="pdf-preview-subtitle" class="text-xs text-gray-500"></p>
+                </div>
+                <button onclick="closePdfPreviewModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none px-2">&times;</button>
+            </div>
+            <iframe id="pdf-preview-iframe" class="flex-1 w-full" style="border:0;"></iframe>
+            <div class="px-5 py-3 border-t border-gray-200 flex justify-end flex-shrink-0">
+                <button onclick="closePdfPreviewModal()"
+                    class="px-5 py-2 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 transition">Selesai</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
          HALAMAN LOGIN
     ====================================================================== -->
     <div id="login-page" class="fixed inset-0 flex items-center justify-center bg-gray-100 z-[9999]">
@@ -1001,6 +1021,25 @@
                 };
             });
         }
+
+        // =========================================================================
+        // MODAL PREVIEW PDF (dipakai setelah Receive PO berhasil disimpan)
+        // =========================================================================
+        function showPdfPreviewModal(blobUrl, title, subtitle) {
+            document.getElementById('pdf-preview-title').textContent = title || 'Preview PDF';
+            document.getElementById('pdf-preview-subtitle').textContent = subtitle || '';
+            document.getElementById('pdf-preview-iframe').src = blobUrl;
+            document.getElementById('pdf-preview-overlay').classList.remove('hidden');
+        }
+        function closePdfPreviewModal() {
+            document.getElementById('pdf-preview-overlay').classList.add('hidden');
+            const iframe = document.getElementById('pdf-preview-iframe');
+            if (iframe) iframe.src = 'about:blank';
+        }
+        // Menutup modal preview PDF jika klik di luar kotak
+        document.getElementById('pdf-preview-overlay').addEventListener('click', function (e) {
+            if (e.target === this) closePdfPreviewModal();
+        });
 
         // =========================================================================
         // SIDEBAR TOGGLE
@@ -9276,15 +9315,8 @@
                 </table>
             </div>
             <div class="mt-4 flex flex-wrap items-center gap-3">
-                <button id="btn-generate-recv-pdf" onclick="generateReceivedPOPDF()"
-                    class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto sm:ml-auto">
-                    <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                    Received PO
-                </button>
-                <button onclick="simpanReceiveFinal()"
-                    class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto">
+                <button id="btn-receive-final" onclick="simpanReceiveFinal()"
+                    class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto sm:ml-auto">
                     <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
@@ -10251,169 +10283,127 @@
         // Receive QR scan juga dihentikan oleh stopQRCamera yang sudah ada di navTo
         // (stopQRCamera dipanggil otomatis setiap kali pindah halaman)
 
-        // ─── Generate PDF "Received PO" (hanya item bertanda ❌) ──────────────────
-        async function generateReceivedPOPDF() {
-            const tglTerima = document.getElementById('recv-tgl-terima')?.value || '';
-            const noPO = document.getElementById('recv-no-po')?.value?.trim() || '';
-            const crewPacking = document.getElementById('recv-crew-packing')?.value?.trim() || '';
-            const crewChecking = document.getElementById('recv-crew-checking')?.value?.trim() || '';
-            const orderedBy = document.getElementById('recv-ordered-by')?.value?.trim() || '';
-            const shipTo = document.getElementById('recv-ship')?.value?.trim() || '';
-            const shippingDate = document.getElementById('recv-shipping-date')?.value?.trim() || '';
+        // ─── Builder murni PDF "Received PO — Mismatch" (hanya item bertanda ❌) ──
+        // Tidak melakukan validasi/alert/manipulasi tombol — hanya membangun & mengembalikan dokumen.
+        // Dipanggil oleh simpanReceiveFinal() setelah data berhasil tersimpan ke Received_Log.
+        async function buildReceivedPOMismatchPDF(header, mismatchItems) {
+            const { tglTerima, noPO, crewPacking, crewChecking, orderedBy, shipTo, shippingDate } = header;
 
-            if (!tglTerima) { showAlert('warning', 'Data Belum Lengkap', 'Tanggal Terima belum diisi.'); return; }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const marginX = 14;
 
-            // Kumpulkan hanya item yang ❌ (tidak sesuai)
-            const rows = document.querySelectorAll('#recv-table-body tr');
-            const mismatchItems = [];
-            rows.forEach(row => {
-                const checkSpan = row.querySelector('[id^="recv-check-"]');
-                if (!checkSpan || checkSpan.textContent !== '❌') return;
-                const cells = row.querySelectorAll('td');
-                if (cells.length < 7) return;
-                const qtyRecInput = row.querySelector('.recv-qty-received');
-                const remarkInput = row.querySelector('.recv-remark-input');
-                mismatchItems.push({
-                    id: cells[1].textContent.trim(),
-                    nama: cells[2].textContent.trim(),
-                    qtyOutbound: cells[3].textContent.trim(),
-                    qtyReceived: qtyRecInput ? qtyRecInput.value : cells[4].textContent.trim(),
-                    uom: cells[5].textContent.trim(),
-                    description: cells[6].textContent.trim(),
-                    remark: remarkInput ? remarkInput.value.trim() : '',
-                });
+            try { doc.addImage(HEADER_BG_IMG, 'PNG', 0, 0, pageWidth, 32); } catch (_) {}
+
+            const logoData = await loadImageAsDataURL(NOD_LOGO_URL);
+            let logoBottomY = 18;
+            if (logoData) {
+                try {
+                    const dims = getImageFitDims(logoData, 26, 14);
+                    doc.addImage(logoData.dataUrl, logoData.format, marginX, 8, dims.w, dims.h);
+                    logoBottomY = 8 + dims.h;
+                } catch (_) { drawFallbackLogo(doc, marginX); logoBottomY = 22; }
+            } else { drawFallbackLogo(doc, marginX); logoBottomY = 22; }
+
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(7.5);
+            doc.setTextColor(120, 113, 108);
+            doc.text('Your All-in-One Drink Maker', marginX, logoBottomY + 4);
+
+            doc.setTextColor(17, 24, 39);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.text('RECEIVED PO — MISMATCH', pageWidth - marginX, 16, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(107, 114, 128);
+            doc.text('No. PO: ' + (noPO || '-'), pageWidth - marginX, 22, { align: 'right' });
+
+            doc.setDrawColor(229, 231, 235);
+            doc.setLineWidth(0.4);
+            doc.line(marginX, 28, pageWidth - marginX, 28);
+
+            let y = 36;
+            doc.setFontSize(10);
+            doc.setTextColor(31, 41, 55);
+
+            const infoLeft = [
+                ['Tanggal Terima', formatTanggalIndo(tglTerima)],
+                ['No. PO', noPO || '-'],
+                ['Crew Packing', crewPacking || '-'],
+                ['Crew Checking', crewChecking || '-'],
+            ];
+            const infoRight = [
+                ['Ordered By', orderedBy || '-'],
+                ['Ship To', shipTo || '-'],
+                ['Shipping Date', shippingDate || '-'],
+            ];
+
+            const colLeftX = marginX, colLeftLabelW = 34;
+            const colRightX = pageWidth / 2 + 4, colRightLabelW = 28;
+            const lineH = 6;
+
+            infoLeft.forEach((row, i) => {
+                const yy = y + i * lineH;
+                doc.setFont('helvetica', 'bold'); doc.text(row[0], colLeftX, yy);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colLeftX + colLeftLabelW, yy);
+                doc.text(String(row[1] || '-'), colLeftX + colLeftLabelW + 3, yy);
+            });
+            infoRight.forEach((row, i) => {
+                const yy = y + i * lineH;
+                doc.setFont('helvetica', 'bold'); doc.text(row[0], colRightX, yy);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colRightX + colRightLabelW, yy);
+                const wrapped = doc.splitTextToSize(String(row[1] || '-'), pageWidth - marginX - (colRightX + colRightLabelW + 3));
+                doc.text(wrapped, colRightX + colRightLabelW + 3, yy);
             });
 
-            if (mismatchItems.length === 0) {
-                showAlert('info', 'Semua Item Sesuai', 'Tidak ada item dengan ketidaksesuaian. PDF Received PO tidak perlu dibuat.');
-                return;
-            }
+            y += Math.max(infoLeft.length, infoRight.length) * lineH + 6;
 
-            const btn = document.getElementById('btn-generate-recv-pdf');
-            if (btn) { btn.disabled = true; btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Memproses...`; }
-            const resetBtn = () => { if (btn) { btn.disabled = false; btn.innerHTML = `<svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Received PO`; } };
+            const tableBody = mismatchItems.map((it, idx) => [
+                String(idx + 1), it.id || '-', it.nama, it.qtyOutbound, it.qtyReceived, it.uom, it.description || '-', it.remark || '-'
+            ]);
 
-            try {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                const pageWidth = doc.internal.pageSize.getWidth();
-                const marginX = 14;
+            doc.autoTable({
+                startY: y,
+                head: [['No', 'ID', 'Nama Barang', 'Qty Outbound', 'Qty Received', 'UOM', 'Description', 'Remark']],
+                body: tableBody,
+                theme: 'grid',
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
+                headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 8 },
+                    1: { halign: 'center', cellWidth: 16 },
+                    3: { halign: 'center', cellWidth: 18 },
+                    4: { halign: 'center', cellWidth: 18 },
+                    5: { halign: 'center', cellWidth: 12 },
+                    7: { cellWidth: 24 },
+                },
+                margin: { left: marginX, right: marginX },
+            });
 
-                try { doc.addImage(HEADER_BG_IMG, 'PNG', 0, 0, pageWidth, 32); } catch (_) {}
+            let finalY = doc.lastAutoTable.finalY + 18;
+            const pageHeight = doc.internal.pageSize.getHeight();
+            if (finalY > pageHeight - 90) { doc.addPage(); finalY = 30; }
 
-                const logoData = await loadImageAsDataURL(NOD_LOGO_URL);
-                let logoBottomY = 18;
-                if (logoData) {
-                    try {
-                        const dims = getImageFitDims(logoData, 26, 14);
-                        doc.addImage(logoData.dataUrl, logoData.format, marginX, 8, dims.w, dims.h);
-                        logoBottomY = 8 + dims.h;
-                    } catch (_) { drawFallbackLogo(doc, marginX); logoBottomY = 22; }
-                } else { drawFallbackLogo(doc, marginX); logoBottomY = 22; }
-
-                doc.setFont('helvetica', 'italic');
-                doc.setFontSize(7.5);
-                doc.setTextColor(120, 113, 108);
-                doc.text('Your All-in-One Drink Maker', marginX, logoBottomY + 4);
-
-                doc.setTextColor(17, 24, 39);
+            const sigColW = (pageWidth - marginX * 2) / 2;
+            const sigLabels = ['Diterima oleh,', 'Crew Checking,'];
+            const sigNames = [shipTo || '', crewChecking || ''];
+            sigLabels.forEach((label, i) => {
+                const x = marginX + i * sigColW;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(31, 41, 55);
+                doc.text(label, x, finalY);
+                doc.line(x, finalY + 18, x + sigColW - 10, finalY + 18);
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(16);
-                doc.text('RECEIVED PO — MISMATCH', pageWidth - marginX, 16, { align: 'right' });
-                doc.setFont('helvetica', 'normal');
-                doc.setFontSize(9);
-                doc.setTextColor(107, 114, 128);
-                doc.text('No. PO: ' + (noPO || '-'), pageWidth - marginX, 22, { align: 'right' });
+                doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
+            });
 
-                doc.setDrawColor(229, 231, 235);
-                doc.setLineWidth(0.4);
-                doc.line(marginX, 28, pageWidth - marginX, 28);
+            const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(180, 180, 180);
+            doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
 
-                let y = 36;
-                doc.setFontSize(10);
-                doc.setTextColor(31, 41, 55);
-
-                const infoLeft = [
-                    ['Tanggal Terima', formatTanggalIndo(tglTerima)],
-                    ['No. PO', noPO || '-'],
-                    ['Crew Packing', crewPacking || '-'],
-                    ['Crew Checking', crewChecking || '-'],
-                ];
-                const infoRight = [
-                    ['Ordered By', orderedBy || '-'],
-                    ['Ship To', shipTo || '-'],
-                    ['Shipping Date', shippingDate || '-'],
-                ];
-
-                const colLeftX = marginX, colLeftLabelW = 34;
-                const colRightX = pageWidth / 2 + 4, colRightLabelW = 28;
-                const lineH = 6;
-
-                infoLeft.forEach((row, i) => {
-                    const yy = y + i * lineH;
-                    doc.setFont('helvetica', 'bold'); doc.text(row[0], colLeftX, yy);
-                    doc.setFont('helvetica', 'normal'); doc.text(':', colLeftX + colLeftLabelW, yy);
-                    doc.text(String(row[1] || '-'), colLeftX + colLeftLabelW + 3, yy);
-                });
-                infoRight.forEach((row, i) => {
-                    const yy = y + i * lineH;
-                    doc.setFont('helvetica', 'bold'); doc.text(row[0], colRightX, yy);
-                    doc.setFont('helvetica', 'normal'); doc.text(':', colRightX + colRightLabelW, yy);
-                    const wrapped = doc.splitTextToSize(String(row[1] || '-'), pageWidth - marginX - (colRightX + colRightLabelW + 3));
-                    doc.text(wrapped, colRightX + colRightLabelW + 3, yy);
-                });
-
-                y += Math.max(infoLeft.length, infoRight.length) * lineH + 6;
-
-                const tableBody = mismatchItems.map((it, idx) => [
-                    String(idx + 1), it.id || '-', it.nama, it.qtyOutbound, it.qtyReceived, it.uom, it.description || '-', it.remark || '-'
-                ]);
-
-                doc.autoTable({
-                    startY: y,
-                    head: [['No', 'ID', 'Nama Barang', 'Qty Outbound', 'Qty Received', 'UOM', 'Description', 'Remark']],
-                    body: tableBody,
-                    theme: 'grid',
-                    styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
-                    headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', halign: 'center' },
-                    columnStyles: {
-                        0: { halign: 'center', cellWidth: 8 },
-                        1: { halign: 'center', cellWidth: 16 },
-                        3: { halign: 'center', cellWidth: 18 },
-                        4: { halign: 'center', cellWidth: 18 },
-                        5: { halign: 'center', cellWidth: 12 },
-                        7: { cellWidth: 24 },
-                    },
-                    margin: { left: marginX, right: marginX },
-                });
-
-                let finalY = doc.lastAutoTable.finalY + 18;
-                const pageHeight = doc.internal.pageSize.getHeight();
-                if (finalY > pageHeight - 90) { doc.addPage(); finalY = 30; }
-
-                const sigColW = (pageWidth - marginX * 2) / 2;
-                const sigLabels = ['Diterima oleh,', 'Crew Checking,'];
-                const sigNames = [shipTo || '', crewChecking || ''];
-                sigLabels.forEach((label, i) => {
-                    const x = marginX + i * sigColW;
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(31, 41, 55);
-                    doc.text(label, x, finalY);
-                    doc.line(x, finalY + 18, x + sigColW - 10, finalY + 18);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
-                });
-
-                const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(180, 180, 180);
-                doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
-
-                const fileName = `Received_PO_${noPO || 'PO'}_${tglTerima || ''}.pdf`;
-                doc.save(fileName);
-            } catch (err) {
-                showAlert('error', 'Gagal Generate PDF', err.message);
-            } finally {
-                resetBtn();
-            }
+            const fileName = `Received_PO_${noPO || 'PO'}_${tglTerima || ''}.pdf`;
+            return { doc, fileName };
         }
 
         // ─── Simpan Receive PO ke GAS (Received_Log + update status Closed) ────────
@@ -10458,16 +10448,16 @@
             const allSesuai = items.length > 0 && items.every(it => it.status === 'Sesuai');
             const newPOStatus = allSesuai ? 'Closed' : 'Done';
             const statusInfo = allSesuai
-                ? `Semua item <b>Sesuai</b> — status PO akan otomatis menjadi <b>Closed</b>.`
-                : `Terdapat item <b>Tidak Sesuai</b> — status PO tetap <b>Done</b> (belum Closed).`;
+                ? `Semua item Sesuai — status PO akan otomatis menjadi Closed.`
+                : `Terdapat item Tidak Sesuai — status PO tetap Done (belum Closed).`;
 
             const ok = await showConfirm(
                 'Simpan & Receive PO?',
-                `${items.length} item akan disimpan ke Received_Log.<br>${statusInfo}`
+                `${items.length} item akan disimpan ke Received_Log.${statusInfo}`
             );
             if (!ok) return;
 
-            const saveBtn = document.querySelector('button[onclick="simpanReceiveFinal()"]');
+            const saveBtn = document.getElementById('btn-receive-final');
             const origHTML = saveBtn ? saveBtn.innerHTML : '';
             if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Menyimpan...`; }
 
@@ -10530,9 +10520,46 @@
                     const statusMsg = newPOStatus === 'Closed'
                         ? `\nSemua item Sesuai — Status PO ${noPO} → ✅ Closed`
                         : `\nAda item Tidak Sesuai — Status PO ${noPO} tetap Done (belum Closed)`;
-                    showAlert('success', '✅ Berhasil Diterima!',
-                        `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}`
-                    );
+
+                    // ── Item yang tidak sesuai (❌) dijadikan lampiran PDF "Received PO — Mismatch" ──
+                    const mismatchItemsForPdf = items
+                        .filter(it => it.status === 'Tidak Sesuai')
+                        .map(it => ({
+                            id: it.id,
+                            nama: it.namaBarang,
+                            qtyOutbound: it.qtyOutbound,
+                            qtyReceived: it.qtyReceived,
+                            uom: it.uom,
+                            description: it.description,
+                            remark: it.remark,
+                        }));
+
+                    if (mismatchItemsForPdf.length > 0) {
+                        // Ada ketidaksesuaian: buat PDF, simpan otomatis ke device, lalu tampilkan preview.
+                        try {
+                            const { doc, fileName } = await buildReceivedPOMismatchPDF(
+                                { tglTerima, noPO, crewPacking, crewChecking, orderedBy, shipTo, shippingDate },
+                                mismatchItemsForPdf
+                            );
+                            doc.save(fileName); // simpan otomatis ke folder device (Downloads)
+                            const blobUrl = doc.output('bloburl');
+                            showPdfPreviewModal(
+                                blobUrl,
+                                '✅ Receive Berhasil Disimpan',
+                                `${items.length} item tersimpan ke Received_Log · PDF "${fileName}" telah diunduh ke perangkat Anda.`
+                            );
+                        } catch (pdfErr) {
+                            // Data receive tetap tersimpan walau PDF gagal dibuat.
+                            showAlert('success', '✅ Berhasil Diterima!',
+                                `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}\n(PDF gagal dibuat: ${pdfErr.message})`
+                            );
+                        }
+                    } else {
+                        // Semua item sesuai — tidak perlu PDF mismatch.
+                        showAlert('success', '✅ Berhasil Diterima!',
+                            `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}`
+                        );
+                    }
 
                     setTimeout(() => {
                         ['recv-no-po','recv-crew-packing','recv-crew-checking','recv-ordered-by','recv-ship','recv-shipping-date'].forEach(id => {
