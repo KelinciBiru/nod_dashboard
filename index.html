@@ -5985,6 +5985,7 @@
                     </svg>
                     <span id="btn-generate-do-label">Delivery Order</span>
                 </button>
+                <p id="do-drive-upload-status" class="text-xs text-gray-400 mt-1 w-full basis-full"></p>
                 <button onclick="simpanOutboundFinal()" 
                     class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto">
                     <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -7080,7 +7081,57 @@
             const safeShipToDO = (shipTo || '').replace(/[\\/:*?"<>|]/g, '').trim();
             const fileName = `Delivery_Order_${noPO || 'PO'}${safeShipToDO ? '_' + safeShipToDO : ''}.pdf`;
             doc.save(fileName);
+
+            // ── Upload otomatis salinan PDF ke folder Google Drive ──
+            // Supaya nanti nya pada menu "Receive PO" file ini bisa ditarik/dipilih
+            // langsung dari Google Drive tanpa harus disimpan manual dulu di device.
+            await uploadDeliveryOrderPDFToDrive({ noPO, fileName, doc });
+
             resetDoBtn();
+        }
+
+        /**
+         * Upload salinan PDF Delivery Order (base64) ke folder Google Drive
+         * (ID folder: 1oBApn8WUj2jPRXPh5GtrXRvYWzzbS3g1) melalui GAS backend.
+         * Tidak menggagalkan proses generate PDF jika upload gagal — PDF tetap
+         * ter-download secara lokal, hanya status upload yang ditampilkan.
+         */
+        async function uploadDeliveryOrderPDFToDrive({ noPO, fileName, doc }) {
+            const statusEl = document.getElementById('do-drive-upload-status');
+            const setStatus = (text, cls) => {
+                if (!statusEl) return;
+                statusEl.textContent = text;
+                statusEl.className = `text-xs mt-1 w-full basis-full ${cls}`;
+            };
+            try {
+                setStatus('Menyimpan salinan PDF ke Google Drive...', 'text-blue-500');
+
+                // Ambil PDF sebagai base64 (tanpa prefix data URI)
+                const pdfBase64 = doc.output('datauristring').split(',')[1];
+
+                const response = await fetch(PO_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'uploadDeliveryOrderPDF',
+                        token: sessionToken,
+                        noPO,
+                        fileName,
+                        base64: pdfBase64,
+                    }),
+                });
+                const result = await response.json();
+
+                if (result && result.success) {
+                    setStatus('✅ Salinan PDF berhasil tersimpan otomatis ke Google Drive.', 'text-green-600 font-semibold');
+                } else {
+                    throw new Error((result && result.message) || 'Gagal menyimpan PDF ke Google Drive.');
+                }
+            } catch (err) {
+                console.error('[Delivery Order] Gagal upload ke Google Drive:', err);
+                setStatus('⚠️ PDF sudah terunduh, namun gagal disimpan otomatis ke Google Drive: ' + err.message, 'text-amber-600');
+            }
         }
 
         /**
@@ -8926,6 +8977,28 @@
             <div id="recv-import-qr-canvas" class="hidden"></div>
         </div>
 
+        <!-- Tarik PDF Delivery Order dari Google Drive -->
+        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
+            <label class="block text-xs font-bold text-gray-500 mb-2">TARIK PDF DELIVERY ORDER DARI GOOGLE DRIVE</label>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <select id="recv-drive-do-select" class="w-full sm:flex-1 text-sm border border-gray-300 rounded p-1.5">
+                    <option value="">— Memuat daftar... —</option>
+                </select>
+                <button id="btn-recv-drive-refresh" onclick="loadDeliveryOrderDriveList()" title="Muat ulang daftar"
+                    class="flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold px-3 py-2.5 rounded-lg transition">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+                <button id="btn-recv-drive-pull" onclick="handlePullDeliveryOrderFromDrive()"
+                    class="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition">
+                    <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    Tarik & Ekstrak
+                </button>
+            </div>
+            <p id="recv-drive-status" class="text-xs text-gray-400 mt-1"></p>
+        </div>
+
         <!-- Baris: Tanggal Terima + No PO -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
@@ -9007,6 +9080,8 @@
             </div>
         </div>
     `;
+            // Muat daftar file Delivery Order PDF dari folder Google Drive
+            loadDeliveryOrderDriveList();
         }
 
         // ─── Render baris tabel Receive PO dari data item ───────────────────────────
@@ -9203,11 +9278,11 @@
         // ─── Ekstrak Teks PDF Delivery Order (tanpa QR Code) ───────────────────
         // Membaca konten teks PDF langsung via pdf.js getTextContent(), lalu
         // mem-parse metadata + tabel item berdasarkan posisi koordinat token.
-        async function handleReceivePDFTextExtract() {
+        async function handleReceivePDFTextExtract(fileOverride) {
             const fileInput = document.getElementById('recv-pdfFile');
             const statusEl = document.getElementById('recv-import-status');
             const btnExtract = document.getElementById('btn-recv-extract');
-            const file = fileInput.files[0];
+            const file = fileOverride || fileInput.files[0];
 
             if (!file) {
                 showAlert('warning', 'Pilih File', 'Silakan pilih file PDF Delivery Order terlebih dahulu.');
@@ -9272,6 +9347,98 @@
             } finally {
                 btnExtract.disabled = false;
                 btnExtract.innerHTML = originalBtnHtml;
+            }
+        }
+
+        // ─── Muat daftar file PDF Delivery Order dari folder Google Drive ─────────
+        // Folder Drive ID: 1oBApn8WUj2jPRXPh5GtrXRvYWzzbS3g1 (dikelola di GAS backend).
+        // Setiap kali PDF Delivery Order dibuat di menu "Process PO", salinannya
+        // otomatis ter-upload ke folder ini sehingga bisa ditarik di sini.
+        async function loadDeliveryOrderDriveList() {
+            const sel = document.getElementById('recv-drive-do-select');
+            const statusEl = document.getElementById('recv-drive-status');
+            if (!sel) return;
+            sel.innerHTML = `<option value="">— Memuat daftar... —</option>`;
+            if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
+            try {
+                const res = await fetch(RECEIVE_GAS_URL + '?action=listDeliveryOrderPDF', { redirect: 'follow' });
+                const result = await res.json();
+                const files = (result && result.success && Array.isArray(result.files)) ? result.files : [];
+
+                if (files.length === 0) {
+                    sel.innerHTML = `<option value="">Belum ada file Delivery Order di Google Drive</option>`;
+                    return;
+                }
+
+                // Urutkan dari yang terbaru
+                files.sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
+
+                sel.innerHTML = `<option value="">— Pilih file Delivery Order —</option>` +
+                    files.map(f => {
+                        const label = f.noPO ? `${f.fileName} (PO: ${f.noPO})` : f.fileName;
+                        return `<option value="${f.fileId}">${label}</option>`;
+                    }).join('');
+            } catch (err) {
+                sel.innerHTML = `<option value="">Gagal memuat daftar</option>`;
+                if (statusEl) {
+                    statusEl.textContent = '❌ Gagal memuat daftar file dari Google Drive: ' + err.message;
+                    statusEl.className = 'text-xs text-red-500 mt-1';
+                }
+            }
+        }
+
+        // ─── Tarik file PDF Delivery Order terpilih dari Google Drive, lalu ────────
+        // langsung ekstrak datanya memakai pipeline yang sama seperti upload manual.
+        async function handlePullDeliveryOrderFromDrive() {
+            const sel = document.getElementById('recv-drive-do-select');
+            const statusEl = document.getElementById('recv-drive-status');
+            const btnPull = document.getElementById('btn-recv-drive-pull');
+            const fileId = sel?.value;
+
+            if (!fileId) {
+                showAlert('warning', 'Pilih File', 'Silakan pilih file Delivery Order dari daftar Google Drive terlebih dahulu.');
+                return;
+            }
+
+            const originalHtml = btnPull.innerHTML;
+            btnPull.disabled = true;
+            btnPull.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> Menarik file...`;
+            if (statusEl) {
+                statusEl.textContent = 'Mengambil file PDF dari Google Drive...';
+                statusEl.className = 'text-xs text-blue-500 mt-1';
+            }
+
+            try {
+                const res = await fetch(RECEIVE_GAS_URL + '?action=getDeliveryOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const result = await res.json();
+
+                if (!result || !result.success || !result.base64) {
+                    throw new Error((result && result.message) || 'File tidak ditemukan di Google Drive.');
+                }
+
+                // Konversi base64 menjadi objek File agar bisa dipakai pipeline ekstrak PDF yang sudah ada
+                const byteChars = atob(result.base64);
+                const byteNumbers = new Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const file = new File([blob], result.fileName || 'Delivery_Order.pdf', { type: 'application/pdf' });
+
+                if (statusEl) {
+                    statusEl.textContent = '✅ File berhasil ditarik dari Google Drive — mengekstrak data...';
+                    statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
+                }
+
+                await handleReceivePDFTextExtract(file);
+            } catch (err) {
+                if (statusEl) {
+                    statusEl.textContent = '❌ Gagal: ' + err.message;
+                    statusEl.className = 'text-xs text-red-500 mt-1';
+                }
+                showAlert('error', 'Gagal Menarik File', 'Terjadi kesalahan saat menarik file dari Google Drive: ' + err.message);
+            } finally {
+                btnPull.disabled = false;
+                btnPull.innerHTML = originalHtml;
             }
         }
 
