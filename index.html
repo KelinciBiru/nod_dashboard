@@ -4750,7 +4750,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Kategori</label>
-                        <select id="retur-category" onchange="updateReturPreview()"
+                        <select id="retur-category" onchange="handleFormReturCategoryChange()"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             <option value="">-- Pilih Kategori --</option>
                             ${categoryOptions}
@@ -4758,9 +4758,11 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">From Location</label>
-                        <input type="text" id="retur-from-location"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                            placeholder="Masukkan lokasi asal barang diambil">
+                        <div id="retur-from-location-wrapper">
+                            <input type="text" id="retur-from-location"
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                                placeholder="Masukkan lokasi asal barang diambil">
+                        </div>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat Penarikan</label>
@@ -4861,7 +4863,7 @@
             preloadSourceItems();
 
             // Restore draft
-            _restoreFormReturDraft();
+            await _restoreFormReturDraft();
             _attachFormReturAutosave();
         }
 
@@ -4875,6 +4877,84 @@
             }
             preview.textContent = `Retur-${CATEGORY_CODE[category]}-${formatDateForPO(new Date())}-00?`;
             preview.className = 'w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold';
+        }
+
+        // =========================================================================
+        // KHUSUS KATEGORI "OUTLET" DI FORM RO
+        // From Location berubah jadi dropdown yang sumbernya sama dengan Form PO
+        // (sheet "Source" kolom F2:F). Saat sebuah outlet dipilih, Alamat Penarikan
+        // (kolom G2:G) dan No. Telepon (kolom H2:H) otomatis terisi. Ship To tetap
+        // diisi manual oleh User.
+        // =========================================================================
+
+        /** Ganti kotak "From Location" jadi dropdown (kategori Outlet) atau kembali jadi input teks biasa */
+        async function renderFromLocationField(asDropdown, currentValue) {
+            const wrapper = document.getElementById('retur-from-location-wrapper');
+            if (!wrapper) return;
+
+            if (!asDropdown) {
+                wrapper.innerHTML = `
+                    <input type="text" id="retur-from-location"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        placeholder="Masukkan lokasi asal barang diambil">`;
+                if (currentValue) document.getElementById('retur-from-location').value = currentValue;
+                return;
+            }
+
+            const outlets = await getOutletSourceData();
+            const seen = new Set();
+            let options = '<option value="">-- Pilih Outlet --</option>';
+            outlets.forEach(o => {
+                if (seen.has(o.shipTo)) return;
+                seen.add(o.shipTo);
+                options += `<option value="${o.shipTo.replace(/"/g, '&quot;')}">${o.shipTo}</option>`;
+            });
+            if (outlets.length === 0) {
+                options += '<option disabled>Gagal memuat daftar outlet</option>';
+            }
+
+            wrapper.innerHTML = `
+                <select id="retur-from-location" onchange="fillAlamatPhoneFromOutletRetur(this.value)"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    ${options}
+                </select>`;
+
+            const selectEl = document.getElementById('retur-from-location');
+            if (currentValue && [...selectEl.options].some(o => o.value === currentValue)) {
+                selectEl.value = currentValue;
+            }
+        }
+
+        /** Isi otomatis Alamat Penarikan & No. Telepon berdasarkan outlet yang dipilih pada From Location.
+         *  Khusus No. Telepon di Form RO selalu pakai satu nomor tetap (bukan dari sheet Source),
+         *  berapapun outlet yang dipilih. */
+        const RETUR_OUTLET_FIXED_PHONE = '087874383021';
+        async function fillAlamatPhoneFromOutletRetur(fromLocationValue) {
+            const alamatEl = document.getElementById('retur-alamat');
+            const phoneEl = document.getElementById('retur-phone');
+            if (!fromLocationValue) {
+                if (alamatEl) alamatEl.value = '';
+                if (phoneEl) phoneEl.value = '';
+                return;
+            }
+            const outlets = await getOutletSourceData();
+            const match = outlets.find(o => o.shipTo === fromLocationValue);
+            if (alamatEl) alamatEl.value = match ? match.alamat : '';
+            if (phoneEl) phoneEl.value = RETUR_OUTLET_FIXED_PHONE;
+            // Trigger autosave draft karena diisi lewat script, bukan langsung diketik user
+            if (typeof _formReturAutosaveHandler === 'function') _formReturAutosaveHandler();
+        }
+
+        /** Dipanggil setiap kali kategori di Form RO berubah */
+        async function handleFormReturCategoryChange() {
+            updateReturPreview();
+            const category = document.getElementById('retur-category')?.value || '';
+            const isOutlet = category === 'Outlet';
+            const existingVal = document.getElementById('retur-from-location')?.value || '';
+            await renderFromLocationField(isOutlet, existingVal);
+            if (!isOutlet) return;
+            // Kalau nilai lama masih cocok dengan salah satu outlet, isi juga Alamat & Phone-nya
+            if (existingVal) fillAlamatPhoneFromOutletRetur(existingVal);
         }
 
         function checkAutoTriggerReturPreview() {
@@ -4988,9 +5068,9 @@
 
             if (namaEl) namaEl.selectedIndex = 0;
             if (categoryEl) categoryEl.selectedIndex = 0;
+            renderFromLocationField(false, ''); // kembalikan From Location ke input teks biasa (kategori direset)
             if (allocatedToEl) allocatedToEl.value = '';
             if (alamatEl) alamatEl.value = '';
-            if (fromLocationEl) fromLocationEl.value = '';
             if (phoneEl) phoneEl.value = '';
             if (shippingDateEl) shippingDateEl.value = '';
             if (fileInput) fileInput.value = '';
@@ -5126,15 +5206,22 @@
         }
 
         /** Restore isian Form Retur dari draft tersimpan */
-        function _restoreFormReturDraft() {
+        async function _restoreFormReturDraft() {
             const draft = _loadDraft(DRAFT_KEYS.formRetur);
             if (!draft) return;
 
             const namaEl = document.getElementById('retur-nama');
             const categoryEl = document.getElementById('retur-category');
             if (namaEl && draft.nama) namaEl.value = draft.nama;
-            if (categoryEl && draft.category) { categoryEl.value = draft.category; updateReturPreview(); }
-            if (draft.fromLocation) document.getElementById('retur-from-location').value = draft.fromLocation;
+            if (categoryEl && draft.category) {
+                categoryEl.value = draft.category;
+                // Render dulu field From Location yang sesuai (input/dropdown) sebelum isi nilainya,
+                // supaya untuk kategori Outlet, dropdown-nya sudah siap ditempati draft.fromLocation.
+                await renderFromLocationField(draft.category === 'Outlet', draft.fromLocation || '');
+                updateReturPreview();
+            } else if (draft.fromLocation) {
+                document.getElementById('retur-from-location').value = draft.fromLocation;
+            }
             if (draft.allocatedTo) document.getElementById('retur-allocated-to').value = draft.allocatedTo;
             if (draft.alamat) document.getElementById('retur-alamat').value = draft.alamat;
             if (draft.phone) document.getElementById('retur-phone').value = draft.phone;
