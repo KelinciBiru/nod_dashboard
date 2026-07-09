@@ -6782,6 +6782,14 @@
                             <td class="p-2 text-center"><button onclick="hapusBaris(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>
                         </tr>`;
                     }).join('');
+
+                    // Kolom ID hasil parsing PDF kadang kosong/tidak terbaca (mis.
+                    // PDF PO tidak mencantumkan kolom ID secara jelas). Lengkapi
+                    // otomatis berdasarkan Nama Barang-nya lewat pencocokan ke
+                    // master data (sheet "LIST"), lalu pasang sinkronisasi ulang
+                    // untuk jaga-jaga kalau user mengoreksi Nama Barang manual.
+                    await autoFillIdFromNamaContentEditable(tbody);
+                    attachContentEditableIdSync(tbody);
                 } else {
                     tbody.innerHTML = `
                         <tr class="bg-yellow-50 border-b border-yellow-200">
@@ -7846,6 +7854,14 @@
                     ? items.filter(i => i.nama.toLowerCase().includes(q)).slice(0, maxResults)
                     : items.slice(0, maxResults);
                 renderList(filtered);
+                // Kalau nama yang sedang diketik sudah PERSIS sama dengan salah
+                // satu item di master data, langsung isi ID-nya saat itu juga —
+                // tidak perlu menunggu user mengklik item dropdown, menekan
+                // Enter, ataupun pindah fokus (blur) dari kotak input dulu.
+                if (q) {
+                    const exact = items.find(i => (i.nama || '').trim().toLowerCase() === q);
+                    if (exact) onSelect(exact);
+                }
             }
 
             input.addEventListener('input', refresh);
@@ -7864,7 +7880,20 @@
                 }
                 refresh();
             });
-            input.addEventListener('blur', () => { setTimeout(hideList, 150); });
+            input.addEventListener('blur', () => {
+                setTimeout(hideList, 150);
+                // Kalau user mengetik manual nama barang yang PERSIS sama dengan
+                // salah satu item di master data (tanpa sempat memilih lewat
+                // dropdown/Enter), tetap panggil onSelect begitu kotaknya blur,
+                // supaya kolom ID tetap ikut ter-auto-isi sesuai nama barangnya.
+                setTimeout(async () => {
+                    const val = input.value.trim();
+                    if (!val) return;
+                    const items = await getSourceItems();
+                    const matched = items.find(i => (i.nama || '').trim().toLowerCase() === val.toLowerCase());
+                    if (matched) onSelect(matched);
+                }, 160);
+            });
 
             input.addEventListener('keydown', (e) => {
                 const lis = list.querySelectorAll('li');
@@ -7900,6 +7929,62 @@
             });
 
             return { positionList, hideList, showList };
+        }
+
+        // =========================================================================
+        // AUTO-ISI KOLOM ID BERDASARKAN NAMA BARANG UNTUK TABEL HASIL IMPORT PDF
+        // Dipakai khusus untuk tabel "Process PO" hasil Import PDF, di mana sel
+        // ID & Nama Barang berupa <td contenteditable> biasa (bukan input dengan
+        // dropdown autocomplete), sehingga tidak lewat attachItemAutocomplete().
+        // =========================================================================
+
+        /** Cocokkan Nama Barang (persis, tanpa memandang huruf besar/kecil) ke
+         *  master data (sheet "LIST") dan kembalikan ID pasangannya, atau ''
+         *  kalau tidak ada yang cocok persis. */
+        async function _lookupIdByNamaBarang(nama) {
+            const n = String(nama || '').trim().toLowerCase();
+            if (!n || n === '-') return '';
+            const items = await getSourceItems();
+            const match = items.find(i => (i.nama || '').trim().toLowerCase() === n);
+            return match ? (match.id || '') : '';
+        }
+
+        /** Untuk tabel dengan sel ID & Nama Barang berupa <td contenteditable>
+         *  (hasil Import PDF di Process PO): isi otomatis kolom ID yang masih
+         *  kosong berdasarkan Nama Barang di baris yang sama. */
+        async function autoFillIdFromNamaContentEditable(tbody) {
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            for (const tr of rows) {
+                const idCell = tr.children[0];
+                const namaCell = tr.children[1];
+                if (!idCell || !namaCell) continue;
+                if (!idCell.hasAttribute('contenteditable') || !namaCell.hasAttribute('contenteditable')) continue;
+                const currentId = idCell.textContent.trim();
+                if (currentId && currentId !== '-') continue; // sudah terisi (dari PDF), jangan ditimpa
+                const matchedId = await _lookupIdByNamaBarang(namaCell.textContent);
+                if (matchedId) idCell.textContent = matchedId;
+            }
+        }
+
+        /** Pasang listener supaya begitu sel Nama Barang (contenteditable) hasil
+         *  Import PDF diedit manual oleh user (mis. koreksi typo/OCR) lalu blur,
+         *  kolom ID di baris yang sama ikut disinkronkan ulang berdasarkan nama
+         *  barunya (kalau ketemu pasangannya di master data). */
+        function attachContentEditableIdSync(tbody) {
+            if (!tbody) return;
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const idCell = tr.children[0];
+                const namaCell = tr.children[1];
+                if (!idCell || !namaCell) return;
+                if (!namaCell.hasAttribute('contenteditable') || !idCell.hasAttribute('contenteditable')) return;
+                if (namaCell.dataset.idSyncAttached) return; // hindari listener dobel
+                namaCell.dataset.idSyncAttached = '1';
+                namaCell.addEventListener('blur', async () => {
+                    const matchedId = await _lookupIdByNamaBarang(namaCell.textContent);
+                    if (matchedId) idCell.textContent = matchedId;
+                });
+            });
         }
 
         function tambahBarisManual() {
@@ -7943,7 +8028,13 @@
             // Pasang event autocomplete (dropdown mengambang di luar tabel)
             const input = tr.querySelector('.nama-barang-input');
             const list = tr.querySelector('.autocomplete-list');
-            attachItemAutocomplete(input, list, tr, tbody);
+            const idInput = tr.querySelector('.item-id-input');
+            attachItemAutocomplete(input, list, tr, tbody, {
+                // Begitu Nama Barang dipilih dari dropdown (sumber: sheet "LIST"),
+                // kolom ID otomatis terisi dengan ID pasangannya (kolom A di LIST),
+                // sama seperti perilaku di Form PO.
+                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
+            });
 
             recalcQtyPcs(tr);
             input.focus();
