@@ -481,7 +481,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzIpN6wWkJ0esK2VXTeHEc5BBYewDUiGjkhFi1UBerQVo5RuziLe5i8KsSQII4hrhnX/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzbkGnKWt51rP_7PTlNFpJQKfviZZ-oybVO0kPHv8m4-pLy_KI3Uw46kaleqZQliI03/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
@@ -4269,7 +4269,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Kategori</label>
-                        <select id="category" onchange="updatePOPreview()"
+                        <select id="category" onchange="handleFormPOCategoryChange()"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             <option value="">-- Pilih Kategori --</option>
                             ${categoryOptions}
@@ -4277,9 +4277,11 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
-                        <input type="text" id="allocated-to"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                            placeholder="Masukkan Nama (Event/Outlet/Penerima)">
+                        <div id="allocated-to-wrapper">
+                            <input type="text" id="allocated-to"
+                                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                                placeholder="Masukkan Nama (Event/Outlet/Penerima)">
+                        </div>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat</label>
@@ -4410,15 +4412,22 @@
         }
 
         /** Restore isian Form PO dari draft tersimpan (jika ada) */
-        function _restoreFormPODraft() {
+        async function _restoreFormPODraft() {
             const draft = _loadDraft(DRAFT_KEYS.formPO);
             if (!draft) return;
 
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             if (namaEl && draft.nama) namaEl.value = draft.nama;
-            if (categoryEl && draft.category) { categoryEl.value = draft.category; updatePOPreview(); }
-            if (draft.allocatedTo) document.getElementById('allocated-to').value = draft.allocatedTo;
+            if (categoryEl && draft.category) {
+                categoryEl.value = draft.category;
+                // Render dulu field Ship To yang sesuai (input/dropdown) sebelum isi nilainya,
+                // supaya untuk kategori Outlet, dropdown-nya sudah siap ditempati draft.allocatedTo.
+                await renderShipToField(draft.category === 'Outlet', draft.allocatedTo || '');
+                updatePOPreview();
+            }
+            const allocatedToEl = document.getElementById('allocated-to');
+            if (allocatedToEl && draft.allocatedTo) allocatedToEl.value = draft.allocatedTo;
             if (draft.alamat) document.getElementById('po-alamat').value = draft.alamat;
             if (draft.phone) document.getElementById('po-phone').value = draft.phone;
             if (draft.shippingDate) document.getElementById('po-shipping-date').value = draft.shippingDate;
@@ -4468,6 +4477,100 @@
             }
             preview.textContent = `${CATEGORY_CODE[category]}-${formatDateForPO(new Date())}-00?`;
             preview.className = 'w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold';
+        }
+
+        // =========================================================================
+        // KHUSUS KATEGORI "OUTLET" DI FORM PO
+        // Ship To berubah jadi dropdown yang sumbernya sheet "Source" kolom F2:F.
+        // Saat sebuah outlet dipilih, Alamat (kolom G2:G) dan No. Telepon (kolom H2:H)
+        // otomatis terisi mengikuti baris yang sama dengan Ship To yang dipilih.
+        // =========================================================================
+        let _outletSourceCache = null;
+
+        /** Ambil data {shipTo, alamat, phone} dari sheet "Source" kolom F,G,H lewat GAS ?action=getOutletSourceData */
+        async function getOutletSourceData() {
+            if (_outletSourceCache) return _outletSourceCache;
+            try {
+                const res = await fetch(PO_GAS_URL + '?action=getOutletSourceData', { redirect: 'follow' });
+                const data = await res.json();
+                _outletSourceCache = Array.isArray(data)
+                    ? data.filter(Boolean).map(d => ({
+                        shipTo: String(d.shipTo || d.ShipTo || d['Ship To'] || '').trim(),
+                        alamat: String(d.alamat || d.Alamat || '').trim(),
+                        phone: String(d.phone || d.Phone || d['No. Telepon'] || '').trim()
+                    })).filter(d => d.shipTo !== '')
+                    : [];
+            } catch (_) {
+                _outletSourceCache = [];
+            }
+            return _outletSourceCache;
+        }
+
+        /** Ganti kotak "Ship To" jadi dropdown (kategori Outlet) atau kembali jadi input teks biasa */
+        async function renderShipToField(asDropdown, currentValue) {
+            const wrapper = document.getElementById('allocated-to-wrapper');
+            if (!wrapper) return;
+
+            if (!asDropdown) {
+                wrapper.innerHTML = `
+                    <input type="text" id="allocated-to"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        placeholder="Masukkan Nama (Event/Outlet/Penerima)">`;
+                if (currentValue) document.getElementById('allocated-to').value = currentValue;
+                return;
+            }
+
+            const outlets = await getOutletSourceData();
+            const seen = new Set();
+            let options = '<option value="">-- Pilih Outlet --</option>';
+            outlets.forEach(o => {
+                if (seen.has(o.shipTo)) return;
+                seen.add(o.shipTo);
+                options += `<option value="${o.shipTo.replace(/"/g, '&quot;')}">${o.shipTo}</option>`;
+            });
+            if (outlets.length === 0) {
+                options += '<option disabled>Gagal memuat daftar outlet</option>';
+            }
+
+            wrapper.innerHTML = `
+                <select id="allocated-to" onchange="fillAlamatPhoneFromOutlet(this.value)"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    ${options}
+                </select>`;
+
+            const selectEl = document.getElementById('allocated-to');
+            if (currentValue && [...selectEl.options].some(o => o.value === currentValue)) {
+                selectEl.value = currentValue;
+            }
+        }
+
+        /** Isi otomatis Alamat & No. Telepon berdasarkan outlet yang dipilih pada Ship To */
+        async function fillAlamatPhoneFromOutlet(shipToValue) {
+            const alamatEl = document.getElementById('po-alamat');
+            const phoneEl = document.getElementById('po-phone');
+            if (!shipToValue) {
+                if (alamatEl) alamatEl.value = '';
+                if (phoneEl) phoneEl.value = '';
+                return;
+            }
+            const outlets = await getOutletSourceData();
+            const match = outlets.find(o => o.shipTo === shipToValue);
+            if (alamatEl) alamatEl.value = match ? match.alamat : '';
+            if (phoneEl) phoneEl.value = match ? match.phone : '';
+            // Trigger autosave draft karena diisi lewat script, bukan langsung diketik user
+            if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
+        }
+
+        /** Dipanggil setiap kali kategori di Form PO berubah */
+        async function handleFormPOCategoryChange() {
+            updatePOPreview();
+            const category = document.getElementById('category')?.value || '';
+            const isOutlet = category === 'Outlet';
+            const existingVal = document.getElementById('allocated-to')?.value || '';
+            await renderShipToField(isOutlet, existingVal);
+            if (!isOutlet) return;
+            // Kalau nilai lama masih cocok dengan salah satu outlet, isi juga Alamat & Phone-nya
+            if (existingVal) fillAlamatPhoneFromOutlet(existingVal);
         }
 
         /** Auto-trigger No. PO preview when item table gets first row filled */
@@ -4579,7 +4682,7 @@
 
             if (namaEl) namaEl.selectedIndex = 0;
             if (categoryEl) categoryEl.selectedIndex = 0;
-            if (allocatedToEl) allocatedToEl.value = '';
+            renderShipToField(false, ''); // kembalikan Ship To ke input teks biasa (kategori direset)
             if (alamatEl) alamatEl.value = '';
             if (phoneEl) phoneEl.value = '';
             if (shippingDateEl) shippingDateEl.value = '';
