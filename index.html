@@ -49,7 +49,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.4.4/qrcode.min.js"></script>
@@ -1432,8 +1432,15 @@
                                 </svg>
                                 <span>Scan</span>
                             </button>
+                            <button type="button" onclick="document.getElementById('wr-scan-input')?.click()"
+                                class="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-indigo-600 text-sm font-semibold rounded-xl shadow-sm border border-indigo-200 transition">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                </svg>
+                                <span>Galeri</span>
+                            </button>
                         </div>
-                        <!-- Fallback: upload foto dari galeri (dipakai jika kamera live tidak tersedia) -->
+                        <!-- Upload foto dari galeri: dipakai kalau scan kamera live gagal mendeteksi -->
                         <input type="file" id="wr-scan-input" accept="image/*" class="hidden" onchange="handleSerialScan(this)">
                         <p id="wr-scan-status" class="hidden text-xs text-indigo-600 mt-1">Memindai serial number...</p>
                         <div id="wr-scan-canvas" class="hidden"></div>
@@ -1473,6 +1480,7 @@
         let _wrBarcodeInstance = null;
         let _wrTesseractWorker = null;
         let _wrOcrReady = false;
+        let _wrTickCount = 0;
 
         /** Buka modal kamera live untuk scan Serial Number (dengan guide box, auto-scan) */
         async function openSerialScanner() {
@@ -1539,6 +1547,7 @@
             setWrCamStatus('Posisikan Serial Number di dalam kotak');
 
             // Mulai loop auto-scan: coba baca setiap ~1 detik tanpa perlu tombol
+            _wrTickCount = 0;
             if (_wrScanTimer) clearInterval(_wrScanTimer);
             _wrScanTimer = setInterval(wrAutoScanTick, 1000);
         }
@@ -1573,6 +1582,224 @@
                 w.terminate().catch(() => {});
             }
             _wrOcrReady = false;
+        }
+
+        /**
+         * Ubah File/Blob foto menjadi <canvas> mentah (dipakai sebelum praproses gambar).
+         */
+        function fileToCanvas(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const c = document.createElement('canvas');
+                    c.width = img.naturalWidth;
+                    c.height = img.naturalHeight;
+                    c.getContext('2d').drawImage(img, 0, 0);
+                    URL.revokeObjectURL(img.src);
+                    resolve(c);
+                };
+                img.onerror = (e) => { URL.revokeObjectURL(img.src); reject(e); };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        /**
+         * Praproses gambar sebelum OCR: ubah ke grayscale lalu threshold biner
+         * (metode Otsu) agar teks pada stiker label (kontras rendah / bayangan /
+         * pantulan cahaya) menjadi hitam-putih tegas dan lebih mudah dibaca Tesseract.
+         * Tanpa praproses ini, banyak foto label (terutama hasil kamera live yang
+         * agak buram/gelap) gagal terbaca sama sekali oleh OCR.
+         */
+        function preprocessForOcr(sourceCanvas) {
+            const w = sourceCanvas.width, h = sourceCanvas.height;
+            if (!w || !h) return sourceCanvas;
+
+            const out = document.createElement('canvas');
+            out.width = w; out.height = h;
+            const ctx = out.getContext('2d');
+            ctx.drawImage(sourceCanvas, 0, 0);
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+
+            // Grayscale + histogram (untuk menghitung threshold Otsu)
+            const gray = new Uint8ClampedArray(w * h);
+            const hist = new Array(256).fill(0);
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                const g = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) | 0;
+                gray[p] = g;
+                hist[g]++;
+            }
+
+            // Threshold Otsu: cari titik pemisah hitam/putih yang paling optimal
+            const total = w * h;
+            let sumAll = 0;
+            for (let t = 0; t < 256; t++) sumAll += t * hist[t];
+            let sumB = 0, wB = 0, wF = 0, maxVar = -1, threshold = 127;
+            for (let t = 0; t < 256; t++) {
+                wB += hist[t];
+                if (wB === 0) continue;
+                wF = total - wB;
+                if (wF === 0) break;
+                sumB += t * hist[t];
+                const mB = sumB / wB;
+                const mF = (sumAll - sumB) / wF;
+                const varBetween = wB * wF * (mB - mF) * (mB - mF);
+                if (varBetween > maxVar) { maxVar = varBetween; threshold = t; }
+            }
+
+            for (let p = 0, i = 0; p < gray.length; p++, i += 4) {
+                const v = gray[p] > threshold ? 255 : 0;
+                data[i] = data[i + 1] = data[i + 2] = v;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            return out;
+        }
+
+        /**
+         * Setelah threshold biner, background di sekitar teks (banyak spasi/padding
+         * dari kotak panduan) masih ikut terbawa. Tesseract dengan mode "single line"
+         * sering gagal / salah baca kalau area di sekeliling teks terlalu lebar.
+         * Fungsi ini memotong gambar rapat ke bounding-box piksel gelap (teks) saja,
+         * plus sedikit padding, supaya OCR fokus persis ke tulisannya.
+         */
+        function trimToContent(canvas, paddingRatio = 0.12) {
+            const w = canvas.width, h = canvas.height;
+            if (!w || !h) return canvas;
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.getImageData(0, 0, w, h).data;
+
+            let minX = w, minY = h, maxX = -1, maxY = -1;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const idx = (y * w + x) * 4;
+                    if (imgData[idx] < 128) { // piksel gelap (teks) setelah threshold
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            if (maxX < minX || maxY < minY) return canvas; // tidak ada piksel gelap ditemukan
+
+            const padX = Math.round((maxX - minX) * paddingRatio) + 8;
+            const padY = Math.round((maxY - minY) * paddingRatio) + 8;
+            minX = Math.max(0, minX - padX);
+            minY = Math.max(0, minY - padY);
+            maxX = Math.min(w - 1, maxX + padX);
+            maxY = Math.min(h - 1, maxY + padY);
+
+            const cw = maxX - minX + 1, ch = maxY - minY + 1;
+            if (cw <= 4 || ch <= 4) return canvas;
+
+            const out = document.createElement('canvas');
+            out.width = cw; out.height = ch;
+            out.getContext('2d').drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+            return out;
+        }
+
+        /**
+         * Cari area terang (putih) terbesar & paling "seperti label" pada gambar biner
+         * (hasil preprocessForOcr). Stiker serial number pada foto dus utuh biasanya
+         * berupa persegi panjang putih/terang yang menonjol di atas background dus
+         * yang gelap — jauh lebih besar & lebih "solid" dibanding goresan teks tipis
+         * lain (mis. logo emas). Pakai flood-fill sederhana (4-arah) untuk menemukan
+         * blob terang terhubung terbesar yang bentuknya masuk akal sebagai label.
+         */
+        function findLargestBrightRegion(binaryCanvas, { minAreaRatio = 0.004, minAspect = 1.1, maxAspect = 9, minFillRatio = 0.35 } = {}) {
+            const w = binaryCanvas.width, h = binaryCanvas.height;
+            if (!w || !h) return null;
+            const data = binaryCanvas.getContext('2d').getImageData(0, 0, w, h).data;
+
+            const total = w * h;
+            const isWhite = new Uint8Array(total);
+            for (let p = 0, i = 0; p < total; p++, i += 4) isWhite[p] = data[i] > 128 ? 1 : 0;
+
+            const visited = new Uint8Array(total);
+            const stack = new Int32Array(total);
+            const minArea = total * minAreaRatio;
+            let best = null;
+
+            for (let startP = 0; startP < total; startP++) {
+                if (visited[startP] || !isWhite[startP]) continue;
+
+                let sp = 0;
+                stack[sp++] = startP;
+                visited[startP] = 1;
+                let count = 0;
+                let minX = w, minY = h, maxX = 0, maxY = 0;
+
+                while (sp > 0) {
+                    const p = stack[--sp];
+                    const x = p % w, y = (p / w) | 0;
+                    count++;
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+
+                    if (x > 0) { const np = p - 1; if (!visited[np] && isWhite[np]) { visited[np] = 1; stack[sp++] = np; } }
+                    if (x < w - 1) { const np = p + 1; if (!visited[np] && isWhite[np]) { visited[np] = 1; stack[sp++] = np; } }
+                    if (y > 0) { const np = p - w; if (!visited[np] && isWhite[np]) { visited[np] = 1; stack[sp++] = np; } }
+                    if (y < h - 1) { const np = p + w; if (!visited[np] && isWhite[np]) { visited[np] = 1; stack[sp++] = np; } }
+                }
+
+                if (count < minArea) continue;
+                const bw = maxX - minX + 1, bh = maxY - minY + 1;
+                const aspect = bw / bh;
+                if (aspect < minAspect || aspect > maxAspect) continue;
+                const fillRatio = count / (bw * bh);
+                if (fillRatio < minFillRatio) continue;
+
+                if (!best || count > best.count) best = { minX, minY, maxX, maxY, count };
+            }
+
+            return best;
+        }
+
+        /**
+         * Temukan & potong area stiker label (bukan seluruh foto dus) dari canvas
+         * resolusi asli, lalu upscale supaya karakter cukup besar untuk OCR akurat.
+         * Deteksi blob dijalankan pada versi kecil (cepat), tapi crop akhir diambil
+         * dari canvas resolusi ASLI supaya detail digit tetap tajam.
+         * Mengembalikan null jika tidak ada area yang cukup meyakinkan sebagai label.
+         */
+        function locateLabelRegion(fullResCanvas) {
+            const maxDim = 800;
+            const scale = Math.min(1, maxDim / Math.max(fullResCanvas.width, fullResCanvas.height));
+            const smallW = Math.max(1, Math.round(fullResCanvas.width * scale));
+            const smallH = Math.max(1, Math.round(fullResCanvas.height * scale));
+
+            const smallCanvas = document.createElement('canvas');
+            smallCanvas.width = smallW; smallCanvas.height = smallH;
+            smallCanvas.getContext('2d').drawImage(fullResCanvas, 0, 0, smallW, smallH);
+
+            const smallBinary = preprocessForOcr(smallCanvas);
+            const region = findLargestBrightRegion(smallBinary);
+            if (!region) return null;
+
+            const invScale = 1 / scale;
+            const pad = 0.15;
+            let minX = region.minX * invScale, minY = region.minY * invScale;
+            let maxX = region.maxX * invScale, maxY = region.maxY * invScale;
+            const bw = maxX - minX, bh = maxY - minY;
+            minX -= bw * pad; maxX += bw * pad;
+            minY -= bh * pad; maxY += bh * pad;
+            minX = Math.max(0, minX); minY = Math.max(0, minY);
+            maxX = Math.min(fullResCanvas.width - 1, maxX);
+            maxY = Math.min(fullResCanvas.height - 1, maxY);
+
+            const cw = Math.round(maxX - minX), ch = Math.round(maxY - minY);
+            if (cw <= 4 || ch <= 4) return null;
+
+            // Upscale agar tinggi crop label mendekati target, supaya digit cukup besar untuk OCR
+            const targetH = 220;
+            const upFactor = Math.max(1, targetH / ch);
+            const out = document.createElement('canvas');
+            out.width = Math.round(cw * upFactor);
+            out.height = Math.round(ch * upFactor);
+            out.getContext('2d').drawImage(fullResCanvas, minX, minY, cw, ch, 0, 0, out.width, out.height);
+            return out;
         }
 
         /**
@@ -1665,15 +1892,29 @@
                 }
 
                 // ── Tahap 2: OCR baris tunggal pada area guide box ───────────
+                // Praproses (grayscale + threshold Otsu), lalu potong rapat ke area
+                // teks saja (buang sisa background/padding), dan coba beberapa mode
+                // segmentasi Tesseract (PSM) karena satu mode saja sering gagal kalau
+                // pencahayaan/vignette kamera tidak rata.
                 if (_wrOcrReady && _wrTesseractWorker) {
                     try {
-                        const cropBlob = await new Promise(res => cropCanvas.toBlob(res, 'image/png'));
-                        const { data } = await _wrTesseractWorker.recognize(cropBlob);
-                        const clean = (data?.text || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                        const thresholded = preprocessForOcr(cropCanvas);
+                        const ocrCanvas = trimToContent(thresholded);
+                        const cropBlob = await new Promise(res => ocrCanvas.toBlob(res, 'image/png'));
 
-                        if (clean.length >= 6) {
-                            if (serialEl) serialEl.value = clean;
-                            setWrCamStatus('✅ Terbaca: ' + clean);
+                        let candidate = '';
+                        for (const psm of ['7', '6', '11']) {
+                            await _wrTesseractWorker.setParameters({ tessedit_pageseg_mode: psm });
+                            const { data } = await _wrTesseractWorker.recognize(cropBlob);
+                            const rawText = data?.text || '';
+                            console.log('[WR-OCR] psm=' + psm + ' raw="' + rawText.trim() + '"');
+                            candidate = extractSerialCandidate(rawText) || rawText.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                            if (candidate.length >= 6) break;
+                        }
+
+                        if (candidate.length >= 6) {
+                            if (serialEl) serialEl.value = candidate;
+                            setWrCamStatus('✅ Terbaca: ' + candidate);
                             closeWrScanner();
                             return;
                         }
@@ -1683,7 +1924,14 @@
                     }
                 }
 
-                setWrCamStatus('Mendeteksi...');
+                _wrTickCount++;
+                if (_wrTickCount === 12) {
+                    // Setelah ~12 detik belum terbaca, beri petunjuk (bukan alert blocking)
+                    // supaya pengguna tahu bisa langsung ketik manual sambil scan tetap jalan.
+                    setWrCamStatus('Belum terbaca — dekatkan kamera / ketik manual jika perlu');
+                } else {
+                    setWrCamStatus('Mendeteksi...');
+                }
             } catch (err) {
                 console.error('Auto-scan tick error:', err);
                 // Jangan tampilkan alert — biarkan loop lanjut ke percobaan berikutnya
@@ -1732,14 +1980,64 @@
         }
 
         /**
+         * OCR satu foto dengan mencoba beberapa mode segmentasi Tesseract (PSM)
+         * berurutan, ambil kandidat serial number terpanjang/terbaik yang ditemukan.
+         * Dipakai untuk foto dari galeri, yang biasanya berupa foto seluruh sisi
+         * dus (bukan cuma stikernya saja) sehingga layoutnya lebih kompleks.
+         *
+         * Kadang worker Tesseract gagal siap sepenuhnya (mis. koneksi lambat saat
+         * mengunduh core/WASM-nya), yang bisa memicu error internal seperti
+         * "Cannot read properties of null (reading 'SetVariable')". Kalau itu terjadi,
+         * kita buang worker yang gagal itu dan coba sekali lagi dengan worker baru,
+         * daripada langsung menampilkan "Gagal Scan" ke pengguna.
+         */
+        async function ocrMultiPsm(source, psmList = ['3', '11', '6'], _retriesLeft = 1) {
+            let worker;
+            try {
+                worker = await Tesseract.createWorker('eng');
+            } catch (initErr) {
+                if (_retriesLeft > 0) return ocrMultiPsm(source, psmList, _retriesLeft - 1);
+                throw new Error('Gagal menyiapkan mesin OCR (koneksi mungkin lambat). Coba lagi.');
+            }
+
+            try {
+                await worker.setParameters({
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+                });
+                let bestCandidate = '';
+                let bestRawText = '';
+                for (const psm of psmList) {
+                    await worker.setParameters({ tessedit_pageseg_mode: psm });
+                    const { data } = await worker.recognize(source);
+                    const rawText = data?.text || '';
+                    console.log('[WR-GALLERY-OCR] psm=' + psm + ' raw="' + rawText.replace(/\n/g, ' | ').trim() + '"');
+                    if (!bestRawText) bestRawText = rawText;
+                    const candidate = extractSerialCandidate(rawText);
+                    if (candidate && candidate.length > bestCandidate.length) bestCandidate = candidate;
+                    if (bestCandidate.length >= 8) break; // sudah cukup panjang & meyakinkan, tak perlu coba mode lain
+                }
+                return { candidate: bestCandidate, rawText: bestRawText };
+            } catch (ocrErr) {
+                console.error('ocrMultiPsm gagal:', ocrErr);
+                if (_retriesLeft > 0) {
+                    try { await worker.terminate(); } catch (_) {}
+                    return ocrMultiPsm(source, psmList, _retriesLeft - 1);
+                }
+                throw new Error('OCR gagal membaca gambar (mesin OCR bermasalah). Coba upload ulang atau ketik manual.');
+            } finally {
+                try { await worker.terminate(); } catch (_) {}
+            }
+        }
+
+        /**
          * Proses hasil foto sticker label box mesin menjadi teks Serial Number.
          * Alur 2 tahap supaya hasil otomatis akurat:
          *  1) Coba baca Barcode/QR Code pada stiker (html5-qrcode) — paling akurat
          *     karena hasilnya persis sama dengan nilai yang di-encode di barcode,
          *     tanpa risiko salah baca karakter seperti OCR.
          *  2) Jika stiker tidak punya barcode (hanya teks tercetak), fallback ke
-         *     OCR Tesseract.js lalu disaring dengan extractSerialCandidate() agar
-         *     hanya mengambil token yang benar-benar berpola serial number.
+         *     OCR Tesseract.js (multi-PSM) lalu disaring dengan extractSerialCandidate()
+         *     agar hanya mengambil token yang benar-benar berpola serial number.
          */
         async function handleSerialScan(input) {
             const file = input.files[0];
@@ -1786,10 +2084,56 @@
                     // Tidak ada barcode/QR yang terbaca pada foto → lanjut ke OCR teks
                 }
 
-                // ── Tahap 2: Fallback OCR teks (Tesseract.js) ───────────────
+                // ── Tahap 2: Fallback OCR teks (Tesseract.js, multi-PSM) ────
                 if (statusEl) statusEl.textContent = 'Tidak ada barcode, membaca teks serial number...';
-                const rawText = await ocrWithTesseract(file, { singleLine: false });
-                const best = extractSerialCandidate(rawText);
+
+                let rawCanvas = null;
+                try {
+                    rawCanvas = await fileToCanvas(file);
+                } catch (_) {
+                    // Gagal memuat foto jadi canvas → langsung OCR pakai file asli di bawah
+                }
+
+                let best = '';
+                let rawText = '';
+
+                // ── 2a. Coba temukan & potong dulu area stiker label-nya saja ──
+                // (foto dari galeri biasanya foto seluruh sisi dus, bukan cuma stikernya,
+                // jadi kalau langsung di-OCR utuh, digit yang kecil sering salah baca).
+                if (rawCanvas) {
+                    try {
+                        const labelCanvas = locateLabelRegion(rawCanvas);
+                        if (labelCanvas) {
+                            const labelBinary = preprocessForOcr(labelCanvas);
+                            const labelTrimmed = trimToContent(labelBinary);
+                            const labelBlob = await new Promise(res => labelTrimmed.toBlob(res, 'image/png'));
+                            const labelResult = await ocrMultiPsm(labelBlob, ['7', '6']);
+                            console.log('[WR-GALLERY-OCR] area label terdeteksi, kandidat="' + labelResult.candidate + '"');
+                            if (labelResult.candidate) {
+                                best = labelResult.candidate;
+                                rawText = labelResult.rawText;
+                            }
+                        } else {
+                            console.log('[WR-GALLERY-OCR] area label tidak terdeteksi, lanjut OCR seluruh foto');
+                        }
+                    } catch (locErr) {
+                        console.error('locateLabelRegion gagal:', locErr);
+                    }
+                }
+
+                // ── 2b. Kalau area label tidak ketemu / belum dapat kandidat, OCR seluruh foto ──
+                if (!best) {
+                    let ocrSource = file;
+                    try {
+                        ocrSource = rawCanvas ? preprocessForOcr(rawCanvas) : file;
+                    } catch (_) {
+                        // Jika gagal praproses, tetap lanjut OCR pakai file asli
+                    }
+                    const fullResult = await ocrMultiPsm(ocrSource);
+                    best = fullResult.candidate;
+                    rawText = fullResult.rawText || rawText;
+                }
+
                 const fallbackFirstLine = rawText.split('\n').map(t => t.trim()).filter(Boolean)[0] || '';
                 const finalText = best || fallbackFirstLine;
 
