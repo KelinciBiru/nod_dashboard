@@ -2244,7 +2244,24 @@
                 const result = await res.json();
 
                 if (result.success) {
-                    showAlert('success', 'Berhasil', 'Data warranty registration telah tersimpan ke Regis_Log.');
+                    // ── Generate & preview PDF Invoice dari data yang baru saja disimpan ──
+                    try {
+                        const { doc, fileName } = await buildWarrantyInvoicePDF({
+                            staff, location, date, customer, phone, email,
+                            machine, idBarang, serial, warranties
+                        });
+                        doc.save(fileName); // simpan otomatis ke perangkat (Downloads)
+                        const blobUrl = doc.output('bloburl');
+                        showPdfPreviewModal(
+                            blobUrl,
+                            '✅ Warranty Registration Berhasil Disimpan',
+                            `Data telah tersimpan ke Regis_Log · PDF Invoice "${fileName}" telah diunduh ke perangkat Anda.`
+                        );
+                    } catch (pdfErr) {
+                        showAlert('success', '✅ Berhasil',
+                            `Data warranty registration telah tersimpan ke Regis_Log.\n(PDF Invoice gagal dibuat: ${pdfErr.message})`
+                        );
+                    }
                     document.getElementById('warranty-form')?.reset();
                     document.getElementById('wr-date').value = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 } else {
@@ -11764,6 +11781,268 @@
 
             const fileName = `Received_PO_${noPO || 'PO'}_${tglTerima || ''}.pdf`;
             return { doc, fileName };
+        }
+
+        // =========================================================================
+        // WARRANTY REGISTRATION → GENERATE PDF INVOICE (client-side, jsPDF)
+        // Mengikuti gaya header/footer PDF yang sudah ada (Delivery Order/Received PO),
+        // TANPA QR Code.
+        // =========================================================================
+        async function buildWarrantyInvoicePDF({ staff, location, date, customer, phone, email, machine, idBarang, serial, warranties }) {
+            const { jsPDF } = window.jspdf;
+            // ── Ukuran Half Letter (140 x 216 mm) — ukuran nota/invoice retail —
+            //    dipakai LANDSCAPE (216 x 140) supaya terlihat lebih profesional
+            //    dibanding portrait yang memanjang ke bawah. ──
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [140, 216] });
+            const pageWidth = doc.internal.pageSize.getWidth();   // 216mm
+            const pageHeight = doc.internal.pageSize.getHeight(); // 140mm
+            const marginX = 12;
+
+            // ── Header Background Image ──
+            const headerH = 24;
+            try {
+                doc.addImage(HEADER_BG_IMG, 'PNG', 0, 0, pageWidth, headerH);
+            } catch (_) { /* skip if fails */ }
+
+            // ── Logo NOD (pojok kiri atas) ──
+            const logoData = await loadImageAsDataURL(NOD_LOGO_URL);
+            let logoBottomY = 14;
+            if (logoData) {
+                try {
+                    const dims = getImageFitDims(logoData, 22, 11);
+                    doc.addImage(logoData.dataUrl, logoData.format, marginX, 5, dims.w, dims.h);
+                    logoBottomY = 5 + dims.h;
+                } catch (_) {
+                    drawFallbackLogo(doc, marginX);
+                    logoBottomY = 16;
+                }
+            } else {
+                drawFallbackLogo(doc, marginX);
+                logoBottomY = 16;
+            }
+
+            // ── Tagline dibawah logo (jarak diperlebar supaya tidak nempel ke garis pemisah) ──
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(6);
+            doc.setTextColor(120, 113, 108);
+            doc.text('Your All-in-One Drink Maker', marginX, logoBottomY + 4);
+
+            // ── Judul Dokumen ──
+            doc.setTextColor(17, 24, 39);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(14);
+            doc.text('WARRANTY INVOICE', pageWidth - marginX, 10, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(107, 114, 128);
+            const invoiceNumber = generateWarrantyInvoiceNumber(location);
+            doc.text('No. Invoice: ' + invoiceNumber, pageWidth - marginX, 15.5, { align: 'right' });
+
+            // Garis pemisah
+            doc.setDrawColor(229, 231, 235);
+            doc.setLineWidth(0.4);
+            doc.line(marginX, headerH - 1, pageWidth - marginX, headerH - 1);
+
+            // ── Info Box (2 kolom — memanfaatkan lebar landscape) ──
+            let y = headerH + 8;
+            doc.setFontSize(8.5);
+            doc.setTextColor(31, 41, 55);
+
+            const infoLeft = [
+                ['Tanggal Pembelian', date || '-'],
+                ['Customer', customer || '-'],
+                ['No. Telepon', phone || '-'],
+                ['Email', email || '-'],
+            ];
+            const infoRight = [
+                ['Staff', staff || '-'],
+                ['Lokasi', location || '-'],
+            ];
+
+            const colLeftX = marginX;
+            const colLeftLabelW = 30;
+            const colRightX = pageWidth / 2 + 6;
+            const colRightLabelW = 22;
+            const lineH = 5.6;
+
+            infoLeft.forEach((row, i) => {
+                const yy = y + i * lineH;
+                doc.setFont('helvetica', 'bold');
+                doc.text(row[0], colLeftX, yy);
+                doc.setFont('helvetica', 'normal');
+                doc.text(':', colLeftX + colLeftLabelW, yy);
+                const textVal = String(row[1] || '-');
+                const maxW = (colRightX - 6) - (colLeftX + colLeftLabelW + 3);
+                const wrapped = doc.splitTextToSize(textVal, maxW);
+                doc.text(wrapped, colLeftX + colLeftLabelW + 3, yy);
+            });
+
+            infoRight.forEach((row, i) => {
+                const yy = y + i * lineH;
+                doc.setFont('helvetica', 'bold');
+                doc.text(row[0], colRightX, yy);
+                doc.setFont('helvetica', 'normal');
+                doc.text(':', colRightX + colRightLabelW, yy);
+                const textVal = String(row[1] || '-');
+                const maxW = pageWidth - marginX - (colRightX + colRightLabelW + 3);
+                const wrapped = doc.splitTextToSize(textVal, maxW);
+                doc.text(wrapped, colRightX + colRightLabelW + 3, yy);
+            });
+
+            y += infoLeft.length * lineH + 7;
+
+            // ── Tabel Detail Produk & Warranty (1 baris, 4 kolom — muat karena lebar landscape) ──
+            const warrantyText = Array.isArray(warranties) && warranties.length > 0 ? warranties.join(', ') : '-';
+            const tableBody = [[
+                machine || '-',
+                idBarang || '-',
+                serial || '-',
+                warrantyText,
+            ]];
+
+            doc.autoTable({
+                startY: y,
+                head: [['Type Mesin', 'ID Barang', 'Serial Number', 'Warranty']],
+                body: tableBody,
+                theme: 'grid',
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.6, valign: 'middle', overflow: 'linebreak' },
+                headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { cellWidth: 66 },
+                    1: { halign: 'center', cellWidth: 30 },
+                    2: { halign: 'center', cellWidth: 46 },
+                    3: { cellWidth: 'auto' },
+                },
+                margin: { left: marginX, right: marginX },
+            });
+
+            // ── Tanda Tangan ──
+            let finalY = doc.lastAutoTable.finalY + 12;
+            const footerH = 20;
+
+            const sigColW = (pageWidth - marginX * 2) / 2;
+            const sigLabels = ['Diregistrasi oleh,', 'Customer,'];
+            const sigNames = [staff || '', customer || ''];
+
+            sigLabels.forEach((label, i) => {
+                const x = marginX + i * sigColW;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8.5);
+                doc.setTextColor(31, 41, 55);
+                doc.text(label, x, finalY);
+                doc.line(x, finalY + 13, x + sigColW - 10, finalY + 13);
+                doc.setFont('helvetica', 'bold');
+                doc.text(sigNames[i] || '( ___________ )', x, finalY + 18);
+            });
+
+            // ── Footer (background pola gelombang + kontak, disusun 2 kolom
+            //     seperti PDF lain — memanfaatkan lebar landscape). Sengaja TIDAK
+            //     ada QR Code pada PDF Invoice ini. ──
+            const footerY = drawWarrantyInvoiceFooter(doc, marginX, pageWidth, pageHeight, footerH);
+
+            // ── Footer Text (generated info) ──
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(5.5);
+            doc.setTextColor(180, 180, 180);
+            doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
+
+            const safeCustomer = (customer || '').replace(/[\\/:*?"<>|]/g, '').trim();
+            const fileName = `Warranty_Invoice_${invoiceNumber}${safeCustomer ? '_' + safeCustomer : ''}.pdf`;
+
+            return { doc, fileName };
+        }
+
+        /**
+         * Footer khusus PDF Warranty Invoice (ukuran Half Letter, LANDSCAPE 216x140mm).
+         * Karena orientasi landscape memberi lebar yang cukup (mirip lebar A4),
+         * alamat & kontak disusun 2 kolom sejajar (bukan bertumpuk) supaya rapi
+         * dan tetap muat dalam tinggi footer yang ringkas.
+         */
+        function drawWarrantyInvoiceFooter(doc, marginX, pageWidth, pageHeight, footerH) {
+            const footerY = pageHeight - footerH;
+
+            // ── Background pola gelombang (full-bleed) ──
+            try {
+                doc.addImage(HEADER_BG_IMG, 'PNG', 0, footerY, pageWidth, footerH);
+            } catch (_) { /* abaikan jika gagal */ }
+
+            // ── Garis pembatas tipis ──
+            doc.setDrawColor(229, 231, 235);
+            doc.setLineWidth(0.3);
+            doc.line(marginX, footerY + 4, pageWidth - marginX, footerY + 4);
+
+            const textY = footerY + 8;
+            const lineH = 3.6;
+
+            // ── Kiri: Nama & Alamat Perusahaan ──
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.setTextColor(31, 41, 55);
+            doc.text('Belleza Shopping Arcade', marginX, textY);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(5.5);
+            doc.setTextColor(75, 85, 99);
+            doc.text('Jl. Arteri Permata Hijau No.34 RT.04/02', marginX, textY + lineH);
+            doc.text('Grogol Utara, Kby. Lama, Jakarta Selatan 12210', marginX, textY + lineH * 2);
+
+            // ── Kanan: Kontak (2 kolom kecil, dengan ikon) ──
+            const iconSize = 3.2;
+            const iconOffsetY = 2.7;
+            const colA = pageWidth / 2 + 14;
+            const colB = pageWidth - marginX - 40;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(6);
+            doc.setTextColor(31, 41, 55);
+
+            try { doc.addImage(ICON_MAIL, 'PNG', colA, textY - iconOffsetY, iconSize, iconSize); } catch (_) { }
+            doc.text('hello@why-nod.com', colA + iconSize + 1.3, textY);
+
+            try { doc.addImage(ICON_PHONE, 'PNG', colB, textY - iconOffsetY, iconSize, iconSize); } catch (_) { }
+            doc.text('0851-9591-9775', colB + iconSize + 1.3, textY);
+
+            try { doc.addImage(ICON_GLOBE, 'PNG', colA, textY + lineH - iconOffsetY, iconSize, iconSize); } catch (_) { }
+            doc.text('www.why-nod.com', colA + iconSize + 1.3, textY + lineH);
+
+            try { doc.addImage(ICON_INSTAGRAM, 'PNG', colB, textY + lineH - iconOffsetY, iconSize, iconSize); } catch (_) { }
+            doc.text('@why.nod', colB + iconSize + 1.3, textY + lineH);
+
+            return footerY;
+        }
+
+        /**
+         * Generate nomor invoice unik untuk Warranty Registration.
+         * Format: INV-YYYYMMDD-<KODELOKASI>-<KODEUNIK>
+         * - YYYYMMDD  : tanggal saat invoice digenerate (bukan tanggal pembelian)
+         * - KODELOKASI: singkatan nama lokasi (mis. "NOD Ashta" → "ASHTA")
+         * - KODEUNIK  : 6 karakter unik berbasis timestamp + angka acak, agar
+         *               tidak ada 2 invoice dengan nomor sama meski dibuat di
+         *               lokasi & hari yang sama.
+         */
+        function generateWarrantyInvoiceNumber(location) {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const datePart = `${yyyy}${mm}${dd}`;
+
+            const locPart = locationCodeForInvoice(location);
+
+            const timePart = now.getTime().toString(36).toUpperCase().slice(-4);
+            const randPart = Math.random().toString(36).slice(2, 4).toUpperCase();
+            const uniquePart = `${timePart}${randPart}`;
+
+            return `INV-${datePart}-${locPart}-${uniquePart}`;
+        }
+
+        /** Ubah nama lokasi jadi kode singkat (huruf besar, tanpa spasi/simbol, maks 6 karakter) */
+        function locationCodeForInvoice(location) {
+            if (!location) return 'NOD';
+            let loc = location.replace(/^NOD\s*/i, '').trim();
+            if (!loc) loc = location;
+            const cleaned = loc.replace(/[^a-zA-Z0-9]+/g, '');
+            return (cleaned || 'NOD').toUpperCase().slice(0, 6);
         }
 
         // ─── Simpan Receive PO ke GAS (Received_Log + update status Closed) ────────
