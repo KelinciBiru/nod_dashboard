@@ -1224,6 +1224,8 @@
         async function showPage(pageName) {
             // Hentikan kamera QR jika sedang aktif
             if (typeof stopQRCamera === 'function') stopQRCamera();
+            // Hentikan kamera scan Serial Number (Warranty Registration) jika sedang aktif
+            if (typeof closeWrScanner === 'function') closeWrScanner();
 
             switch (pageName) {
                 case 'Dashboard': showDashboard(); break;
@@ -1431,8 +1433,10 @@
                                 <span>Scan</span>
                             </button>
                         </div>
-                        <input type="file" id="wr-scan-input" accept="image/*" capture="environment" class="hidden" onchange="handleSerialScan(this)">
+                        <!-- Fallback: upload foto dari galeri (dipakai jika kamera live tidak tersedia) -->
+                        <input type="file" id="wr-scan-input" accept="image/*" class="hidden" onchange="handleSerialScan(this)">
                         <p id="wr-scan-status" class="hidden text-xs text-indigo-600 mt-1">Memindai serial number...</p>
+                        <div id="wr-scan-canvas" class="hidden"></div>
                     </div>
 
                     <!-- Warranty -->
@@ -1463,31 +1467,291 @@
             </div>`;
         }
 
-        /** Buka kamera untuk scan teks serial number */
-        function openSerialScanner() {
-            document.getElementById('wr-scan-input')?.click();
+        let _wrCameraStream = null;
+
+        /** Buka modal kamera live untuk scan Serial Number (dengan guide box) */
+        async function openSerialScanner() {
+            const modal = document.getElementById('wr-scan-modal');
+            const video = document.getElementById('wr-scan-video');
+            const camStatus = document.getElementById('wr-scan-cam-status');
+            if (!modal || !video) return;
+
+            modal.classList.remove('hidden');
+            if (camStatus) {
+                camStatus.querySelector('span').textContent = 'Posisikan Serial Number di dalam kotak';
+            }
+
+            try {
+                _wrCameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: false
+                });
+                video.srcObject = _wrCameraStream;
+                await video.play();
+            } catch (err) {
+                // Kamera tidak tersedia/ditolak → tutup modal & fallback ke upload foto dari galeri
+                closeWrScanner();
+                showAlert('warning', 'Kamera Tidak Tersedia', 'Tidak dapat mengakses kamera (' + err.message + '). Silakan upload foto secara manual.');
+                document.getElementById('wr-scan-input')?.click();
+            }
         }
 
-        /** Proses hasil foto kamera dengan Tesseract.js OCR */
+        /** Tutup modal kamera & hentikan stream */
+        function closeWrScanner() {
+            const modal = document.getElementById('wr-scan-modal');
+            const video = document.getElementById('wr-scan-video');
+            if (modal) modal.classList.add('hidden');
+            if (_wrCameraStream) {
+                _wrCameraStream.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
+                _wrCameraStream = null;
+            }
+            if (video) video.srcObject = null;
+        }
+
+        /**
+         * Jalankan OCR Tesseract.js dengan parameter yang dioptimalkan untuk serial number:
+         * whitelist alfanumerik saja, dan opsional mode "single line" (PSM 7) ketika
+         * gambar sumber sudah berupa crop presisi berisi satu baris teks saja.
+         */
+        async function ocrWithTesseract(source, { singleLine = false } = {}) {
+            const worker = await Tesseract.createWorker('eng');
+            try {
+                const params = {
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+                };
+                if (singleLine) params.tessedit_pageseg_mode = '7';
+                await worker.setParameters(params);
+                const { data } = await worker.recognize(source);
+                return data.text || '';
+            } finally {
+                try { await worker.terminate(); } catch (_) {}
+            }
+        }
+
+        /**
+         * Ambil frame dari video live, crop tepat sesuai posisi kotak panduan (guide box)
+         * yang terlihat di layar, lalu proses:
+         *  1) Coba baca Barcode/QR pada frame penuh (jika stiker punya barcode).
+         *  2) OCR baris tunggal pada area guide box saja (bukan seluruh foto), sehingga
+         *     tidak terganggu oleh teks lain / pantulan cahaya di bagian box lainnya.
+         */
+        async function captureWrSerialPhoto() {
+            const video = document.getElementById('wr-scan-video');
+            const guide = document.getElementById('wr-scan-guide');
+            const camStatus = document.getElementById('wr-scan-cam-status');
+            const serialEl = document.getElementById('wr-serial');
+            if (!video || !guide || video.readyState < 2) return;
+
+            const setCamStatus = (text) => {
+                if (camStatus) camStatus.querySelector('span').textContent = text;
+            };
+            setCamStatus('Memproses hasil...');
+
+            // ── Petakan posisi guide box (CSS px, sudah memperhitungkan object-fit:cover) ──
+            // ke koordinat piksel asli video, supaya crop benar-benar presisi pada area
+            // yang dilihat & diposisikan oleh pengguna di layar.
+            const videoRect = video.getBoundingClientRect();
+            const guideRect = guide.getBoundingClientRect();
+            const vw = video.videoWidth, vh = video.videoHeight;
+            const cw = videoRect.width, ch = videoRect.height;
+
+            const coverScale = Math.max(cw / vw, ch / vh);
+            const displayedW = vw * coverScale;
+            const displayedH = vh * coverScale;
+            const offsetX = (displayedW - cw) / 2;
+            const offsetY = (displayedH - ch) / 2;
+
+            const guideLeft = guideRect.left - videoRect.left;
+            const guideTop = guideRect.top - videoRect.top;
+
+            const sx = (guideLeft + offsetX) / coverScale;
+            const sy = (guideTop + offsetY) / coverScale;
+            const sw = guideRect.width / coverScale;
+            const sh = guideRect.height / coverScale;
+
+            // Render frame penuh (untuk percobaan baca barcode) & frame ter-crop (untuk OCR)
+            const fullCanvas = document.createElement('canvas');
+            fullCanvas.width = vw;
+            fullCanvas.height = vh;
+            fullCanvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
+
+            const upscale = 2.5;
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = Math.max(1, Math.round(sw * upscale));
+            cropCanvas.height = Math.max(1, Math.round(sh * upscale));
+            cropCanvas.getContext('2d').drawImage(
+                video, sx, sy, sw, sh, 0, 0, cropCanvas.width, cropCanvas.height
+            );
+
+            let barcodeScanner = null;
+            try {
+                const fullBlob = await new Promise(res => fullCanvas.toBlob(res, 'image/png'));
+                const cropBlob = await new Promise(res => cropCanvas.toBlob(res, 'image/png'));
+
+                // ── Tahap 1: Barcode / QR Code pada frame penuh ──────────────
+                try {
+                    barcodeScanner = new Html5Qrcode('wr-scan-canvas', {
+                        formatsToSupport: [
+                            Html5QrcodeSupportedFormats.QR_CODE,
+                            Html5QrcodeSupportedFormats.CODE_128,
+                            Html5QrcodeSupportedFormats.CODE_39,
+                            Html5QrcodeSupportedFormats.CODE_93,
+                            Html5QrcodeSupportedFormats.EAN_13,
+                            Html5QrcodeSupportedFormats.EAN_8,
+                            Html5QrcodeSupportedFormats.UPC_A,
+                            Html5QrcodeSupportedFormats.UPC_E,
+                            Html5QrcodeSupportedFormats.ITF,
+                            Html5QrcodeSupportedFormats.CODABAR,
+                            Html5QrcodeSupportedFormats.DATA_MATRIX
+                        ],
+                        verbose: false
+                    });
+                    const decoded = await barcodeScanner.scanFile(fullBlob, false);
+                    if (decoded && decoded.trim()) {
+                        if (serialEl) serialEl.value = decoded.trim();
+                        setCamStatus('✅ Terbaca dari barcode');
+                        closeWrScanner();
+                        showAlert('success', 'Berhasil', 'Serial number terbaca otomatis dari barcode: ' + decoded.trim());
+                        return;
+                    }
+                } catch (barcodeErr) {
+                    // Tidak ada barcode/QR pada frame → lanjut OCR teks
+                }
+
+                // ── Tahap 2: OCR baris tunggal pada area guide box ───────────
+                const text = await ocrWithTesseract(cropBlob, { singleLine: true });
+                const clean = (text || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+                if (clean.length >= 6) {
+                    if (serialEl) serialEl.value = clean;
+                    setCamStatus('✅ Terbaca: ' + clean);
+                    closeWrScanner();
+                } else {
+                    setCamStatus('⚠️ Belum terbaca jelas, coba lagi');
+                }
+            } catch (err) {
+                setCamStatus('❌ Gagal memproses, coba lagi');
+                showAlert('error', 'Gagal Scan', err.message);
+            } finally {
+                if (barcodeScanner) { try { barcodeScanner.clear(); } catch (_) {} }
+            }
+        }
+
+        /**
+         * Cari kandidat serial number terbaik dari hasil OCR mentah (Tesseract).
+         * Stiker label box biasanya memuat beberapa baris teks (nama produk,
+         * tanggal, dsb), jadi kita tidak bisa asal ambil baris pertama —
+         * fungsi ini menyaring token yang polanya paling mirip serial number,
+         * contoh: "MXM24110100165" (huruf+angka) atau "20251105776" (angka saja).
+         */
+        function extractSerialCandidate(rawText) {
+            if (!rawText) return '';
+
+            // Pecah per baris & per spasi supaya token yang menempel (mis. "S/N:MXM24110100165")
+            // tetap bisa dipisah dari label di depannya.
+            const rawTokens = rawText.split(/[\s\n]+/).map(t => t.trim()).filter(Boolean);
+
+            // Bersihkan setiap token dari karakter selain huruf/angka/dash/slash
+            const cleaned = rawTokens
+                .map(t => t.replace(/[^A-Za-z0-9\-\/]/g, ''))
+                .filter(Boolean);
+
+            // Kandidat valid: minimal 8 karakter alfanumerik (serial number pendek jarang < 8 digit)
+            const candidates = cleaned.filter(t => t.replace(/[^A-Za-z0-9]/g, '').length >= 8);
+            if (candidates.length === 0) return '';
+
+            // Prioritas 1: kombinasi huruf + angka (pola khas mis. "MXM24110100165")
+            const mixed = candidates.filter(t => /[A-Za-z]/.test(t) && /[0-9]/.test(t));
+            if (mixed.length > 0) {
+                return mixed.reduce((a, b) => (b.length > a.length ? b : a)).toUpperCase();
+            }
+
+            // Prioritas 2: angka murni 8-15 digit (pola khas mis. "20251105776")
+            const numeric = candidates.filter(t => /^[0-9]{8,15}$/.test(t));
+            if (numeric.length > 0) {
+                return numeric.reduce((a, b) => (b.length > a.length ? b : a));
+            }
+
+            // Fallback terakhir: token alfanumerik terpanjang yang ditemukan
+            return candidates.reduce((a, b) => (b.length > a.length ? b : a)).toUpperCase();
+        }
+
+        /**
+         * Proses hasil foto sticker label box mesin menjadi teks Serial Number.
+         * Alur 2 tahap supaya hasil otomatis akurat:
+         *  1) Coba baca Barcode/QR Code pada stiker (html5-qrcode) — paling akurat
+         *     karena hasilnya persis sama dengan nilai yang di-encode di barcode,
+         *     tanpa risiko salah baca karakter seperti OCR.
+         *  2) Jika stiker tidak punya barcode (hanya teks tercetak), fallback ke
+         *     OCR Tesseract.js lalu disaring dengan extractSerialCandidate() agar
+         *     hanya mengambil token yang benar-benar berpola serial number.
+         */
         async function handleSerialScan(input) {
             const file = input.files[0];
             if (!file) return;
 
             const statusEl = document.getElementById('wr-scan-status');
             const serialEl = document.getElementById('wr-serial');
-            if (statusEl) statusEl.classList.remove('hidden');
+            if (statusEl) {
+                statusEl.classList.remove('hidden');
+                statusEl.textContent = 'Membaca barcode pada label...';
+                statusEl.className = 'text-xs text-indigo-600 mt-1';
+            }
 
+            let barcodeScanner = null;
             try {
-                const result = await Tesseract.recognize(file, 'eng', {
-                    logger: m => console.log(m)
-                });
-                const lines = result.data.text.split('\n').map(t => t.trim()).filter(Boolean);
-                const text = lines[0] || result.data.text.trim();
-                if (serialEl) serialEl.value = text;
+                // ── Tahap 1: Barcode / QR Code ──────────────────────────────
+                try {
+                    barcodeScanner = new Html5Qrcode('wr-scan-canvas', {
+                        formatsToSupport: [
+                            Html5QrcodeSupportedFormats.QR_CODE,
+                            Html5QrcodeSupportedFormats.CODE_128,
+                            Html5QrcodeSupportedFormats.CODE_39,
+                            Html5QrcodeSupportedFormats.CODE_93,
+                            Html5QrcodeSupportedFormats.EAN_13,
+                            Html5QrcodeSupportedFormats.EAN_8,
+                            Html5QrcodeSupportedFormats.UPC_A,
+                            Html5QrcodeSupportedFormats.UPC_E,
+                            Html5QrcodeSupportedFormats.ITF,
+                            Html5QrcodeSupportedFormats.CODABAR,
+                            Html5QrcodeSupportedFormats.DATA_MATRIX
+                        ],
+                        verbose: false
+                    });
+                    const decoded = await barcodeScanner.scanFile(file, false);
+                    if (decoded && decoded.trim()) {
+                        if (serialEl) serialEl.value = decoded.trim();
+                        if (statusEl) {
+                            statusEl.textContent = '✅ Serial number terbaca otomatis dari barcode.';
+                            statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
+                        }
+                        return;
+                    }
+                } catch (barcodeErr) {
+                    // Tidak ada barcode/QR yang terbaca pada foto → lanjut ke OCR teks
+                }
+
+                // ── Tahap 2: Fallback OCR teks (Tesseract.js) ───────────────
+                if (statusEl) statusEl.textContent = 'Tidak ada barcode, membaca teks serial number...';
+                const rawText = await ocrWithTesseract(file, { singleLine: false });
+                const best = extractSerialCandidate(rawText);
+                const fallbackFirstLine = rawText.split('\n').map(t => t.trim()).filter(Boolean)[0] || '';
+                const finalText = best || fallbackFirstLine;
+
+                if (serialEl) serialEl.value = finalText;
+                if (statusEl) {
+                    if (finalText) {
+                        statusEl.textContent = '✅ Serial number terbaca dari teks — mohon periksa kembali sebelum Proses.';
+                        statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
+                    } else {
+                        statusEl.textContent = '⚠️ Serial number tidak terbaca, silakan ketik manual.';
+                        statusEl.className = 'text-xs text-amber-600 mt-1';
+                    }
+                }
             } catch (err) {
                 showAlert('error', 'Gagal Scan', err.message);
             } finally {
-                if (statusEl) statusEl.classList.add('hidden');
+                if (barcodeScanner) { try { barcodeScanner.clear(); } catch (_) {} }
                 input.value = '';
             }
         }
@@ -11379,6 +11643,64 @@
     </script>
 
     <!-- ═══ MODAL KAMERA QR — PERMANEN (tidak ikut innerHTML) ═══ -->
+    <!-- Modal kamera live untuk scan Serial Number (Warranty Registration) -->
+    <div id="wr-scan-modal"
+        class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div class="flex items-center gap-2">
+                    <svg class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span class="font-bold text-gray-700 text-sm">Scan Serial Number</span>
+                </div>
+                <button onclick="closeWrScanner()" title="Tutup"
+                    class="text-gray-400 hover:text-red-500 transition p-1 rounded-lg hover:bg-gray-100">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Area video + guide box -->
+            <div class="relative bg-black overflow-hidden" style="aspect-ratio:4/3; max-height:70vh;">
+                <video id="wr-scan-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:block;"></video>
+
+                <!-- Guide box: posisikan tulisan serial number persis di dalam kotak ini -->
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div id="wr-scan-guide" class="border-2 border-dashed border-amber-400 rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                        style="width:82%; aspect-ratio:2.4/1;"></div>
+                </div>
+
+                <!-- Status -->
+                <div id="wr-scan-cam-status" class="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none px-4">
+                    <span class="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
+                        Posisikan Serial Number di dalam kotak
+                    </span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-5 py-3 bg-gray-50 space-y-2">
+                <button type="button" onclick="captureWrSerialPhoto()"
+                    class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-xl shadow transition">
+                    <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <span>Ambil Foto</span>
+                </button>
+                <button type="button" onclick="document.getElementById('wr-scan-input')?.click()"
+                    class="w-full text-xs text-gray-400 hover:text-indigo-600 transition text-center">
+                    atau upload foto dari galeri
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="qr-camera-modal"
         class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
