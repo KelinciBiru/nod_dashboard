@@ -5470,10 +5470,40 @@
             // Preload items for autocomplete
             preloadSourceItems();
 
+            // Pasang auto-fill alamat berdasarkan shortcut (mis. "HO Belleza")
+            _attachPOAlamatShortcut();
+
             // Restore draft (jika sebelumnya ada isian yang belum sempat disubmit)
             // lalu pasang autosave agar perubahan berikutnya selalu tersimpan.
             _restoreFormPODraft();
             _attachFormPOAutosave();
+        }
+
+        /** Kamus shortcut Alamat: ketik key-nya di field Alamat, otomatis diganti alamat lengkap.
+         *  Key dicocokkan case-insensitive & setelah di-trim. Tambah entry baru di sini kalau perlu. */
+        const PO_ALAMAT_SHORTCUTS = {
+            'ho belleza': 'Jl. Arteri Permata Hijau, RT.7/RW.8, Grogol Sel., Kec. Kebayoran Lama, Kota Jakarta Selatan, Daerah Khusus Ibukota Jakarta 12210'
+        };
+
+        /** Pasang listener di field #po-alamat: begitu isiannya cocok dengan salah satu
+         *  key di PO_ALAMAT_SHORTCUTS (case-insensitive), otomatis diganti alamat lengkapnya. */
+        function _attachPOAlamatShortcut() {
+            const alamatEl = document.getElementById('po-alamat');
+            if (!alamatEl || alamatEl.dataset.shortcutBound === '1') return;
+            alamatEl.dataset.shortcutBound = '1';
+
+            const tryExpand = () => {
+                const key = alamatEl.value.trim().toLowerCase();
+                const full = PO_ALAMAT_SHORTCUTS[key];
+                if (full && alamatEl.value !== full) {
+                    alamatEl.value = full;
+                }
+            };
+
+            // Cek tiap kali user mengetik (begitu sudah pas dengan key, langsung expand)
+            alamatEl.addEventListener('input', tryExpand);
+            // Jaga-jaga: cek juga saat field kehilangan fokus
+            alamatEl.addEventListener('blur', tryExpand);
         }
 
         /** Kumpulkan isi field Form PO (termasuk baris item dinamis) jadi object draft */
