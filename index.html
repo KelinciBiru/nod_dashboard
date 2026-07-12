@@ -11179,8 +11179,8 @@
                 <select id="recv-no-po-select" class="flex-1 min-w-0 w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
                     <option value="">— Pilih No. PO (opsional) —</option>
                 </select>
-                <button id="btn-recv-refresh-po" onclick="loadDonePOList()" title="Refresh daftar PO"
-                    class="flex-shrink-0 p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-500">
+                <button id="btn-recv-refresh-po" onclick="loadDonePOList(true)" title="Refresh daftar PO"
+                    class="flex-shrink-0 flex items-center justify-center p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-500">
                     <svg id="btn-recv-refresh-po-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
@@ -11646,7 +11646,7 @@
         // =========================================================================
         // LOAD DAFTAR PO STATUS "DONE" UNTUK DROPDOWN DI RECEIVE PO
         // =========================================================================
-        async function loadDonePOList() {
+        async function loadDonePOList(forceRefresh = false) {
             const sel = document.getElementById('recv-no-po-select');
             const statusEl = document.getElementById('recv-po-list-status');
             if (!sel) return;
@@ -11656,6 +11656,7 @@
             // ── Spinner pada tombol refresh ──
             const refreshBtn = document.getElementById('btn-recv-refresh-po');
             const refreshIcon = document.getElementById('btn-recv-refresh-po-icon');
+            const spinnerStartedAt = Date.now();
             if (refreshBtn) {
                 refreshBtn.disabled = true;
                 if (refreshIcon) refreshIcon.classList.add('hidden');
@@ -11666,13 +11667,30 @@
                     refreshBtn.appendChild(rSpinner);
                 }
             }
-            const resetRefreshBtn = () => {
+            const resetRefreshBtn = async () => {
                 if (!refreshBtn) return;
+                // Klik manual (forceRefresh): pastikan spinner minimal terlihat ~450ms,
+                // supaya user yakin tombolnya benar-benar merespons — walaupun
+                // datanya sendiri sudah selesai diambil lebih cepat dari itu.
+                if (forceRefresh) {
+                    const elapsed = Date.now() - spinnerStartedAt;
+                    const minVisibleMs = 450;
+                    if (elapsed < minVisibleMs) await new Promise(r => setTimeout(r, minVisibleMs - elapsed));
+                }
                 refreshBtn.disabled = false;
                 const sp = refreshBtn.querySelector('.refresh-spinner');
                 if (sp) sp.remove();
                 if (refreshIcon) refreshIcon.classList.remove('hidden');
             };
+
+            // Klik manual pada tombol Refresh HARUS menarik data terbaru dari sheet,
+            // bukan data lama dari cache (cache TTL 5 menit) — sebelumnya inilah
+            // sebabnya tombol "terlihat tidak berfungsi": klik selesai terlalu cepat
+            // karena hanya membaca ulang cache lama, bukan benar-benar refresh.
+            if (forceRefresh) {
+                clearCache('getPOData');
+                clearCache('reportStatusFallback');
+            }
 
             try {
                 let data = [];
@@ -11732,10 +11750,10 @@
                         statusEl.className = 'text-xs text-gray-400 mt-1';
                     }
                 }
-                resetRefreshBtn();
+                await resetRefreshBtn();
             } catch (err) {
                 if (statusEl) { statusEl.textContent = '❌ Gagal memuat: ' + err.message; statusEl.className = 'text-xs text-red-500 mt-1'; }
-                resetRefreshBtn();
+                await resetRefreshBtn();
             }
         }
 
