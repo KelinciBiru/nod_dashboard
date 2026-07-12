@@ -222,15 +222,15 @@
         </header>
 
         <!-- BODY: sidebar + konten -->
-        <div class="flex flex-1 overflow-hidden relative">
+        <div class="flex flex-1 overflow-y-auto relative">
 
             <!-- OVERLAY (klik untuk tutup sidebar di mobile) -->
             <div id="sidebar-overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/30 z-20 md:hidden">
             </div>
 
             <!-- SIDEBAR (slide in/out) -->
-            <aside id="sidebar" class="absolute md:relative z-30 flex flex-col h-full bg-white border-r border-gray-100 shadow-xl md:shadow-none
-                       transition-all duration-300 ease-in-out
+            <aside id="sidebar" class="fixed md:sticky top-0 z-30 flex flex-col self-stretch bg-white border-r border-gray-100 shadow-xl md:shadow-none
+                       transition-all duration-300 ease-in-out h-screen md:h-auto
                        -translate-x-full md:translate-x-0 w-64 flex-shrink-0">
 
                 <!-- Logo -->
@@ -464,7 +464,7 @@
             </aside>
 
             <!-- AREA KONTEN UTAMA -->
-            <main id="content-area" class="relative isolate flex-1 p-4 md:p-8 overflow-y-auto bg-gray-50">
+            <main id="content-area" class="relative isolate flex-1 p-4 md:p-8 bg-gray-50">
                 <h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>
             </main>
         </div>
@@ -1891,8 +1891,6 @@
                         </button>
                     </div>
                 </form>
-
-                ${renderFooterWatermark('catalogue')}
             </div>`;
         }
 
@@ -5146,7 +5144,6 @@
                         </button>
                     </div>
                     <p class="text-gray-500">Belum ada data catalogue di sheet.</p>
-                    ${renderFooterWatermark('catalogue')}
                 </div>`;
                 return;
             }
@@ -5283,7 +5280,6 @@
                 <div class="mb-6">${categoryDropdown}</div>
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">${cardsHtml || '<p class="text-gray-400 text-sm col-span-full">Tidak ada barang pada kategori ini.</p>'}</div>
                 ${renderCataloguePagination(totalPages)}
-                ${renderFooterWatermark('catalogue')}
             </div>`;
 
             if (isSelecting) updateCatalogueRequestBtnLabel();
@@ -13283,7 +13279,6 @@
            supaya halamannya tidak putih polos — meniru gaya dekorasi di halaman Login. */
         #content-area.app-bg-decor {
             overflow-x: hidden;
-            overflow-y: auto;
         }
 
         #content-area.app-bg-decor::before,
