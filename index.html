@@ -2219,6 +2219,13 @@
                         class="w-full px-4 py-2.5 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none"
                         oninput="onTtSerialChange()">
                     <datalist id="tt-serial-list"></datalist>
+                    <div id="tt-ongoing-badge" class="mt-2 hidden items-center gap-1.5 w-fit px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                        </span>
+                        <span id="tt-ongoing-count-text">0 Mesin On Going</span>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2296,10 +2303,21 @@
                 ttSerialInfoMap = result.serialInfoMap || {};
                 ttTeknisiList = result.teknisiList || [];
 
+                const ongoingSerials = result.ongoingSerials || [];
+
                 const serialListEl = document.getElementById('tt-serial-list');
                 if (serialListEl) {
-                    serialListEl.innerHTML = (result.ongoingSerials || [])
+                    serialListEl.innerHTML = ongoingSerials
                         .map(s => `<option value="${escapeHtml(s)}">`).join('');
+                }
+
+                const ongoingBadgeEl = document.getElementById('tt-ongoing-badge');
+                const ongoingCountTextEl = document.getElementById('tt-ongoing-count-text');
+                if (ongoingBadgeEl && ongoingCountTextEl) {
+                    const count = ongoingSerials.length;
+                    ongoingCountTextEl.textContent = `${count} Mesin On Going`;
+                    ongoingBadgeEl.classList.toggle('hidden', count === 0);
+                    ongoingBadgeEl.classList.toggle('flex', count > 0);
                 }
 
                 ttSparepartMap = {};
@@ -2447,6 +2465,7 @@
                 document.getElementById('tt-sparepart').value = '';
                 document.getElementById('tt-sparepart-id').value = '';
                 resetTtDonePhoto();
+                loadTtInit();
             } catch (err) {
                 showAlert('error', 'Gagal Menyimpan', err.message || 'Gagal menyimpan data Task Technician.');
             } finally {
