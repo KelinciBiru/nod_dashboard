@@ -600,6 +600,150 @@
         }
 
         // =========================================================================
+        // LIVE SYNC — auto-update data di background TANPA reload/kedip halaman
+        // =========================================================================
+        // Cara kerja:
+        // 1. Setiap halaman yang "mendukung" (lihat LiveSync.register di bawah)
+        //    dicek berkala (polling) ke GAS: ambil data mentah terbaru, lalu
+        //    dibandingkan (hash) dengan data terakhir yang sudah tampil di layar.
+        // 2. Jika TIDAK ada perubahan → tidak melakukan apa-apa (tidak ada
+        //    render ulang sama sekali, jadi tidak ada kedipan).
+        // 3. Jika ADA perubahan → cache utk endpoint terkait diisi dgn data
+        //    terbaru, lalu fungsi show*() halaman itu dipanggil ulang dalam
+        //    "mode senyap" (tanpa spinner setLoading, karena datanya sudah
+        //    siap di cache) sehingga tabel/kartu berganti mulus.
+        // 4. Polling otomatis berhenti saat: tab tidak aktif (visibilitychange),
+        //    ada modal/konfirmasi terbuka, atau user baru saja melakukan aksi
+        //    tulis di halaman itu (grace period, supaya tidak menimpa hasil
+        //    aksi user sendiri sebelum sheet sempat ter-update).
+        window.__liveSyncSilent = false; // dipakai setLoading() supaya spinner tidak muncul saat auto-update
+        let _liveSyncLastMutationAt = 0; // timestamp aksi tulis terakhir (closePO, Start Delivery, dst)
+        function liveSyncNoteMutation() { _liveSyncLastMutationAt = Date.now(); }
+
+        const LiveSync = (() => {
+            const POLL_INTERVAL_MS = 12000; // 12 detik — cukup responsif, aman dari kuota GAS
+            const MUTATION_GRACE_MS = 6000; // jeda setelah aksi tulis user sendiri
+            const registry = {};   // { pageName: { check, onChange } }
+            const lastHash = {};   // { pageName: number }
+            let timer = null;
+            let activePage = null;
+            let busy = false;
+
+            function _hash(obj) {
+                const str = JSON.stringify(obj);
+                let h = 0;
+                for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; }
+                return h;
+            }
+
+            function _anyModalOpen() {
+                const ids = ['modal-overlay', 'confirm-overlay', 'pdf-preview-overlay'];
+                return ids.some(id => {
+                    const el = document.getElementById(id);
+                    return el && !el.classList.contains('hidden');
+                });
+            }
+
+            /** Daftarkan halaman yang mendukung live update.
+             *  check(): async → mengembalikan data mentah utk dibandingkan
+             *  onChange(rawResult): async → dipanggil saat data berubah, tugasnya render ulang secara senyap
+             */
+            function register(pageName, { check, onChange }) {
+                registry[pageName] = { check, onChange };
+            }
+
+            async function _tick() {
+                if (busy) return;
+                if (!activePage || !registry[activePage]) return;
+                if (document.visibilityState !== 'visible') return;
+                if (!sessionToken) return;
+                if (_anyModalOpen()) return;
+                if (Date.now() - _liveSyncLastMutationAt < MUTATION_GRACE_MS) return;
+
+                busy = true;
+                try {
+                    const { check, onChange } = registry[activePage];
+                    const raw = await check();
+                    const h = _hash(raw);
+                    if (lastHash[activePage] !== undefined && lastHash[activePage] !== h) {
+                        lastHash[activePage] = h;
+                        window.__liveSyncSilent = true;
+                        try { await onChange(raw); } finally { window.__liveSyncSilent = false; }
+                        showLiveUpdateToast();
+                    } else {
+                        lastHash[activePage] = h;
+                    }
+                } catch (e) {
+                    console.warn('[LiveSync] gagal cek update:', e);
+                } finally {
+                    busy = false;
+                }
+            }
+
+            function start(pageName) {
+                stop();
+                if (!registry[pageName]) return;
+                activePage = pageName;
+                delete lastHash[pageName]; // baseline akan diisi oleh render manual pertama via setBaseline()
+                timer = setInterval(_tick, POLL_INTERVAL_MS);
+            }
+
+            function stop() {
+                if (timer) clearInterval(timer);
+                timer = null;
+                activePage = null;
+            }
+
+            /** Dipanggil oleh show*() setelah render manual (bukan dari polling) selesai,
+             *  supaya polling berikutnya punya baseline yang benar dan tidak langsung
+             *  menganggap "berubah" pada pengecekan pertama. */
+            function setBaseline(pageName, raw) {
+                lastHash[pageName] = _hash(raw);
+            }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && activePage) _tick();
+            });
+
+            return { register, start, stop, setBaseline };
+        })();
+
+        /** Ganti innerHTML suatu elemen dengan transisi fade halus saat dipanggil
+         *  dari auto-update (silent), supaya perubahan data terasa mulus, bukan
+         *  "kedip" mendadak. Saat dipanggil dari render manual (bukan silent),
+         *  langsung ganti tanpa animasi (seperti perilaku semula). */
+        function smoothSwapContent(el, html) {
+            if (!el) return;
+            if (!window.__liveSyncSilent) { el.innerHTML = html; return; }
+            el.style.transition = 'opacity 0.25s ease';
+            el.style.opacity = '0.35';
+            setTimeout(() => {
+                el.innerHTML = html;
+                requestAnimationFrame(() => { el.style.opacity = '1'; });
+            }, 150);
+        }
+
+        /** Notifikasi kecil non-blocking di pojok kanan atas saat data ter-update otomatis. */
+        let _liveToastTimer = null;
+        function showLiveUpdateToast() {
+            let el = document.getElementById('live-sync-toast');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'live-sync-toast';
+                el.className = 'fixed top-4 right-4 z-[9999] flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg bg-gray-900 text-white text-xs font-semibold opacity-0 pointer-events-none transition-opacity duration-300';
+                el.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span><span>Data diperbarui otomatis</span>`;
+                document.body.appendChild(el);
+            }
+            el.classList.remove('opacity-0');
+            el.classList.add('opacity-100');
+            if (_liveToastTimer) clearTimeout(_liveToastTimer);
+            _liveToastTimer = setTimeout(() => {
+                el.classList.remove('opacity-100');
+                el.classList.add('opacity-0');
+            }, 2200);
+        }
+
+        // =========================================================================
         // LOGIN
         // =========================================================================
         // KEAMANAN: Password TIDAK LAGI dicek di browser (sebelumnya 'admin123' dkk
@@ -858,6 +1002,9 @@
         function logout() {
             if (!confirm('Yakin ingin logout?')) return;
 
+            // Hentikan polling auto-update (LiveSync) sebelum sesi dihapus
+            if (typeof LiveSync !== 'undefined') LiveSync.stop();
+
             // Reset role & token
             currentUserRole = '';
             sessionToken = null;
@@ -1021,6 +1168,7 @@
         // UTILITAS UI
         // =========================================================================
         function setLoading(message = 'Memuat data...') {
+            if (window.__liveSyncSilent) return; // auto-update di background: jangan tampilkan spinner (anti-kedip)
             document.getElementById('content-area').innerHTML = `
             <div class="flex flex-col items-center justify-center h-64 gap-4">
                 <div class="w-10 h-10 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
@@ -1221,11 +1369,17 @@
             showPage(pageName);
         }
 
+        // Halaman yang mendukung auto-update (LiveSync) tanpa perlu refresh manual
+        const LIVE_SYNC_PAGES = new Set(['Report Status', 'Route']);
+
         async function showPage(pageName) {
             // Hentikan kamera QR jika sedang aktif
             if (typeof stopQRCamera === 'function') stopQRCamera();
             // Hentikan kamera scan Serial Number (Warranty Registration) jika sedang aktif
             if (typeof closeWrScanner === 'function') closeWrScanner();
+
+            // Hentikan polling auto-update halaman sebelumnya sebelum pindah halaman
+            LiveSync.stop();
 
             switch (pageName) {
                 case 'Dashboard': showDashboard(); break;
@@ -1254,6 +1408,12 @@
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
                     <p class="mt-4 text-gray-600">Halaman ini sedang dalam pengembangan.</p>`;
+            }
+
+            // Mulai polling auto-update jika halaman ini mendukungnya (mode senyap via __liveSyncSilent
+            // mencegah start() dipanggil ulang saat showPage() dipicu dari dalam siklus polling itu sendiri)
+            if (LIVE_SYNC_PAGES.has(pageName) && !window.__liveSyncSilent) {
+                LiveSync.start(pageName);
             }
         }
 
@@ -2732,45 +2892,59 @@
             });
         }
 
-        async function showTeamDeliveryRoute() {
+        async function showTeamDeliveryRoute(_preFetchedRaw) {
             const contentArea = document.getElementById('content-area');
+            // Saat auto-update senyap (LiveSync) dan area kartu sudah ada di layar,
+            // jangan reset seluruh halaman ke skeleton — cukup ganti isi kartunya saja
+            // supaya tidak ada kedipan/flash pada judul & tombol di atasnya.
+            const isSilentUpdate = window.__liveSyncSilent && document.getElementById('route-card-area');
 
-            // ── Skeleton loading ──
-            contentArea.innerHTML = `
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Route</h1>
-                    <p class="text-sm text-gray-500">Daftar pengiriman aktif hari ini. Klik <b>Start</b> untuk memulai, <b>Delivered</b> setelah sampai tujuan.</p>
+            if (!isSilentUpdate) {
+                // ── Skeleton loading ──
+                contentArea.innerHTML = `
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Route</h1>
+                        <p class="text-sm text-gray-500">Daftar pengiriman aktif hari ini. Klik <b>Start</b> untuk memulai, <b>Delivered</b> setelah sampai tujuan.</p>
+                    </div>
+                    <button onclick="showTeamDeliveryRoute()"
+                        class="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg border border-amber-200 transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Refresh
+                    </button>
                 </div>
-                <button onclick="showTeamDeliveryRoute()"
-                    class="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg border border-amber-200 transition">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                    Refresh
-                </button>
-            </div>
-            <div id="route-card-area">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    ${[1,2,3].map(() => `
-                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 animate-pulse">
-                        <div class="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
-                        <div class="h-3 bg-gray-100 rounded w-1/2 mb-2"></div>
-                        <div class="h-3 bg-gray-100 rounded w-2/3 mb-4"></div>
-                        <div class="flex gap-2 mt-4">
-                            <div class="h-9 bg-gray-200 rounded-lg flex-1"></div>
-                            <div class="h-9 bg-gray-200 rounded-lg w-10"></div>
-                        </div>
-                    </div>`).join('')}
-                </div>
-            </div>`;
+                <div id="route-card-area">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${[1,2,3].map(() => `
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 animate-pulse">
+                            <div class="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
+                            <div class="h-3 bg-gray-100 rounded w-1/2 mb-2"></div>
+                            <div class="h-3 bg-gray-100 rounded w-2/3 mb-4"></div>
+                            <div class="flex gap-2 mt-4">
+                                <div class="h-9 bg-gray-200 rounded-lg flex-1"></div>
+                                <div class="h-9 bg-gray-200 rounded-lg w-10"></div>
+                            </div>
+                        </div>`).join('')}
+                    </div>
+                </div>`;
+            }
+
+            // Daftarkan halaman ini ke LiveSync (aman dipanggil berkali-kali; hanya menyimpan referensi terbaru)
+            LiveSync.register('Route', {
+                check: async () => {
+                    const r = await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' });
+                    return await r.json();
+                },
+                onChange: async (freshRaw) => { await showTeamDeliveryRoute(freshRaw); }
+            });
 
             // ── Ambil data dari sheet "Plan Driver" via GAS ──
             // Backend sudah mengelompokkan & mengurutkan rute per Driver
             // (Gold = rute pertama, lalu Zona_Area terdekat / nearest-neighbor).
             try {
-                const res = await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' });
-                const raw = await res.json();
+                const raw = _preFetchedRaw || await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' }).then(r => r.json());
 
                 // raw = array of rows (dengan header di index 0)
                 // Kolom yang dikembalikan GAS dari sheet "Plan Driver":
@@ -2802,7 +2976,7 @@
                     const emptyMsg = (currentUserRole === 'DRIVER' && currentDriverName)
                         ? `Tidak ada rute aktif untuk <b>${escapeHtml(currentDriverName)}</b>.`
                         : 'Semua PO sudah selesai atau belum ada yang siap dikirim.';
-                    cardArea.innerHTML = `
+                    smoothSwapContent(cardArea, `
                     <div class="flex flex-col items-center justify-center py-20 text-center">
                         <svg class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -2812,7 +2986,7 @@
                         </svg>
                         <p class="text-lg font-semibold text-gray-400">Tidak ada pengiriman aktif</p>
                         <p class="text-sm text-gray-400 mt-1">${emptyMsg}</p>
-                    </div>`;
+                    </div>`);
                     return;
                 }
 
@@ -2879,7 +3053,7 @@
                     </div>`;
                 }
 
-                cardArea.innerHTML = `<div id="route-cards-grid">${html}</div>`;
+                smoothSwapContent(cardArea, `<div id="route-cards-grid">${html}</div>`);
 
             } catch (err) {
                 document.getElementById('route-card-area').innerHTML = `
@@ -3210,6 +3384,7 @@
          * Klik tombol "Start" → ubah status ke "On-Delivery" + catat ke Delivery_Log dengan jam berangkat
          */
         async function routeStartDelivery(noPO, idx) {
+            liveSyncNoteMutation();
             const btn  = document.getElementById(`route-btn-${idx}`);
             const card = document.getElementById(`route-card-${idx}`);
             if (!btn) return;
@@ -3304,6 +3479,7 @@
          * Klik tombol "Delivered" → tampilkan modal isian → catat jam tiba + Nama Pengirim + Tgl Diterima
          */
         async function routeMarkDelivered(noPO, idx) {
+            liveSyncNoteMutation();
             // Tampilkan modal isian Nama Pengirim, Nama Penerima & Tanggal Diterima
             // (modal ini juga otomatis mengambil titik koordinat GPS lokasi tiba)
             const formData = await routeShowDeliveredModal(noPO);
@@ -3424,6 +3600,7 @@
          * Klik tombol "Cancel" → tampilkan popup alasan → kirim cancelDelivery ke GAS
          */
         async function routeCancelDelivery(noPO, idx) {
+            liveSyncNoteMutation();
             const cancelData = await routeShowCancelModal(noPO);
             if (!cancelData) return; // user klik Kembali
             const { namaDriver, alasan } = cancelData;
@@ -3500,6 +3677,7 @@
          * Start yang sama diubah jadi tombol "Delivered" setelah sukses.
          */
         async function routeStartPickupRetur(noRO, idx) {
+            liveSyncNoteMutation();
             const btn  = document.getElementById(`route-btn-${idx}`);
             const card = document.getElementById(`route-card-${idx}`);
             if (!btn) return;
@@ -3600,6 +3778,7 @@
          * dari "On Delivery" → "Done".
          */
         async function routeCompletePickupRetur(noRO, idx) {
+            liveSyncNoteMutation();
             // Tampilkan modal isian Nama Pengirim, Nama Penerima & Tanggal Diterima
             // (modal ini juga otomatis mengambil titik koordinat GPS lokasi tiba)
             const formData = await routeShowDeliveredModal(noRO);
@@ -3726,6 +3905,7 @@
          * Delivery_Log, PO_Data, atau "Plan Driver".
          */
         async function routeCancelPickupRetur(noRO, idx) {
+            liveSyncNoteMutation();
             const btn       = document.getElementById(`route-btn-${idx}`);
             const cancelBtn = document.getElementById(`route-cancel-btn-${idx}`);
             const card      = document.getElementById(`route-card-${idx}`);
@@ -10406,11 +10586,11 @@
                 });
 
                 if (allRows.length === 0 && openRORows.length === 0) {
-                    contentArea.innerHTML = `
+                    smoothSwapContent(contentArea, `
                     <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
                     <div class="p-8 text-center bg-white border border-gray-200 rounded-lg shadow-sm">
                         <p class="text-gray-500">✅ Tidak ada PO yang berlangsung.</p>
-                    </div>`;
+                    </div>`);
                     return;
                 }
 
@@ -10561,7 +10741,7 @@
                 // Header: PO_User hanya 4 kolom, Admin + kolom Link & Aksi
                 const theadExtra = isAdmin ? '<th class="p-3">Link PDF</th><th class="p-3">Aksi</th>' : '';
 
-                contentArea.innerHTML = `
+                smoothSwapContent(contentArea, `
                 <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
                 <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                     <table class="w-full text-xs text-center border-collapse">
@@ -10577,12 +10757,29 @@
                         <tbody id="po-table-body">${rows_html}</tbody>
                     </table>
                 </div>
-                ${roSection}`;
+                ${roSection}`);
+
+                // ── Daftarkan LiveSync sekali saja (aman dipanggil berkali-kali) ──
+                LiveSync.register('Report Status', {
+                    check: async () => {
+                        const [poFresh, retuFresh] = await Promise.all([
+                            fetchWithTimeout(API_URLS.reportStatus + '?action=getPOData').then(r => r.json()).catch(() => []),
+                            fetchWithTimeout(API_URLS.purchaseOrder + '?action=getReturData').then(r => r.json()).catch(() => []),
+                        ]);
+                        return { poFresh, retuFresh };
+                    },
+                    onChange: async ({ poFresh, retuFresh }) => {
+                        setCache('getPOData', poFresh);
+                        setCache('getReturData', retuFresh);
+                        await showReportStatus();
+                    }
+                });
 
             } catch (err) { setError(err.message); }
         }
 
         async function closePO(poNumber) {
+            liveSyncNoteMutation();
             const ok = await showConfirm('Tutup Purchase Order?', `PO ${poNumber} akan ditandai sebagai Closed. Tindakan ini tidak dapat dibatalkan.`);
             if (!ok) return;
 
@@ -10659,6 +10856,7 @@
         }
 
         async function closeRO(noRO) {
+            liveSyncNoteMutation();
             const ok = await showConfirm('Tutup Return Order?', `RO ${noRO} akan ditandai sebagai Closed. Tindakan ini tidak dapat dibatalkan.`);
             if (!ok) return;
 
