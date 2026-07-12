@@ -400,7 +400,7 @@
                         Catalogue
                     </button>
 
-                    <!-- Service Center Baru (khusus ADMIN) -->
+                    <!-- Service Center Baru (untuk ADMIN, CS_User, dan Teknisi) -->
                     <div id="menu-service-center" class="hidden">
                         <button onclick="toggleSubMenu('service-center-sub','arrow-service-center')"
                             class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
@@ -518,7 +518,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzHw6SUgof5N7xydQl0yz9lNxZciJV0MIHFLdX0b0993d7fnOj1ENRNF9ugwm39e1-h/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzOJF1r8RdNlRq39JINScufZPSRBEDBvf1TArLUR3wkkRRNq_JfZurCggGCy7L2v_5I/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
@@ -794,6 +794,8 @@
                         sessionStorage.setItem('currentUserRole', currentUserRole);
                         sessionStorage.setItem('sessionToken', sessionToken);
                         passInput.value = '';
+                        // DEBUG: hapus baris ini setelah role CS_User/Teknisi terkonfirmasi benar
+                        console.log('[LOGIN] Backend returned role:', JSON.stringify(data.role));
                         startApp();
                     }
                 } else {
@@ -868,6 +870,12 @@
                 const displayName = currentDriverName || 'Driver';
                 if (roleLabel) roleLabel.textContent = `Driver — ${displayName}`;
                 if (roleBadge) { roleBadge.textContent = displayName; roleBadge.classList.remove('hidden'); }
+            } else if (currentUserRole === 'CS_User') {
+                if (roleLabel) roleLabel.textContent = 'CS User';
+                if (roleBadge) { roleBadge.textContent = 'CS User'; roleBadge.classList.remove('hidden'); }
+            } else if (currentUserRole === 'Teknisi') {
+                if (roleLabel) roleLabel.textContent = 'Teknisi';
+                if (roleBadge) { roleBadge.textContent = 'Teknisi'; roleBadge.classList.remove('hidden'); }
             } else {
                 if (roleLabel) roleLabel.textContent = 'PO User';
                 if (roleBadge) { roleBadge.textContent = 'PO User'; roleBadge.classList.remove('hidden'); }
@@ -887,7 +895,7 @@
                 document.getElementById('menu-process-po').classList.add('hidden');
                 document.getElementById('menu-process-inbound').classList.add('hidden');
                 document.getElementById('menu-team-delivery').classList.add('hidden');
-                // Service Center hanya untuk ADMIN
+                // Service Center hanya untuk ADMIN, CS_User, dan Teknisi
                 document.getElementById('menu-service-center').classList.add('hidden');
                 // Tampilkan Receive PO di bawah submenu Purchase Order
                 document.getElementById('sub-receive-po').classList.remove('hidden');
@@ -932,6 +940,22 @@
                 document.getElementById('team-delivery-sub').classList.remove('hidden');
                 document.getElementById('arrow-team-delivery').textContent = '▲';
                 navTo(_getRestorePage('Route'));
+            } else if (currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') {
+                // CS_User & Teknisi: hanya tampilkan menu Service Center
+                document.getElementById('menu-inventory').classList.add('hidden');
+                document.getElementById('menu-plan-task').classList.add('hidden');
+                document.getElementById('menu-maintenance').classList.add('hidden');
+                document.getElementById('menu-po').classList.add('hidden');
+                document.getElementById('menu-process-po').classList.add('hidden');
+                document.getElementById('menu-process-inbound').classList.add('hidden');
+                document.getElementById('menu-team-delivery').classList.add('hidden');
+                document.getElementById('menu-catalogue').classList.add('hidden');
+                // Tampilkan Service Center
+                document.getElementById('menu-service-center').classList.remove('hidden');
+                // Buka submenu Service Center otomatis
+                document.getElementById('service-center-sub').classList.remove('hidden');
+                document.getElementById('arrow-service-center').textContent = '▲';
+                navTo(_getRestorePage('Check Machine'));
             } else {
                 // ADMIN: semua menu tampil termasuk Process PO & Team Delivery
                 document.getElementById('menu-process-po').classList.remove('hidden');
@@ -941,7 +965,7 @@
                 // Tampilkan Warranty Registration di bawah submenu Purchase Order
                 document.getElementById('sub-product-registration').classList.remove('hidden');
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
-                // Service Center hanya untuk ADMIN
+                // Service Center untuk ADMIN, CS_User, dan Teknisi
                 document.getElementById('menu-service-center').classList.remove('hidden');
                 navTo(_getRestorePage('Dashboard'));
             }
@@ -992,7 +1016,7 @@
                 return defaultPage;
             }
             if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(saved) &&
-                currentUserRole !== 'ADMIN') {
+                !(currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi')) {
                 return defaultPage;
             }
             return saved;
@@ -1331,10 +1355,16 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Warranty Registration" hanya dapat diakses oleh Admin dan PO User.');
                 return;
             }
-            // ── AKSES KONTROL: Service Center hanya untuk ADMIN ──
+            // ── AKSES KONTROL: Service Center untuk ADMIN, CS_User, dan Teknisi ──
             if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(pageName) &&
-                currentUserRole !== 'ADMIN') {
-                showAlert('error', 'Akses Ditolak', 'Menu "Service Center" hanya dapat diakses oleh Admin.');
+                !(currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi')) {
+                showAlert('error', 'Akses Ditolak', 'Menu "Service Center" hanya dapat diakses oleh Admin, CS User, dan Teknisi.');
+                return;
+            }
+            // ── AKSES KONTROL: CS_User & Teknisi HANYA bisa akses Service Center ──
+            if ((currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') &&
+                !['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(pageName)) {
+                showAlert('error', 'Akses Ditolak', 'Role "' + currentUserRole + '" hanya dapat mengakses menu Service Center.');
                 return;
             }
             const titles = {
