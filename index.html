@@ -518,7 +518,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycby_g7ld11F7uptb-M_AwMi3Y7AarhzKncASSP-pZ-HbbyB6cKCdUYj2KhU2x6mMDc2C/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzHw6SUgof5N7xydQl0yz9lNxZciJV0MIHFLdX0b0993d7fnOj1ENRNF9ugwm39e1-h/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
@@ -3491,10 +3491,11 @@
         }
 
         /**
-         * [FIX 8] Klik "Start" pada card RO (Retur_Data) di menu Route.
+         * [FIX 10] Klik "Start" pada card RO (Retur_Data) di menu Route.
          * Mengubah status Retur_Data & Report_Status dari "Ready To PickUp"
-         * → "On Delivery". TIDAK menulis apa pun ke Delivery_Log, PO_Data,
-         * atau sheet "Plan Driver" — hanya action 'startPickupRetur' di GAS.
+         * → "On Delivery", DAN mencatat Jam Berangkat + baris "On-Delivery"
+         * baru ke Delivery_Log lewat action 'startPickupRetur' di GAS —
+         * TIDAK menulis apa pun ke PO_Data atau sheet "Plan Driver".
          * Alurnya dibuat identik dengan routeStartDelivery (card PO): tombol
          * Start yang sama diubah jadi tombol "Delivered" setelah sukses.
          */
@@ -3503,7 +3504,13 @@
             const card = document.getElementById(`route-card-${idx}`);
             if (!btn) return;
 
-            const driver = card?.dataset.driver || '';
+            // Ambil data lengkap dari atribut card
+            const orderedBy    = card?.dataset.orderedBy    || '';
+            const shipTo       = card?.dataset.shipTo       || '';
+            const alamat       = card?.dataset.alamat       || '';
+            const phone        = card?.dataset.phone        || '';
+            const shippingDate = card?.dataset.shippingDate || '';
+            const driver       = card?.dataset.driver       || '';
 
             const origHTML        = btn.innerHTML;
             const cancelBtn       = document.getElementById(`route-cancel-btn-${idx}`);
@@ -3511,6 +3518,9 @@
             btn.disabled = true;
             if (cancelBtn) cancelBtn.disabled = true;
             btn.innerHTML = `<span class="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>`;
+
+            // Format jam WIB yang aman: "HH:MM"
+            const jamBerangkat = getJamWIB();
 
             try {
                 const res = await fetch(DELIVERY_GAS_URL, {
@@ -3520,7 +3530,14 @@
                     body: JSON.stringify({
                         action: 'startPickupRetur',
                         token : sessionToken,
-                        noRO
+                        noRO,
+                        jamBerangkat,
+                        orderedBy,
+                        shipTo,
+                        alamat,
+                        phone,
+                        shippingDate,
+                        driver
                     })
                 });
                 const result = await res.json();
@@ -3531,6 +3548,11 @@
                     if (badge) {
                         badge.className   = 'flex-shrink-0 inline-block px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap bg-blue-100 text-blue-700';
                         badge.textContent = '🚚 On Delivery';
+                    }
+                    const jamInfo = document.getElementById(`route-jam-info-${idx}`);
+                    if (jamInfo) {
+                        jamInfo.innerHTML = `<svg class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span>⏱ Berangkat: ${jamBerangkat}</span>`;
+                        jamInfo.classList.remove('hidden');
                     }
                     btn.className = 'flex-1 min-w-0 flex items-center justify-center gap-1.5 h-10 px-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-bold rounded-xl shadow-sm transition';
                     btn.disabled  = false;
@@ -3551,7 +3573,8 @@
                         cardEl.classList.add('border-blue-200', 'bg-blue-50/30');
                     }
 
-                    showAlert('success', '🚚 Pickup Dimulai!', `RO ${noRO} → On Delivery.`);
+                    showAlert('success', '🚚 Pickup Dimulai!',
+                        `RO ${noRO} → On Delivery\nJam berangkat: ${jamBerangkat}\nData dicatat ke Delivery_Log.`);
                 } else {
                     btn.disabled = false;
                     btn.innerHTML = origHTML;
@@ -3565,6 +3588,7 @@
                 showAlert('error', 'Koneksi Error', 'Tidak dapat terhubung ke server: ' + err.message);
             }
         }
+
 
         /**
          * [FIX 9] Klik "Delivered" pada card RO — menyelesaikan pickup.
