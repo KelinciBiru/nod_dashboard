@@ -234,7 +234,7 @@
                 <nav class="flex-1 overflow-y-auto p-3 space-y-1">
 
                     <!-- Dashboard -->
-                    <button onclick="navTo('Dashboard')"
+                    <button id="menu-dashboard" onclick="navTo('Dashboard')"
                         class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
                         <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -518,7 +518,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzOJF1r8RdNlRq39JINScufZPSRBEDBvf1TArLUR3wkkRRNq_JfZurCggGCy7L2v_5I/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyV9QY-Xb7UeD6eXrTu6v2ODapwa-vo6Pw_WDo_GWxYWlP5O1SDi4F7s3ATdynJt_VE/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
@@ -936,12 +936,15 @@
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
                 // Catalogue hanya untuk ADMIN, PO_User, dan Warehouse — Driver tidak perlu akses
                 document.getElementById('menu-catalogue').classList.add('hidden');
+                // Service Center bukan untuk Driver
+                document.getElementById('menu-service-center').classList.add('hidden');
                 // Buka submenu Team Delivery otomatis
                 document.getElementById('team-delivery-sub').classList.remove('hidden');
                 document.getElementById('arrow-team-delivery').textContent = '▲';
                 navTo(_getRestorePage('Route'));
             } else if (currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') {
                 // CS_User & Teknisi: hanya tampilkan menu Service Center
+                document.getElementById('menu-dashboard').classList.add('hidden');
                 document.getElementById('menu-inventory').classList.add('hidden');
                 document.getElementById('menu-plan-task').classList.add('hidden');
                 document.getElementById('menu-maintenance').classList.add('hidden');
