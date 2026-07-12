@@ -887,6 +887,14 @@
                 sidebarOpen = false; // di desktop tidak pakai overlay
             }
 
+            // Reset menu-dashboard ke tampil setiap kali startApp() dipanggil.
+            // Bug fix: sebelumnya menu ini hanya di-hidden oleh blok CS_User/Teknisi
+            // dan tidak pernah di-remove('hidden') oleh blok role lain. Karena ini SPA
+            // (elemen DOM tidak dibuat ulang saat login), kalau CS_User/Teknisi login
+            // lalu logout dan role lain (ADMIN/PO_User/WAREHOUSE/DRIVER) login di sesi
+            // yang sama, menu Dashboard tetap hidden sampai halaman di-refresh manual.
+            document.getElementById('menu-dashboard').classList.remove('hidden');
+
             if (currentUserRole === 'PO_User') {
                 // Staff: hanya bisa akses Purchase Order (termasuk Receive PO), Process PO TERSEMBUNYI
                 document.getElementById('menu-inventory').classList.add('hidden');
