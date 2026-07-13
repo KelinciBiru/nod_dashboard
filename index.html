@@ -2282,8 +2282,39 @@
                     ⟳ Refresh
                 </button>
             </div>
-            <p class="text-sm text-gray-500 mb-6">Status mesin "On Going" &amp; "Solved" (7 hari terakhir) dari sheet "Repair".</p>
+            <p class="text-sm text-gray-500 mb-6">Status mesin "On Going" / "Pending" &amp; "Solved" (7 hari terakhir) dari sheet "Repair".</p>
 
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <h2 class="text-base font-bold text-gray-700">On Going &amp; Pending</h2>
+                <span id="rsr-ongoing-count" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">0 mesin</span>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-800 text-white text-xs uppercase tracking-wide">
+                                <th class="px-4 py-3 text-left font-semibold">Serial Number</th>
+                                <th class="px-4 py-3 text-left font-semibold">Type Machine</th>
+                                <th class="px-4 py-3 text-left font-semibold">Status</th>
+                                <th class="px-4 py-3 text-left font-semibold">Ex Location/Customer</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rsr-ongoing-tbody">
+                            <tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">
+                                <div class="flex items-center justify-center gap-3">
+                                    <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+                                    Memuat data...
+                                </div>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <h2 class="text-base font-bold text-gray-700">Solved (7 hari terakhir)</h2>
+                <span id="rsr-solved-count" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">0 mesin</span>
+            </div>
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
@@ -2295,7 +2326,7 @@
                                 <th class="px-4 py-3 text-left font-semibold">Ex Location/Customer</th>
                             </tr>
                         </thead>
-                        <tbody id="rsr-tbody">
+                        <tbody id="rsr-solved-tbody">
                             <tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">
                                 <div class="flex items-center justify-center gap-3">
                                     <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
@@ -2310,14 +2341,38 @@
             await loadReportStatusRepair();
         }
 
-        /** Ambil & render tabel Report Status Repair dari backend (action=getReportStatusRepair) */
+        /** Render 1 baris tabel Report Status Repair (dipakai bersama oleh tabel On Going/Pending & Solved) */
+        function renderReportStatusRepairRow(row) {
+            const statusLower = (row.status || '').toLowerCase();
+            const badgeClass = statusLower === 'on going'
+                ? 'bg-amber-500 text-white'
+                : (statusLower === 'pending' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white');
+            return `
+            <tr class="border-t border-gray-100 hover:bg-gray-50">
+                <td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">${escapeHtml(row.serialNumber || '-')}</td>
+                <td class="px-4 py-3 text-gray-600">${escapeHtml(row.typeMachine || '-')}</td>
+                <td class="px-4 py-3">
+                    <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${badgeClass}">
+                        ${escapeHtml(row.status || '-')}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-gray-600">${escapeHtml(row.exLocation || '-')}</td>
+            </tr>`;
+        }
+
+        /** Ambil & render 2 tabel (On Going/Pending & Solved) Report Status Repair dari backend (action=getReportStatusRepair) */
         async function loadReportStatusRepair() {
-            const tbody = document.getElementById('rsr-tbody');
+            const ongoingTbody = document.getElementById('rsr-ongoing-tbody');
+            const solvedTbody = document.getElementById('rsr-solved-tbody');
+            const ongoingCountEl = document.getElementById('rsr-ongoing-count');
+            const solvedCountEl = document.getElementById('rsr-solved-count');
             const btn = document.getElementById('rsr-refresh-btn');
-            if (!tbody) return;
+            if (!ongoingTbody || !solvedTbody) return;
 
             if (!SERVICE_CENTER_GAS_URL || SERVICE_CENTER_GAS_URL.startsWith('GANTI_DENGAN')) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
+                const msg = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
+                ongoingTbody.innerHTML = msg;
+                solvedTbody.innerHTML = msg;
                 return;
             }
 
@@ -2328,29 +2383,24 @@
                 const result = await res.json();
                 if (!result.success) throw new Error(result.message || 'Gagal mengambil data.');
 
-                const rows = result.data || [];
-                if (rows.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`;
-                    return;
-                }
+                // Fallback untuk backend lama yang cuma mengirim field "data" gabungan
+                const onGoingRows = result.onGoing || (result.data || []).filter(r => (r.status || '').toLowerCase() !== 'solved');
+                const solvedRows = result.solved || (result.data || []).filter(r => (r.status || '').toLowerCase() === 'solved');
 
-                tbody.innerHTML = rows.map(row => {
-                    const statusLower = (row.status || '').toLowerCase();
-                    const badgeClass = statusLower === 'on going' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white';
-                    return `
-                    <tr class="border-t border-gray-100 hover:bg-gray-50">
-                        <td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">${escapeHtml(row.serialNumber || '-')}</td>
-                        <td class="px-4 py-3 text-gray-600">${escapeHtml(row.typeMachine || '-')}</td>
-                        <td class="px-4 py-3">
-                            <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${badgeClass}">
-                                ${escapeHtml(row.status || '-')}
-                            </span>
-                        </td>
-                        <td class="px-4 py-3 text-gray-600">${escapeHtml(row.exLocation || '-')}</td>
-                    </tr>`;
-                }).join('');
+                if (ongoingCountEl) ongoingCountEl.textContent = `${onGoingRows.length} mesin`;
+                if (solvedCountEl) solvedCountEl.textContent = `${solvedRows.length} mesin`;
+
+                ongoingTbody.innerHTML = onGoingRows.length === 0
+                    ? `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                    : onGoingRows.map(renderReportStatusRepairRow).join('');
+
+                solvedTbody.innerHTML = solvedRows.length === 0
+                    ? `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                    : solvedRows.map(renderReportStatusRepairRow).join('');
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                const msg = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                ongoingTbody.innerHTML = msg;
+                solvedTbody.innerHTML = msg;
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
             }
@@ -2361,18 +2411,23 @@
         // Akses: ADMIN, CS_User, Teknisi
         // Form kerja Teknisi: pilih/ketik Serial Number → Type Machine, Nama
         // Customer, dan Kendala terisi otomatis dari sheet "Penukaran Mesin NOD"
-        // (fallback: bisa diisi manual, Nama Customer → "Unknown" jika tidak
-        // ditemukan). Teknisi mengisi Action Repair + Sparepart, lalu menyimpan
+        // (fallback: kalau Serial Number tidak ketemu di sana, otomatis dicari
+        // di sheet "Repair" kolom C=Serial Number, D=Type Machine, H=Ex
+        // Location/Customer; kalau tetap tidak ketemu, Nama Customer ->
+        // "Unknown"). Teknisi mengisi Action Repair + Sparepart, lalu menyimpan
         // sebagai "Pending" (dengan alasan) atau "Done Repair" (dengan nama
         // Teknisi & tanggal). Semua tersimpan ke sheet "Teknisi_Log".
         // =========================================================================
 
         // Data referensi dari backend (diisi oleh loadTtInit())
         let ttSerialInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer, kendala } }
+        let ttRepairInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer } } fallback dari sheet "Repair" (kolom C/D/H) kalau tidak ketemu di "Penukaran Mesin NOD"
         let ttSparepartMap = {};    // { namaSparepart -> idSparepart }
         let ttSparepartList = [];   // [{ name, id }] daftar sparepart dari backend, untuk pencarian multi-pilih
         let ttSelectedSpareparts = []; // [{ name, id }] sparepart yang sudah dipilih user (bisa lebih dari 1)
         let ttTeknisiList = [];
+        let ttOngoingSerials = [];  // Serial Number berstatus "On Going" dari backend
+        let ttPendingSerials = [];  // Serial Number berstatus "Pending" dari backend
 
         async function showTaskTechnician() {
             document.getElementById('content-area').innerHTML = `
@@ -2382,16 +2437,25 @@
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 mb-6 max-w-2xl space-y-4">
                 <div>
                     <label for="tt-serial" class="block text-sm font-semibold text-gray-700 mb-1">Serial Number</label>
-                    <input type="text" id="tt-serial" list="tt-serial-list" placeholder="Pilih dari daftar On Going atau ketik manual..."
+                    <input type="text" id="tt-serial" list="tt-serial-list" placeholder="Pilih dari daftar On Going/Pending atau ketik manual..."
                         class="w-full px-4 py-2.5 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none"
                         oninput="onTtSerialChange()">
                     <datalist id="tt-serial-list"></datalist>
-                    <div id="tt-ongoing-badge" class="mt-2 hidden items-center gap-1.5 w-fit px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
-                        <span class="relative flex h-2 w-2">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                        </span>
-                        <span id="tt-ongoing-count-text">0 Mesin On Going</span>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <div id="tt-ongoing-badge" class="hidden items-center gap-1.5 w-fit px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                            <span id="tt-ongoing-count-text">0 Mesin On Going</span>
+                        </div>
+                        <div id="tt-pending-badge" class="hidden items-center gap-1.5 w-fit px-2.5 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold">
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                            </span>
+                            <span id="tt-pending-count-text">0 Mesin Pending</span>
+                        </div>
                     </div>
                 </div>
 
@@ -2466,23 +2530,40 @@
                 }
 
                 ttSerialInfoMap = result.serialInfoMap || {};
+                ttRepairInfoMap = result.repairInfoMap || {};
                 ttTeknisiList = result.teknisiList || [];
 
-                const ongoingSerials = result.ongoingSerials || [];
+                ttOngoingSerials = result.ongoingSerials || [];
+                ttPendingSerials = result.pendingSerials || [];
+
+                // Dropdown Serial Number menampilkan gabungan "On Going" & "Pending"
+                // (dedup, jaga-jaga kalau ada serial yang muncul di kedua daftar).
+                const combinedSerials = ttOngoingSerials.concat(
+                    ttPendingSerials.filter(s => !ttOngoingSerials.some(o => o.toLowerCase() === s.toLowerCase()))
+                );
 
                 const serialListEl = document.getElementById('tt-serial-list');
                 if (serialListEl) {
-                    serialListEl.innerHTML = ongoingSerials
+                    serialListEl.innerHTML = combinedSerials
                         .map(s => `<option value="${escapeHtml(s)}">`).join('');
                 }
 
                 const ongoingBadgeEl = document.getElementById('tt-ongoing-badge');
                 const ongoingCountTextEl = document.getElementById('tt-ongoing-count-text');
                 if (ongoingBadgeEl && ongoingCountTextEl) {
-                    const count = ongoingSerials.length;
+                    const count = ttOngoingSerials.length;
                     ongoingCountTextEl.textContent = `${count} Mesin On Going`;
                     ongoingBadgeEl.classList.toggle('hidden', count === 0);
                     ongoingBadgeEl.classList.toggle('flex', count > 0);
+                }
+
+                const pendingBadgeEl = document.getElementById('tt-pending-badge');
+                const pendingCountTextEl = document.getElementById('tt-pending-count-text');
+                if (pendingBadgeEl && pendingCountTextEl) {
+                    const count = ttPendingSerials.length;
+                    pendingCountTextEl.textContent = `${count} Mesin Pending`;
+                    pendingBadgeEl.classList.toggle('hidden', count === 0);
+                    pendingBadgeEl.classList.toggle('flex', count > 0);
                 }
 
                 ttSparepartMap = {};
@@ -2526,6 +2607,17 @@
                 if (typeEl) typeEl.value = info.typeMachine || '';
                 if (customerEl) customerEl.value = info.namaCustomer || 'Unknown';
                 if (kendalaEl) kendalaEl.value = info.kendala || '';
+                return;
+            }
+
+            // Fallback: Nama Customer tidak ketemu di "Penukaran Mesin NOD" ->
+            // cari otomatis di sheet "Repair" (kolom C=Serial Number,
+            // kolom D=Type Machine, kolom H=Ex Location/Customer).
+            const repairInfo = ttRepairInfoMap[serial.toLowerCase()];
+            if (repairInfo) {
+                if (typeEl) typeEl.value = repairInfo.typeMachine || '';
+                if (customerEl) customerEl.value = repairInfo.namaCustomer || 'Unknown';
+                if (kendalaEl) kendalaEl.value = '';
             } else {
                 if (typeEl) typeEl.value = '';
                 if (customerEl) customerEl.value = 'Unknown';
