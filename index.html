@@ -627,7 +627,7 @@
         const CATALOGUE_GAS_URL = 'https://script.google.com/macros/s/AKfycbyR2a98c8txp83ZPhVbKjP16SNKFsCJQQ7KdwnsG337KZ4o01vQFl6zQhXf3pIo9xQM1g/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App khusus Warranty Registration setelah deploy
-        const WARRANTY_GAS_URL = 'https://script.google.com/macros/s/AKfycbwkPD4DOq7fBVQAb0_f9AhrcSdofIFkNkqSTgREi0Rdwc81ineyKC8slUVhmQG-qogY/exec';
+        const WARRANTY_GAS_URL = 'https://script.google.com/macros/s/AKfycbwJsjy5jbQaIw0EVdh8EQVMBjJUqNU7rdvY1giMPgdNJUt7bhDrmpz59KXhqp8_261A/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu "Check Machine" (Service Center).
         // Backend ini membaca sheet "Repair" pada spreadsheet "Maintenance/Repair NOD" dan sheet
@@ -1840,32 +1840,65 @@
         // spreadsheet "Maintenance/Repair NOD", + "Alasan Penukaran" dari sheet
         // "Penukaran Mesin NOD" kolom L) dan tombol "Check Warranty" (data warranty dari
         // sheet "Regis_Log" pada spreadsheet Warranty Registration / WARRANTY_GAS_URL).
+        // "Check Warranty" mencari berdasarkan Nama Customer (dropdown dari Regis_Log
+        // kolom D, atau diketik manual) jika diisi — prioritas utama; jika kosong,
+        // fallback ke pencarian berdasarkan Serial Number seperti sebelumnya. Jika nama
+        // customer tidak ditemukan di Regis_Log, popup menampilkan "Customer belum
+        // mengaktifkan Warranty".
         // =========================================================================
         function showCheckMachine() {
             document.getElementById('content-area').innerHTML = `
             <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700 mb-1">Check Machine</h1>
-            <p class="text-sm text-gray-500 mb-6">Masukkan Serial Number untuk melihat riwayat service atau status warranty mesin.</p>
+            <p class="text-sm text-gray-500 mb-6">Masukkan Serial Number untuk melihat riwayat service, atau Nama Customer untuk melihat status warranty mesin.</p>
 
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 mb-6">
-                <label for="cm-serial" class="block text-sm font-semibold text-gray-700 mb-1">Serial Number</label>
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <input type="text" id="cm-serial" placeholder="Ketik Serial Number..."
-                        class="flex-1 px-4 py-2.5 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none"
-                        onkeydown="if(event.key==='Enter'){event.preventDefault();checkMachineBySerial();}">
-                    <div class="flex gap-2">
-                        <button id="cm-check-btn" onclick="checkMachineBySerial()"
-                            class="px-5 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-sm font-bold shadow-sm transition whitespace-nowrap">
-                            Check
-                        </button>
-                        <button id="cm-warranty-btn" onclick="checkWarrantyBySerial()"
-                            class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-sm transition whitespace-nowrap">
-                            Check Warranty
-                        </button>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="cm-serial" class="block text-sm font-semibold text-gray-700 mb-1">Serial Number</label>
+                        <input type="text" id="cm-serial" placeholder="Ketik Serial Number..."
+                            class="w-full px-4 py-2.5 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();checkMachineBySerial();}">
                     </div>
+                    <div>
+                        <label for="cm-customer" class="block text-sm font-semibold text-gray-700 mb-1">Nama Customer</label>
+                        <input type="text" id="cm-customer" list="cm-customer-list" placeholder="Ketik atau pilih nama customer..."
+                            class="w-full px-4 py-2.5 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();checkWarrantyMachine();}">
+                        <datalist id="cm-customer-list"></datalist>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="cm-check-btn" onclick="checkMachineBySerial()"
+                        class="px-5 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-sm font-bold shadow-sm transition whitespace-nowrap">
+                        Check
+                    </button>
+                    <button id="cm-warranty-btn" onclick="checkWarrantyMachine()"
+                        class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-sm transition whitespace-nowrap">
+                        Check Warranty
+                    </button>
                 </div>
             </div>
 
             <div id="cm-result"></div>`;
+
+            loadCmCustomerList();
+        }
+
+        /** Muat daftar Nama Customer (untuk dropdown Check Warranty) dari sheet Regis_Log kolom D */
+        async function loadCmCustomerList() {
+            const listEl = document.getElementById('cm-customer-list');
+            if (!listEl) return;
+            try {
+                const url = WARRANTY_GAS_URL + '?action=listCustomers';
+                const res = await fetchWithTimeout(url, {}, 20000);
+                const result = await res.json();
+                if (!result.success) return;
+
+                listEl.innerHTML = (result.data || [])
+                    .map(c => `<option value="${escapeHtml(c)}">`).join('');
+            } catch (err) {
+                // Diamkan: dropdown customer tetap bisa diisi manual walau gagal dimuat
+            }
         }
 
         /** Ambil & tampilkan riwayat repair mesin berdasarkan Serial Number */
@@ -1950,14 +1983,41 @@
             }
         }
 
-        /** Ambil & tampilkan status warranty mesin berdasarkan Serial Number (via popup) */
-        async function checkWarrantyBySerial() {
+        /** Bangun baris "Warranty" pada popup Check Machine: otomatis 1 tahun dari
+         *  Tanggal Pembelian (dihitung backend), merah + "Warranty Has been Expired"
+         *  kalau sudah lewat tanggal berakhir. */
+        function buildCmWarrantyRowHtml(row) {
+            let display;
+            let ddClass = 'text-xs whitespace-pre-line text-right';
+
+            if (row.warrantyExpired === true) {
+                display = 'Warranty Has been Expired';
+                ddClass += ' text-red-600 font-bold';
+            } else if (row.warrantyExpired === false && row.warrantyEndDate) {
+                display = '1 Tahun (s/d ' + escapeHtml(String(row.warrantyEndDate)) + ')';
+                ddClass += ' text-gray-700';
+            } else {
+                display = '-';
+                ddClass += ' text-gray-700';
+            }
+
+            return `
+            <div class="px-4 py-2.5 grid grid-cols-2 gap-3">
+                <dt class="text-xs font-semibold text-gray-500">Warranty</dt>
+                <dd class="${ddClass}">${display}</dd>
+            </div>`;
+        }
+
+        /** Ambil & tampilkan status warranty mesin berdasarkan Nama Customer (prioritas) atau Serial Number (via popup) */
+        async function checkWarrantyMachine() {
             const serialEl = document.getElementById('cm-serial');
-            const serial = serialEl?.value.trim();
+            const customerEl = document.getElementById('cm-customer');
+            const serial = serialEl?.value.trim() || '';
+            const customer = customerEl?.value.trim() || '';
             const btn = document.getElementById('cm-warranty-btn');
 
-            if (!serial) {
-                showAlert('warning', 'Serial Number Kosong', 'Mohon isi Serial Number terlebih dahulu.');
+            if (!serial && !customer) {
+                showAlert('warning', 'Data Kosong', 'Mohon isi Serial Number atau Nama Customer terlebih dahulu.');
                 return;
             }
 
@@ -1965,7 +2025,10 @@
             if (btn) { btn.disabled = true; btn.textContent = '⏳ Mencari...'; }
 
             try {
-                const url = WARRANTY_GAS_URL + '?action=checkWarranty&serial=' + encodeURIComponent(serial);
+                // Prioritaskan pencarian berdasarkan Nama Customer jika diisi.
+                const url = customer
+                    ? WARRANTY_GAS_URL + '?action=checkWarrantyByCustomer&customer=' + encodeURIComponent(customer)
+                    : WARRANTY_GAS_URL + '?action=checkWarranty&serial=' + encodeURIComponent(serial);
                 const res = await fetchWithTimeout(url, {}, 20000);
                 const result = await res.json();
 
@@ -1973,15 +2036,29 @@
 
                 const rows = result.data || [];
                 if (rows.length === 0) {
-                    showAlert('warning', 'Data Tidak Ditemukan', `Tidak ditemukan data warranty untuk Serial Number "${serial}".`);
+                    if (customer) {
+                        openCmWarrantyModal(`
+                        <div class="text-center py-8">
+                            <p class="text-gray-500 text-sm font-semibold">Customer belum mengaktifkan Warranty</p>
+                        </div>`);
+                    } else {
+                        showAlert('warning', 'Data Tidak Ditemukan', `Tidak ditemukan data warranty untuk Serial Number "${serial}".`);
+                    }
                     return;
                 }
 
-                const fields = [
+                const fields = customer ? [
+                    { label: 'Customer', key: 'customer' },
+                    { label: 'No.Telp', key: 'phone' },
+                    { label: 'Email', key: 'email' },
                     { label: 'Type Mesin', key: 'typeMesin' },
                     { label: 'ID Barang', key: 'idBarang' },
                     { label: 'Serial Number', key: 'serial' },
-                    { label: 'Warranty', key: 'warranty' },
+                    { label: 'Tanggal Pembelian', key: 'tanggalPembelian' },
+                ] : [
+                    { label: 'Type Mesin', key: 'typeMesin' },
+                    { label: 'ID Barang', key: 'idBarang' },
+                    { label: 'Serial Number', key: 'serial' },
                 ];
 
                 let bodyHtml = '';
@@ -1999,6 +2076,7 @@
                                     <dd class="text-xs text-gray-700 whitespace-pre-line text-right">${display}</dd>
                                 </div>`;
                             }).join('')}
+                            ${buildCmWarrantyRowHtml(row)}
                         </dl>
                     </div>`;
                 });
