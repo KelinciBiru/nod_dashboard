@@ -1791,9 +1791,7 @@
                 case 'Check Machine': await showCheckMachine(); break;
                 case 'Riwayat Penukaran': await showRiwayatPenukaran(); break;
                 case 'Task Technician': await showTaskTechnician(); break;
-                case 'Report Status Repair':
-                    showServiceCenterStub(pageName);
-                    break;
+                case 'Report Status Repair': await showReportStatusRepair(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -2188,6 +2186,95 @@
                 </div>`;
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = originalText; }
+            }
+        }
+
+        // =========================================================================
+        // HALAMAN: SERVICE CENTER - REPORT STATUS REPAIR
+        // Akses: ADMIN, CS_User, Teknisi
+        // Tabel mesin dari sheet "Repair": status "On Going" ditampilkan semua,
+        // status "Solved" hanya yang Date Solved-nya masih dalam 7 hari terakhir.
+        // =========================================================================
+        async function showReportStatusRepair() {
+            document.getElementById('content-area').innerHTML = `
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700">Report Status Repair</h1>
+                <button id="rsr-refresh-btn" onclick="loadReportStatusRepair()"
+                    class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold shadow-sm transition">
+                    ⟳ Refresh
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 mb-6">Status mesin "On Going" &amp; "Solved" (7 hari terakhir) dari sheet "Repair".</p>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-800 text-white text-xs uppercase tracking-wide">
+                                <th class="px-4 py-3 text-left font-semibold">Serial Number</th>
+                                <th class="px-4 py-3 text-left font-semibold">Type Machine</th>
+                                <th class="px-4 py-3 text-left font-semibold">Status</th>
+                                <th class="px-4 py-3 text-left font-semibold">Ex Location/Customer</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rsr-tbody">
+                            <tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">
+                                <div class="flex items-center justify-center gap-3">
+                                    <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+                                    Memuat data...
+                                </div>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+
+            await loadReportStatusRepair();
+        }
+
+        /** Ambil & render tabel Report Status Repair dari backend (action=getReportStatusRepair) */
+        async function loadReportStatusRepair() {
+            const tbody = document.getElementById('rsr-tbody');
+            const btn = document.getElementById('rsr-refresh-btn');
+            if (!tbody) return;
+
+            if (!SERVICE_CENTER_GAS_URL || SERVICE_CENTER_GAS_URL.startsWith('GANTI_DENGAN')) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
+                return;
+            }
+
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Memuat...'; }
+            try {
+                const url = SERVICE_CENTER_GAS_URL + '?action=getReportStatusRepair';
+                const res = await fetchWithTimeout(url, {}, 20000);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message || 'Gagal mengambil data.');
+
+                const rows = result.data || [];
+                if (rows.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = rows.map(row => {
+                    const statusLower = (row.status || '').toLowerCase();
+                    const badgeClass = statusLower === 'on going' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white';
+                    return `
+                    <tr class="border-t border-gray-100 hover:bg-gray-50">
+                        <td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">${escapeHtml(row.serialNumber || '-')}</td>
+                        <td class="px-4 py-3 text-gray-600">${escapeHtml(row.typeMachine || '-')}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${badgeClass}">
+                                ${escapeHtml(row.status || '-')}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600">${escapeHtml(row.exLocation || '-')}</td>
+                    </tr>`;
+                }).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
             }
         }
 
