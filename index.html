@@ -2296,11 +2296,12 @@
                                 <th class="px-4 py-3 text-left font-semibold">Serial Number</th>
                                 <th class="px-4 py-3 text-left font-semibold">Type Machine</th>
                                 <th class="px-4 py-3 text-left font-semibold">Status</th>
+                                <th class="px-4 py-3 text-left font-semibold">SLA</th>
                                 <th class="px-4 py-3 text-left font-semibold">Ex Location/Customer</th>
                             </tr>
                         </thead>
                         <tbody id="rsr-ongoing-tbody">
-                            <tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">
+                            <tr><td colspan="5" class="px-4 py-10 text-center text-gray-400">
                                 <div class="flex items-center justify-center gap-3">
                                     <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
                                     Memuat data...
@@ -2341,12 +2342,44 @@
             await loadReportStatusRepair();
         }
 
-        /** Render 1 baris tabel Report Status Repair (dipakai bersama oleh tabel On Going/Pending & Solved) */
-        function renderReportStatusRepairRow(row) {
+        /**
+         * Hitung teks SLA dari "Inbound Date" (kolom B sheet "Repair").
+         * - Jika tidak ada tanggal (kosong/invalid) -> "Overdue"
+         * - Jika ada tanggal -> sisa hari dari total jatah 5 hari sejak Inbound Date.
+         *   Sisa 5..1 -> "5 Hari".."1 Hari"; sisa <= 0 -> "Overdue"
+         */
+        function computeSlaText(inboundDateRaw) {
+            if (!inboundDateRaw) return 'Overdue';
+            const inboundDate = new Date(inboundDateRaw);
+            if (isNaN(inboundDate.getTime())) return 'Overdue';
+            const startInbound = new Date(inboundDate.getFullYear(), inboundDate.getMonth(), inboundDate.getDate());
+            const now = new Date();
+            const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const elapsedDays = Math.round((startToday - startInbound) / 86400000);
+            const remaining = 5 - elapsedDays;
+            if (remaining <= 0) return 'Overdue';
+            return `${remaining} Hari`;
+        }
+
+        /** Render badge SLA dengan warna sesuai tingkat urgensi */
+        function renderSlaBadge(inboundDateRaw) {
+            const text = computeSlaText(inboundDateRaw);
+            let badgeClass = 'bg-emerald-500 text-white';
+            if (text === 'Overdue') badgeClass = 'bg-red-600 text-white';
+            else if (text === '1 Hari') badgeClass = 'bg-red-500 text-white';
+            else if (text === '2 Hari') badgeClass = 'bg-orange-500 text-white';
+            else if (text === '3 Hari') badgeClass = 'bg-amber-500 text-white';
+            return `<span class="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${badgeClass}">${escapeHtml(text)}</span>`;
+        }
+
+        /** Render 1 baris tabel Report Status Repair (dipakai bersama oleh tabel On Going/Pending & Solved).
+         *  showSla=true untuk menampilkan kolom SLA (dipakai di tabel On Going & Pending). */
+        function renderReportStatusRepairRow(row, showSla) {
             const statusLower = (row.status || '').toLowerCase();
             const badgeClass = statusLower === 'on going'
                 ? 'bg-amber-500 text-white'
                 : (statusLower === 'pending' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white');
+            const slaCell = showSla ? `<td class="px-4 py-3">${renderSlaBadge(row.inboundDate)}</td>` : '';
             return `
             <tr class="border-t border-gray-100 hover:bg-gray-50">
                 <td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">${escapeHtml(row.serialNumber || '-')}</td>
@@ -2356,6 +2389,7 @@
                         ${escapeHtml(row.status || '-')}
                     </span>
                 </td>
+                ${slaCell}
                 <td class="px-4 py-3 text-gray-600">${escapeHtml(row.exLocation || '-')}</td>
             </tr>`;
         }
@@ -2370,9 +2404,8 @@
             if (!ongoingTbody || !solvedTbody) return;
 
             if (!SERVICE_CENTER_GAS_URL || SERVICE_CENTER_GAS_URL.startsWith('GANTI_DENGAN')) {
-                const msg = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
-                ongoingTbody.innerHTML = msg;
-                solvedTbody.innerHTML = msg;
+                ongoingTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
+                solvedTbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
                 return;
             }
 
@@ -2391,16 +2424,15 @@
                 if (solvedCountEl) solvedCountEl.textContent = `${solvedRows.length} mesin`;
 
                 ongoingTbody.innerHTML = onGoingRows.length === 0
-                    ? `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
-                    : onGoingRows.map(renderReportStatusRepairRow).join('');
+                    ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                    : onGoingRows.map(row => renderReportStatusRepairRow(row, true)).join('');
 
                 solvedTbody.innerHTML = solvedRows.length === 0
                     ? `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
-                    : solvedRows.map(renderReportStatusRepairRow).join('');
+                    : solvedRows.map(row => renderReportStatusRepairRow(row, false)).join('');
             } catch (err) {
-                const msg = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
-                ongoingTbody.innerHTML = msg;
-                solvedTbody.innerHTML = msg;
+                ongoingTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                solvedTbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
             }
