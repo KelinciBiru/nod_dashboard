@@ -618,7 +618,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbyV9QY-Xb7UeD6eXrTu6v2ODapwa-vo6Pw_WDo_GWxYWlP5O1SDi4F7s3ATdynJt_VE/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzBgmNWjbdett4k09AvdWlkEPyyO8JFeF3GZCh6CVjJ3WrJ1LiILhaBX84s3hh5dDRa/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
@@ -7289,6 +7289,14 @@
                             File PDF <span class="font-semibold text-amber-600">Request Order</span> otomatis terlampir setelah klik Download PDF
                         </p>
                     </div>
+                    <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <label class="block text-sm font-semibold text-indigo-700 mb-1">Revisi PO (opsional)</label>
+                        <select id="revisi-po-select" onchange="handleRevisiPOSelect(this.value)"
+                            class="w-full p-2.5 border border-indigo-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">— Memuat daftar No. PO bulan ini... —</option>
+                        </select>
+                        <p id="revisi-po-status" class="text-xs text-gray-400 mt-1"></p>
+                    </div>
                 </div>
             </div>
 
@@ -7353,6 +7361,9 @@
             // lalu pasang autosave agar perubahan berikutnya selalu tersimpan.
             _restoreFormPODraft();
             _attachFormPOAutosave();
+
+            // Muat daftar No. PO bulan berjalan untuk dropdown "Revisi PO"
+            _loadRevisiPODropdown();
         }
 
         /** Kamus shortcut Alamat: ketik key-nya di field Alamat, otomatis diganti alamat lengkap.
@@ -7472,6 +7483,11 @@
         function updatePOPreview() {
             const category = document.getElementById('category').value;
             const preview = document.getElementById('po-preview');
+            if (window._revisiPOActive) {
+                preview.textContent = 'REVISI — ' + window._revisiPOActive;
+                preview.className = 'w-full p-3 border border-indigo-300 rounded-lg bg-indigo-50 text-indigo-700 text-sm font-mono tracking-wide font-bold';
+                return;
+            }
             if (!category || !CATEGORY_CODE[category]) {
                 preview.textContent = 'Pilih kategori untuk melihat preview No. PO';
                 preview.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 text-sm font-mono tracking-wide';
@@ -7591,7 +7607,258 @@
             }
         }
 
+        // =========================================================================
+        // REVISI PO — tarik ulang data PO (No. PO bulan berjalan) dari file PDF
+        // "Request Order" yang tersimpan di Google Drive, lalu isi otomatis form
+        // Form PO agar bisa diedit. Saat disubmit, baris PO_Data yang SAMA (No. PO
+        // tidak berubah) akan ditimpa dengan data terbaru (lihat action 'revisiPO'
+        // di Code.gs), bukan membuat No. PO baru.
+        // =========================================================================
+        window._revisiPOActive = null; // No. PO yang sedang direvisi; null = mode buat PO baru
+
+        /** Konversi teks tanggal "dd/mm/yyyy" (format PO_Data/Retur_Data) ke "yyyy-mm-dd" (input type=date) */
+        function _ddmmyyyyToInputDate(str) {
+            const m = String(str || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (!m) return '';
+            return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        }
+
+        /** Isi baris-baris tabel item Form PO/RO dari hasil parsePOData().items */
+        function _fillItemRowsFromParsed(items, addRowFn, tbodyId) {
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            (items || []).forEach(it => {
+                addRowFn(false);
+                const tr = tbody.querySelector('tr:last-child');
+                if (!tr) return;
+                const idEl = tr.querySelector('.po-item-id');
+                const namaEl = tr.querySelector('.po-item-nama');
+                const qtyEl = tr.querySelector('.po-item-qty');
+                const uomEl = tr.querySelector('.po-item-uom');
+                const descEl = tr.querySelector('.po-item-desc');
+                const noteEl = tr.querySelector('.po-item-note');
+                if (idEl) idEl.value = it.id || '';
+                if (namaEl) { namaEl.value = it.nama_barang || ''; namaEl.title = namaEl.value; }
+                if (qtyEl) qtyEl.value = it.qty_po || '1';
+                if (uomEl) {
+                    const match = [...uomEl.options].find(o => o.value.toLowerCase() === String(it.uom || '').toLowerCase());
+                    uomEl.value = match ? match.value : (uomEl.options[0]?.value || '');
+                }
+                if (descEl) {
+                    const match = [...descEl.options].find(o => o.value.toLowerCase() === String(it.description || '').toLowerCase());
+                    descEl.value = match ? match.value : (descEl.options[descEl.options.length - 1]?.value || '');
+                }
+                if (noteEl) noteEl.value = it.note || '';
+            });
+            if (tbody.querySelectorAll('tr').length === 0) {
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+            }
+        }
+
+        /** Muat dropdown "Revisi PO": daftar No. PO (bukan RO) bulan berjalan, dari nama file PDF di Drive */
+        async function _loadRevisiPODropdown() {
+            const sel = document.getElementById('revisi-po-select');
+            if (!sel) return;
+            sel.innerHTML = `<option value="">— Memuat daftar No. PO bulan ini... —</option>`;
+            try {
+                const res = await fetch(API_URLS.purchaseOrder + '?action=listRequestOrderPDF&monthOnly=1', { redirect: 'follow' });
+                const result = await res.json();
+                if (!result || result.success !== true) {
+                    sel.innerHTML = `<option value="">Gagal memuat daftar No. PO (Code.gs belum di-deploy ulang?)</option>`;
+                    return;
+                }
+                const files = (Array.isArray(result.files) ? result.files : []).filter(f => f.type !== 'RO');
+                files.sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
+                if (files.length === 0) {
+                    sel.innerHTML = `<option value="">Belum ada No. PO bulan ini di Google Drive</option>`;
+                    return;
+                }
+                sel.innerHTML = `<option value="">— Pilih No. PO untuk direvisi (opsional) —</option>` +
+                    files.map(f => `<option value="${f.fileId}" data-no-po="${escapeHtml(f.noPO || '')}">${escapeHtml(f.noPO || f.fileName)}</option>`).join('');
+            } catch (err) {
+                sel.innerHTML = `<option value="">Gagal memuat daftar (${err.message})</option>`;
+            }
+        }
+
+        /** Dipanggil saat user memilih No. PO di dropdown "Revisi PO" */
+        async function handleRevisiPOSelect(fileId) {
+            const sel = document.getElementById('revisi-po-select');
+            const statusEl = document.getElementById('revisi-po-status');
+            if (!fileId) { _exitRevisiPOMode(); return; }
+
+            const noPO = sel?.selectedOptions?.[0]?.dataset?.noPo || '';
+            if (statusEl) { statusEl.textContent = 'Menarik data PO "' + noPO + '" dari Google Drive...'; statusEl.className = 'text-xs text-blue-500 mt-1'; }
+
+            try {
+                // 1. Ambil metadata header dari sheet PO_Data (lebih akurat daripada hasil ekstraksi PDF)
+                const poDataRes = await fetch(API_URLS.purchaseOrder + '?action=getPOData', { redirect: 'follow' });
+                const poRows = await poDataRes.json();
+                const row = Array.isArray(poRows) ? poRows.slice(1).find(r => String(r[1] || '').trim() === noPO) : null;
+
+                // 2. Ambil file PDF Request Order & ekstrak tabel item
+                const pdfRes = await fetch(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const pdfResult = await pdfRes.json();
+                if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
+
+                const byteChars = atob(pdfResult.base64);
+                const byteArray = new Uint8Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const { text: rawText, pageData } = await extractTextFromPDF(new File([blob], pdfResult.fileName || 'Request_Order.pdf', { type: 'application/pdf' }));
+                const parsed = parsePOData(pageData, rawText);
+
+                // 3. Isi field header — utamakan data dari sheet PO_Data, fallback ke hasil parsing PDF
+                const namaEl = document.getElementById('nama');
+                const categoryEl = document.getElementById('category');
+                const alamatEl = document.getElementById('po-alamat');
+                const phoneEl = document.getElementById('po-phone');
+                const shipDateEl = document.getElementById('po-shipping-date');
+                const noteEl = document.getElementById('po-note-khusus');
+
+                const orderedBy = row ? String(row[2] || '') : (parsed.ordered_by || '');
+                const shipTo = row ? String(row[3] || '') : (parsed.ship_to || '');
+                const category = row ? String(row[6] || '') : (parsed.kategori || '');
+                const alamat = row ? String(row[7] || '') : '';
+                const phone = row ? String(row[8] || '') : '';
+                const shippingDateTxt = row ? String(row[9] || '') : '';
+                const noteKhusus = row ? String(row[10] || '') : '';
+
+                if (namaEl && [...namaEl.options].some(o => o.value === orderedBy)) namaEl.value = orderedBy;
+                if (categoryEl && category && CATEGORY_CODE[category]) {
+                    categoryEl.value = category;
+                    await renderShipToField(category === 'Outlet', shipTo);
+                } else {
+                    await renderShipToField(false, shipTo);
+                }
+                const allocatedToEl = document.getElementById('allocated-to');
+                if (allocatedToEl) allocatedToEl.value = shipTo;
+                if (alamatEl) alamatEl.value = alamat;
+                if (phoneEl) phoneEl.value = phone;
+                if (shipDateEl) shipDateEl.value = _ddmmyyyyToInputDate(shippingDateTxt);
+                if (noteEl) noteEl.value = noteKhusus;
+
+                // 4. Isi tabel item dari hasil ekstraksi PDF
+                _fillItemRowsFromParsed(parsed.items, tambahBarisFormPO, 'po-item-table-body');
+
+                // 5. Masuk ke mode Revisi
+                window._revisiPOActive = noPO;
+                updatePOPreview();
+                const submitBtnLabel = document.getElementById('submitBtnLabel');
+                if (submitBtnLabel) submitBtnLabel.textContent = 'Simpan Revisi';
+                _showBatalRevisiButton('po');
+
+                if (statusEl) { statusEl.textContent = '✅ Data PO "' + noPO + '" berhasil ditarik. Form siap diedit — mengisi file PDF baru bersifat opsional.'; statusEl.className = 'text-xs text-green-600 mt-1 font-semibold'; }
+            } catch (err) {
+                if (statusEl) { statusEl.textContent = '❌ Gagal menarik data: ' + err.message; statusEl.className = 'text-xs text-red-500 mt-1'; }
+                showAlert('error', 'Gagal Menarik Data Revisi', err.message);
+                if (sel) sel.value = '';
+            }
+        }
+
+        /** Keluar dari mode Revisi PO, kembali ke mode buat PO baru */
+        function _exitRevisiPOMode() {
+            window._revisiPOActive = null;
+            const submitBtnLabel = document.getElementById('submitBtnLabel');
+            if (submitBtnLabel) submitBtnLabel.textContent = 'Kirim PO';
+            const btnBatal = document.getElementById('batal-revisi-po-btn');
+            if (btnBatal) btnBatal.remove();
+            const sel = document.getElementById('revisi-po-select');
+            if (sel) sel.value = '';
+            const statusEl = document.getElementById('revisi-po-status');
+            if (statusEl) statusEl.textContent = '';
+            updatePOPreview();
+        }
+
+        /** Tambahkan tombol "Batal Revisi" di samping tombol submit (Form PO / Form RO) */
+        function _showBatalRevisiButton(kind) {
+            const containerId = kind === 'po' ? 'submitBtn' : 'retur-submitBtn';
+            const btnId = kind === 'po' ? 'batal-revisi-po-btn' : 'batal-revisi-ro-btn';
+            const exitFnName = kind === 'po' ? '_exitRevisiPOMode' : '_exitRevisiROMode';
+            if (document.getElementById(btnId)) return;
+            const submitBtn = document.getElementById(containerId);
+            if (!submitBtn || !submitBtn.parentElement) return;
+            const btn = document.createElement('button');
+            btn.id = btnId;
+            btn.type = 'button';
+            btn.className = 'flex-1 bg-gray-200 text-gray-700 py-3 px-3 rounded-lg font-bold hover:bg-gray-300 transition duration-200 shadow-sm text-center';
+            btn.textContent = 'Batal Revisi';
+            btn.onclick = () => window[exitFnName]();
+            submitBtn.parentElement.insertBefore(btn, submitBtn);
+        }
+
+        /** Submit khusus mode Revisi PO — menimpa baris PO_Data yang sama (No. PO tetap) */
+        async function _doSubmitRevisiPO() {
+            const noPO = window._revisiPOActive;
+            const namaEl = document.getElementById('nama');
+            const categoryEl = document.getElementById('category');
+            const allocatedToEl = document.getElementById('allocated-to');
+            const fileInput = document.getElementById('pdfFile');
+            const btn = document.getElementById('submitBtn');
+            const btnLabel = document.getElementById('submitBtnLabel');
+
+            if (!namaEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon terlebih dahulu.'); return; }
+            if (!categoryEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih kategori terlebih dahulu.'); return; }
+            if (currentUserRole !== 'ADMIN' && ['Tukar Sleeve', 'TF Stock to Hampers'].includes(categoryEl.value)) {
+                showAlert('error', 'Tidak Diizinkan', 'Kategori ini hanya dapat digunakan oleh Admin.');
+                return;
+            }
+            if (!allocatedToEl || !allocatedToEl.value.trim()) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
+            const shippingDateVal = document.getElementById('po-shipping-date')?.value || '';
+            if (!shippingDateVal) { showAlert('warning', 'Belum Lengkap', 'Isi Shipping Date terlebih dahulu.'); return; }
+
+            const setLoadingState = (loading) => {
+                btn.disabled = loading;
+                btnLabel.textContent = loading ? 'Menyimpan Revisi...' : 'Simpan Revisi';
+            };
+            setLoadingState(true);
+
+            const sendPayload = async (fileData, fileName, fileType) => {
+                const payload = {
+                    action: 'revisiPO',
+                    token: sessionToken,
+                    noPO,
+                    nama: namaEl.value,
+                    allocatedTo: allocatedToEl.value.trim(),
+                    alamat: document.getElementById('po-alamat')?.value?.trim() || '',
+                    phone: document.getElementById('po-phone')?.value?.trim() || '',
+                    shippingDate: shippingDateVal,
+                    noteKhusus: document.getElementById('po-note-khusus')?.value?.trim() || '',
+                    category: categoryEl.value,
+                };
+                if (fileData) { payload.fileData = fileData; payload.fileName = fileName; payload.fileType = fileType; }
+                try {
+                    const response = await fetch(API_URLS.purchaseOrder, {
+                        method: 'POST', redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    if (!result.success) throw new Error(result.message || 'Gagal menyimpan revisi.');
+                    showAlert('success', 'Revisi Tersimpan!', 'No. PO ' + noPO + ' berhasil diperbarui.');
+                    resetFormPO();
+                    _exitRevisiPOMode();
+                    _loadRevisiPODropdown();
+                    _clearDraft(DRAFT_KEYS.formPO);
+                } catch (err) {
+                    showAlert('error', 'Gagal Menyimpan Revisi', err.message);
+                } finally {
+                    setLoadingState(false);
+                }
+            };
+
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => sendPayload(e.target.result.split(',')[1], file.name, file.type);
+                reader.readAsDataURL(file);
+            } else {
+                await sendPayload(null, null, null);
+            }
+        }
+
         async function submitPO() {
+            if (window._revisiPOActive) { return _doSubmitRevisiPO(); }
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
@@ -7736,6 +8003,14 @@
             <div class="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200">
                 <h1 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">Form Return Order</h1>
                 <div class="space-y-4">
+                    <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <label class="block text-sm font-semibold text-indigo-700 mb-1">Revisi RO (opsional)</label>
+                        <select id="revisi-ro-select" onchange="handleRevisiROSelect(this.value)"
+                            class="w-full p-2.5 border border-indigo-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">— Memuat daftar No. RO bulan ini... —</option>
+                        </select>
+                        <p id="revisi-ro-status" class="text-xs text-gray-400 mt-1"></p>
+                    </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">No. RO (otomatis)</label>
                         <div id="retur-po-preview"
@@ -7867,11 +8142,19 @@
             // Restore draft
             await _restoreFormReturDraft();
             _attachFormReturAutosave();
+
+            // Muat daftar No. RO bulan berjalan untuk dropdown "Revisi RO"
+            _loadRevisiRODropdown();
         }
 
         function updateReturPreview() {
             const category = document.getElementById('retur-category').value;
             const preview = document.getElementById('retur-po-preview');
+            if (window._revisiROActive) {
+                preview.textContent = 'REVISI — ' + window._revisiROActive;
+                preview.className = 'w-full p-3 border border-indigo-300 rounded-lg bg-indigo-50 text-indigo-700 text-sm font-mono tracking-wide font-bold';
+                return;
+            }
             if (!category || !CATEGORY_CODE[category]) {
                 preview.textContent = 'Pilih kategori untuk melihat preview No. PO';
                 preview.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 text-sm font-mono tracking-wide';
@@ -7973,7 +8256,200 @@
             }
         }
 
+        // =========================================================================
+        // REVISI RO — sama seperti Revisi PO, tapi untuk Form Return Order (RO)
+        // dan sheet Retur_Data. No. RO tidak berubah, baris yang sama ditimpa.
+        // =========================================================================
+        window._revisiROActive = null; // No. RO yang sedang direvisi; null = mode buat RO baru
+
+        /** Muat dropdown "Revisi RO": daftar No. RO (prefix "Retur-") bulan berjalan, dari nama file PDF di Drive */
+        async function _loadRevisiRODropdown() {
+            const sel = document.getElementById('revisi-ro-select');
+            if (!sel) return;
+            sel.innerHTML = `<option value="">— Memuat daftar No. RO bulan ini... —</option>`;
+            try {
+                const res = await fetch(API_URLS.purchaseOrder + '?action=listRequestOrderPDF&monthOnly=1', { redirect: 'follow' });
+                const result = await res.json();
+                if (!result || result.success !== true) {
+                    sel.innerHTML = `<option value="">Gagal memuat daftar No. RO (Code.gs belum di-deploy ulang?)</option>`;
+                    return;
+                }
+                const files = (Array.isArray(result.files) ? result.files : []).filter(f => f.type === 'RO');
+                files.sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
+                if (files.length === 0) {
+                    sel.innerHTML = `<option value="">Belum ada No. RO bulan ini di Google Drive</option>`;
+                    return;
+                }
+                sel.innerHTML = `<option value="">— Pilih No. RO untuk direvisi (opsional) —</option>` +
+                    files.map(f => `<option value="${f.fileId}" data-no-po="${escapeHtml(f.noPO || '')}">${escapeHtml(f.noPO || f.fileName)}</option>`).join('');
+            } catch (err) {
+                sel.innerHTML = `<option value="">Gagal memuat daftar (${err.message})</option>`;
+            }
+        }
+
+        /** Dipanggil saat user memilih No. RO di dropdown "Revisi RO" */
+        async function handleRevisiROSelect(fileId) {
+            const sel = document.getElementById('revisi-ro-select');
+            const statusEl = document.getElementById('revisi-ro-status');
+            if (!fileId) { _exitRevisiROMode(); return; }
+
+            const noRO = sel?.selectedOptions?.[0]?.dataset?.noPo || '';
+            if (statusEl) { statusEl.textContent = 'Menarik data RO "' + noRO + '" dari Google Drive...'; statusEl.className = 'text-xs text-blue-500 mt-1'; }
+
+            try {
+                // 1. Ambil metadata header dari sheet Retur_Data
+                const roDataRes = await fetch(API_URLS.purchaseOrder + '?action=getReturData', { redirect: 'follow' });
+                const roRows = await roDataRes.json();
+                const row = Array.isArray(roRows) ? roRows.slice(1).find(r => String(r[1] || '').trim() === noRO) : null;
+
+                // 2. Ambil file PDF Request Order (RO) & ekstrak tabel item
+                const pdfRes = await fetch(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const pdfResult = await pdfRes.json();
+                if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
+
+                const byteChars = atob(pdfResult.base64);
+                const byteArray = new Uint8Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const { text: rawText, pageData } = await extractTextFromPDF(new File([blob], pdfResult.fileName || 'Request_Order.pdf', { type: 'application/pdf' }));
+                const parsed = parsePOData(pageData, rawText);
+
+                // 3. Isi field header — utamakan data dari sheet Retur_Data, fallback ke hasil parsing PDF
+                const namaEl = document.getElementById('retur-nama');
+                const categoryEl = document.getElementById('retur-category');
+                const alamatEl = document.getElementById('retur-alamat');
+                const phoneEl = document.getElementById('retur-phone');
+                const shipDateEl = document.getElementById('retur-shipping-date');
+                const noteEl = document.getElementById('retur-note-khusus');
+
+                const orderedBy = row ? String(row[2] || '') : (parsed.ordered_by || '');
+                const shipTo = row ? String(row[3] || '') : (parsed.ship_to || '');
+                const category = row ? String(row[6] || '') : (parsed.kategori || '');
+                const alamat = row ? String(row[7] || '') : '';
+                const phone = row ? String(row[8] || '') : '';
+                const shippingDateTxt = row ? String(row[9] || '') : '';
+                const noteKhusus = row ? String(row[10] || '') : '';
+                const fromLocation = row ? String(row[11] || '') : '';
+
+                if (namaEl && [...namaEl.options].some(o => o.value === orderedBy)) namaEl.value = orderedBy;
+                if (categoryEl && category && CATEGORY_CODE[category]) {
+                    categoryEl.value = category;
+                    await renderFromLocationField(category === 'Outlet', fromLocation);
+                } else {
+                    await renderFromLocationField(false, fromLocation);
+                }
+                const allocatedToEl = document.getElementById('retur-allocated-to');
+                if (allocatedToEl) allocatedToEl.value = shipTo;
+                if (alamatEl) alamatEl.value = alamat;
+                if (phoneEl) phoneEl.value = phone;
+                if (shipDateEl) shipDateEl.value = _ddmmyyyyToInputDate(shippingDateTxt);
+                if (noteEl) noteEl.value = noteKhusus;
+
+                // 4. Isi tabel item dari hasil ekstraksi PDF
+                _fillItemRowsFromParsed(parsed.items, tambahBarisFormRetur, 'retur-item-table-body');
+
+                // 5. Masuk ke mode Revisi
+                window._revisiROActive = noRO;
+                updateReturPreview();
+                const submitBtnLabel = document.getElementById('retur-submitBtnLabel');
+                if (submitBtnLabel) submitBtnLabel.textContent = 'Simpan Revisi';
+                _showBatalRevisiButton('ro');
+
+                if (statusEl) { statusEl.textContent = '✅ Data RO "' + noRO + '" berhasil ditarik. Form siap diedit — mengisi file PDF baru bersifat opsional.'; statusEl.className = 'text-xs text-green-600 mt-1 font-semibold'; }
+            } catch (err) {
+                if (statusEl) { statusEl.textContent = '❌ Gagal menarik data: ' + err.message; statusEl.className = 'text-xs text-red-500 mt-1'; }
+                showAlert('error', 'Gagal Menarik Data Revisi', err.message);
+                if (sel) sel.value = '';
+            }
+        }
+
+        /** Keluar dari mode Revisi RO, kembali ke mode buat RO baru */
+        function _exitRevisiROMode() {
+            window._revisiROActive = null;
+            const submitBtnLabel = document.getElementById('retur-submitBtnLabel');
+            if (submitBtnLabel) submitBtnLabel.textContent = 'Kirim Retur';
+            const btnBatal = document.getElementById('batal-revisi-ro-btn');
+            if (btnBatal) btnBatal.remove();
+            const sel = document.getElementById('revisi-ro-select');
+            if (sel) sel.value = '';
+            const statusEl = document.getElementById('revisi-ro-status');
+            if (statusEl) statusEl.textContent = '';
+            updateReturPreview();
+        }
+
+        /** Submit khusus mode Revisi RO — menimpa baris Retur_Data yang sama (No. RO tetap) */
+        async function _doSubmitRevisiRO() {
+            const noRO = window._revisiROActive;
+            const namaEl = document.getElementById('retur-nama');
+            const categoryEl = document.getElementById('retur-category');
+            const allocatedToEl = document.getElementById('retur-allocated-to');
+            const fileInput = document.getElementById('retur-pdfFile');
+            const btn = document.getElementById('retur-submitBtn');
+            const btnLabel = document.getElementById('retur-submitBtnLabel');
+
+            if (!namaEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon terlebih dahulu.'); return; }
+            if (!categoryEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih kategori terlebih dahulu.'); return; }
+            if (currentUserRole !== 'ADMIN' && ['Tukar Sleeve', 'TF Stock to Hampers'].includes(categoryEl.value)) {
+                showAlert('error', 'Tidak Diizinkan', 'Kategori ini hanya dapat digunakan oleh Admin.');
+                return;
+            }
+            if (!allocatedToEl || !allocatedToEl.value.trim()) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
+            const shippingDateVal = document.getElementById('retur-shipping-date')?.value || '';
+            if (!shippingDateVal) { showAlert('warning', 'Belum Lengkap', 'Isi Shipping Date terlebih dahulu.'); return; }
+
+            const setLoadingState = (loading) => {
+                btn.disabled = loading;
+                btnLabel.textContent = loading ? 'Menyimpan Revisi...' : 'Simpan Revisi';
+            };
+            setLoadingState(true);
+
+            const sendPayload = async (fileData, fileName, fileType) => {
+                const payload = {
+                    action: 'revisiRO',
+                    token: sessionToken,
+                    noRO,
+                    nama: namaEl.value,
+                    allocatedTo: allocatedToEl.value.trim(),
+                    fromLocation: document.getElementById('retur-from-location')?.value?.trim() || '',
+                    alamat: document.getElementById('retur-alamat')?.value?.trim() || '',
+                    phone: document.getElementById('retur-phone')?.value?.trim() || '',
+                    shippingDate: shippingDateVal,
+                    noteKhusus: document.getElementById('retur-note-khusus')?.value?.trim() || '',
+                    category: categoryEl.value,
+                };
+                if (fileData) { payload.fileData = fileData; payload.fileName = fileName; payload.fileType = fileType; }
+                try {
+                    const response = await fetch(API_URLS.purchaseOrder, {
+                        method: 'POST', redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    if (!result.success) throw new Error(result.message || 'Gagal menyimpan revisi.');
+                    showAlert('success', 'Revisi Tersimpan!', 'No. RO ' + noRO + ' berhasil diperbarui.');
+                    resetFormRetur();
+                    _exitRevisiROMode();
+                    _loadRevisiRODropdown();
+                    _clearDraft(DRAFT_KEYS.formRetur);
+                } catch (err) {
+                    showAlert('error', 'Gagal Menyimpan Revisi', err.message);
+                } finally {
+                    setLoadingState(false);
+                }
+            };
+
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => sendPayload(e.target.result.split(',')[1], file.name, file.type);
+                reader.readAsDataURL(file);
+            } else {
+                await sendPayload(null, null, null);
+            }
+        }
+
         async function submitRetur() {
+            if (window._revisiROActive) { return _doSubmitRevisiRO(); }
             const namaEl = document.getElementById('retur-nama');
             const categoryEl = document.getElementById('retur-category');
             const allocatedToEl = document.getElementById('retur-allocated-to');
@@ -9711,6 +10187,7 @@
                             else if (/^(QTY|QUANTITY|JUMLAH)$/.test(up)) cols.qty = tk.x;
                             else if (/^(UOM|UNIT|SATUAN)$/.test(up)) cols.uom = tk.x;
                             else if (/^(DESCRIPTION|DESC|KETERANGAN|DESKRIPSI)$/.test(up)) cols.desc = tk.x;
+                            else if (/^(NOTE|NOTES|CATATAN)$/.test(up)) cols.note = tk.x;
                         }
                         // Jika NAME tidak terdeteksi exact, ambil kolom terlebar (kemungkinan nama barang)
                         if (cols.name === undefined && cols.qty !== undefined) {
@@ -9786,7 +10263,7 @@
                             // angka murni tidak pernah benar-benar milik kolom ID — kalau
                             // diikutkan, nomor urut baris bisa "nyasar" ke kolom ID hanya
                             // karena kebetulan lebih dekat secara horizontal.
-                            allowedCols = colKeys.filter(k => k === 'qty' || k === 'no');
+                            allowedCols = colKeys.filter(k => k === 'qty' || k === 'no' || k === 'note');
                         } else if (isIdCodeToken && colKeys.includes('id')) {
                             // Paksa ke kolom ID, tidak boleh ke Nama/Description
                             allowedCols = ['id'];
@@ -9799,7 +10276,7 @@
                             // ketika posisi X-nya kebetulan lebih dekat ke header ID
                             // daripada ke header Nama Barang (umum terjadi jika header
                             // Nama Barang diberi padding/indentasi lebih besar dari datanya).
-                            allowedCols = colKeys.filter(k => k === 'name' || k === 'desc');
+                            allowedCols = colKeys.filter(k => k === 'name' || k === 'desc' || k === 'note');
                         }
                         if (!allowedCols || allowedCols.length === 0) allowedCols = colKeys;
 
@@ -9815,6 +10292,7 @@
                     const qtyRaw = (buckets.qty || []).join(' ').trim();
                     const uomRaw = (buckets.uom || []).join(' ').trim();
                     const descRaw = (buckets.desc || []).join(' ').trim();
+                    const noteRaw = (buckets.note || []).join(' ').trim();
                     let idStr = (buckets.id || []).join(' ').trim();
 
                     // Safety net: jika kolom ID tidak terdeteksi sama sekali di header
@@ -9868,7 +10346,7 @@
                         desc = found || classifyDescription(namaStr);
                     }
 
-                    items.push({ id: idStr, nama_barang: namaStr, qty_po: qty, uom, description: desc });
+                    items.push({ id: idStr, nama_barang: namaStr, qty_po: qty, uom, description: desc, note: noteRaw });
                 }
             }
 
