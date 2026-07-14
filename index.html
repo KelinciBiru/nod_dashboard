@@ -2219,10 +2219,12 @@
                 }
 
                 const fields = [
+                    { label: 'Tanggal Pembelian', key: 'tanggalPembelian' },
                     { label: 'Type Mesin Pengganti', key: 'typeMesinPengganti' },
                     { label: 'Serial Number Mesin Pengganti', key: 'serialPengganti' },
                     { label: 'ID Device Pengganti', key: 'idDevicePengganti' },
                     { label: 'Tanggal Penukaran', key: 'tanggalPenukaran' },
+                    { label: 'Umur Mesin', key: 'umurMesin' },
                     { label: 'Alasan Ditukar', key: 'alasanDitukar' },
                     { label: 'Serial Number Mesin Sebelumnya', key: 'serialSebelumnya' },
                     { label: 'Sparepart yang Diganti', key: 'sparepartDiganti' },
@@ -2232,14 +2234,10 @@
 
                 let html = '<div class="space-y-3 mb-6 max-w-2xl">';
                 rows.forEach((row) => {
-                    const sudahPernah = (row.statusPenukaran || '').indexOf('Sudah') === 0;
                     html += `
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                         <div class="bg-gray-800 text-white px-4 py-2.5 flex items-center justify-between gap-3">
                             <span class="text-xs font-bold truncate">${escapeHtml(row.namaCustomer || '-')}</span>
-                            <span class="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${sudahPernah ? 'bg-amber-500 text-white' : 'bg-gray-600 text-white'}">
-                                ${escapeHtml(row.statusPenukaran || '-')}
-                            </span>
                         </div>
                         <dl class="divide-y divide-gray-100">
                             ${fields.map(f => {
