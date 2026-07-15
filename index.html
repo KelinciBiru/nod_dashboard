@@ -2356,7 +2356,7 @@
                 <h2 class="text-base font-bold text-gray-700">On Going &amp; Pending</h2>
                 <span id="rsr-ongoing-count" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">0 mesin</span>
             </div>
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-2">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
@@ -2379,6 +2379,7 @@
                     </table>
                 </div>
             </div>
+            <div id="rsr-ongoing-pagination" class="flex items-center justify-between mb-6 flex-wrap gap-2"></div>
 
             <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <h2 class="text-base font-bold text-gray-700">Solved (7 hari terakhir)</h2>
@@ -2416,15 +2417,24 @@
          * - Jika ada tanggal -> sisa hari dari total jatah 5 hari sejak Inbound Date.
          *   Sisa 5..1 -> "5 Hari".."1 Hari"; sisa <= 0 -> "Overdue"
          */
-        function computeSlaText(inboundDateRaw) {
-            if (!inboundDateRaw) return 'Overdue';
+        /**
+         * Hitung sisa hari SLA (kuota 5 hari sejak Inbound Date) dalam bentuk angka, dipakai untuk sorting.
+         * - Tidak ada tanggal / tanggal invalid -> -Infinity (paling overdue, selalu di urutan paling atas)
+         * - Ada tanggal -> 5 - elapsedDays (bisa negatif jika sudah lewat dari 5 hari)
+         */
+        function computeSlaRemainingDays(inboundDateRaw) {
+            if (!inboundDateRaw) return -Infinity;
             const inboundDate = new Date(inboundDateRaw);
-            if (isNaN(inboundDate.getTime())) return 'Overdue';
+            if (isNaN(inboundDate.getTime())) return -Infinity;
             const startInbound = new Date(inboundDate.getFullYear(), inboundDate.getMonth(), inboundDate.getDate());
             const now = new Date();
             const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const elapsedDays = Math.round((startToday - startInbound) / 86400000);
-            const remaining = 5 - elapsedDays;
+            return 5 - elapsedDays;
+        }
+
+        function computeSlaText(inboundDateRaw) {
+            const remaining = computeSlaRemainingDays(inboundDateRaw);
             if (remaining <= 0) return 'Overdue';
             return `${remaining} Hari`;
         }
@@ -2462,12 +2472,60 @@
             </tr>`;
         }
 
+        // State pagination untuk tabel "On Going & Pending" (Report Status Repair)
+        let rsrOngoingAllRows = [];
+        let rsrOngoingCurrentPage = 1;
+        const RSR_ONGOING_PAGE_SIZE = 10;
+
+        /** Render isi tbody & kontrol pagination tabel On Going & Pending sesuai halaman aktif */
+        function renderRsrOngoingPage(page) {
+            const ongoingTbody = document.getElementById('rsr-ongoing-tbody');
+            const paginationEl = document.getElementById('rsr-ongoing-pagination');
+            if (!ongoingTbody) return;
+
+            const totalRows = rsrOngoingAllRows.length;
+            const totalPages = Math.max(1, Math.ceil(totalRows / RSR_ONGOING_PAGE_SIZE));
+            rsrOngoingCurrentPage = Math.min(Math.max(1, page), totalPages);
+
+            const startIdx = (rsrOngoingCurrentPage - 1) * RSR_ONGOING_PAGE_SIZE;
+            const pageRows = rsrOngoingAllRows.slice(startIdx, startIdx + RSR_ONGOING_PAGE_SIZE);
+
+            ongoingTbody.innerHTML = pageRows.length === 0
+                ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                : pageRows.map(row => renderReportStatusRepairRow(row, true)).join('');
+
+            if (paginationEl) {
+                if (totalRows === 0) {
+                    paginationEl.innerHTML = '';
+                } else {
+                    const rangeStart = startIdx + 1;
+                    const rangeEnd = Math.min(startIdx + RSR_ONGOING_PAGE_SIZE, totalRows);
+                    const prevDisabled = rsrOngoingCurrentPage <= 1;
+                    const nextDisabled = rsrOngoingCurrentPage >= totalPages;
+                    paginationEl.innerHTML = `
+                        <span class="text-xs text-gray-500">Menampilkan ${rangeStart}-${rangeEnd} dari ${totalRows} mesin</span>
+                        <div class="flex items-center gap-2">
+                            <button onclick="renderRsrOngoingPage(rsrOngoingCurrentPage - 1)" ${prevDisabled ? 'disabled' : ''}
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold border ${prevDisabled ? 'text-gray-300 border-gray-100 cursor-not-allowed' : 'text-gray-700 border-gray-200 hover:bg-gray-50'}">
+                                ‹ Prev
+                            </button>
+                            <span class="text-xs font-semibold text-gray-600">Halaman ${rsrOngoingCurrentPage} / ${totalPages}</span>
+                            <button onclick="renderRsrOngoingPage(rsrOngoingCurrentPage + 1)" ${nextDisabled ? 'disabled' : ''}
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold border ${nextDisabled ? 'text-gray-300 border-gray-100 cursor-not-allowed' : 'text-gray-700 border-gray-200 hover:bg-gray-50'}">
+                                Next ›
+                            </button>
+                        </div>`;
+                }
+            }
+        }
+
         /** Ambil & render 2 tabel (On Going/Pending & Solved) Report Status Repair dari backend (action=getReportStatusRepair) */
         async function loadReportStatusRepair() {
             const ongoingTbody = document.getElementById('rsr-ongoing-tbody');
             const solvedTbody = document.getElementById('rsr-solved-tbody');
             const ongoingCountEl = document.getElementById('rsr-ongoing-count');
             const solvedCountEl = document.getElementById('rsr-solved-count');
+            const paginationEl = document.getElementById('rsr-ongoing-pagination');
             const btn = document.getElementById('rsr-refresh-btn');
             if (!ongoingTbody || !solvedTbody) return;
 
@@ -2488,12 +2546,22 @@
                 const onGoingRows = result.onGoing || (result.data || []).filter(r => (r.status || '').toLowerCase() !== 'solved');
                 const solvedRows = result.solved || (result.data || []).filter(r => (r.status || '').toLowerCase() === 'solved');
 
+                // Urutkan On Going & Pending:
+                // 1) Status "Pending" selalu di paling atas.
+                // 2) Di antara sisanya (termasuk sesama grup Pending), urutkan berdasarkan urgensi SLA:
+                //    Overdue paling atas, lalu yang sisa harinya paling sedikit (paling mendekati Overdue) berikutnya, dst.
+                onGoingRows.sort((a, b) => {
+                    const aPending = (a.status || '').toLowerCase() === 'pending' ? 0 : 1;
+                    const bPending = (b.status || '').toLowerCase() === 'pending' ? 0 : 1;
+                    if (aPending !== bPending) return aPending - bPending;
+                    return computeSlaRemainingDays(a.inboundDate) - computeSlaRemainingDays(b.inboundDate);
+                });
+
                 if (ongoingCountEl) ongoingCountEl.textContent = `${onGoingRows.length} mesin`;
                 if (solvedCountEl) solvedCountEl.textContent = `${solvedRows.length} mesin`;
 
-                ongoingTbody.innerHTML = onGoingRows.length === 0
-                    ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
-                    : onGoingRows.map(row => renderReportStatusRepairRow(row, true)).join('');
+                rsrOngoingAllRows = onGoingRows;
+                renderRsrOngoingPage(1);
 
                 solvedTbody.innerHTML = solvedRows.length === 0
                     ? `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
@@ -2501,6 +2569,7 @@
             } catch (err) {
                 ongoingTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
                 solvedTbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                if (paginationEl) paginationEl.innerHTML = '';
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
             }
