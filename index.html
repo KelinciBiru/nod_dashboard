@@ -523,6 +523,9 @@
                         </button>
                         <div id="service-center-sub"
                             class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button onclick="navTo('Form Service')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Form
+                                Service</button>
                             <button onclick="navTo('Check Machine')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Check
                                 Machine</button>
@@ -1736,14 +1739,14 @@
                 return;
             }
             // ── AKSES KONTROL: Service Center untuk ADMIN, CS_User, dan Teknisi ──
-            if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(pageName) &&
+            if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician', 'Form Service'].includes(pageName) &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi')) {
                 showAlert('error', 'Akses Ditolak', 'Menu "Service Center" hanya dapat diakses oleh Admin, CS User, dan Teknisi.');
                 return;
             }
             // ── AKSES KONTROL: CS_User & Teknisi HANYA bisa akses Service Center ──
             if ((currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') &&
-                !['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(pageName)) {
+                !['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician', 'Form Service'].includes(pageName)) {
                 showAlert('error', 'Akses Ditolak', 'Role "' + currentUserRole + '" hanya dapat mengakses menu Service Center.');
                 return;
             }
@@ -1767,7 +1770,8 @@
                 'Check Machine': 'Service Center - Check Machine',
                 'Riwayat Penukaran': 'Service Center - Riwayat Penukaran',
                 'Report Status Repair': 'Service Center - Report Status Repair',
-                'Task Technician': 'Service Center - Task Technician'
+                'Task Technician': 'Service Center - Task Technician',
+                'Form Service': 'Service Center - Form Service'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -1819,6 +1823,7 @@
                 case 'Riwayat Penukaran': await showRiwayatPenukaran(); break;
                 case 'Task Technician': await showTaskTechnician(); break;
                 case 'Report Status Repair': await showReportStatusRepair(); break;
+                case 'Form Service': await showFormService(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -3013,6 +3018,858 @@
             <img src="${FOOTER_WATERMARK_LOGO}" alt="" aria-hidden="true"
                  class="hidden sm:block pointer-events-none select-none absolute right-3 bottom-3 md:right-6 md:bottom-6 ${widthClasses} ${opacityClass} -z-10"
                  ${maskStyle}>`;
+        }
+
+        // =========================================================================
+        // HALAMAN: SERVICE CENTER - FORM SERVICE
+        // Akses: ADMIN, CS_User, Teknisi
+        // =========================================================================
+        async function showFormService() {
+            setLoading('Memuat form...');
+            const contentArea = document.getElementById('content-area');
+
+            let namaOptions = '<option value="">-- Pilih Nama --</option>';
+            try {
+                const names = await cachedFetch(API_URLS.purchaseOrder + '?action=getNames', 'getNames');
+                if (Array.isArray(names)) {
+                    names.filter(n => n && String(n).trim() !== '').forEach(name => {
+                        namaOptions += `<option value="${name}">${name}</option>`;
+                    });
+                } else {
+                    namaOptions += '<option disabled>Gagal memuat nama</option>';
+                }
+            } catch (e) {
+                namaOptions += '<option disabled>Gagal memuat nama</option>';
+            }
+
+            contentArea.innerHTML = `
+            <div class="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200">
+                <h1 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-2">Form Service</h1>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">No. Tiket (otomatis)</label>
+                        <div id="fs-preview"
+                            class="w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold">
+                            Service-...-00?
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ordered By</label>
+                        <select id="fs-nama"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                            ${namaOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Category</label>
+                        <input type="text" id="fs-category" value="Service" disabled readonly
+                            class="w-full p-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Tipe Permintaan</label>
+                        <div class="flex items-center gap-6">
+                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" id="fs-type-pickup" onchange="toggleFsType('pickup')"
+                                    class="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400">
+                                Pick Up
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" id="fs-type-return" onchange="toggleFsType('return')"
+                                    class="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400">
+                                Return
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Customer</label>
+                        <input type="text" id="fs-customer"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan nama customer">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat</label>
+                        <input type="text" id="fs-alamat"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan alamat">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">No. Telepon</label>
+                        <input type="tel" id="fs-phone"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Contoh: 08123456789">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">File PDF</label>
+                        <input type="file" id="fs-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
+                        <div id="fs-pdfFile-status"
+                            class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2">
+                            <svg class="h-4 w-4 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <span id="fs-pdfFile-label">Klik "Download PDF" untuk membuat &amp; melampirkan file</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                            <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            File PDF <span class="font-semibold text-amber-600">Service Order</span> otomatis terlampir setelah klik Download PDF
+                        </p>
+                    </div>
+                    <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <label class="block text-sm font-semibold text-indigo-700 mb-1">Revisi Form Service (opsional)</label>
+                        <select id="revisi-fs-select" onchange="handleRevisiFormServiceSelect(this.value)"
+                            class="w-full p-2.5 border border-indigo-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">— Memuat daftar No. Tiket bulan ini... —</option>
+                        </select>
+                        <p id="revisi-fs-status" class="text-xs text-gray-400 mt-1"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabel Item Form Service -->
+            <div class="max-w-4xl mx-auto mt-6 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+                <h2 id="fs-table-title" class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">Detail Item (pilih "Pick Up" atau "Return" terlebih dahulu)</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-800 text-white">
+                                <th class="p-2 text-left rounded-tl-lg" style="min-width:100px">ID</th>
+                                <th class="p-2 text-left" style="min-width:260px">Nama Barang</th>
+                                <th class="p-2 text-center" style="min-width:90px">Qty</th>
+                                <th class="p-2 text-center" style="width:110px">UOM</th>
+                                <th class="p-2 text-left" style="min-width:160px">Serial Number</th>
+                                <th class="p-2 text-left" style="min-width:160px">Remark</th>
+                                <th class="p-2 text-center rounded-tr-lg" style="width:50px">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fs-item-table-body">
+                            <tr data-placeholder>
+                                <td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <button onclick="tambahBarisFormService()" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-xs transition shadow-sm">
+                        <svg class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                        Tambah Baris
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tombol Aksi -->
+            <div class="max-w-4xl mx-auto mt-4 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button id="fs-downloadBtn" onclick="downloadServiceOrderPDF()"
+                        class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-lg font-bold text-sm transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed text-center leading-tight">
+                        <svg id="fs-downloadIcon" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span id="fs-downloadLabel" class="whitespace-nowrap">Download PDF</span>
+                    </button>
+                    <button id="fs-submitBtn" onclick="submitFormService()"
+                        class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
+                        <span id="fs-submitBtnLabel" class="whitespace-nowrap">Kirim Form Service</span>
+                    </button>
+                </div>
+            </div>`;
+
+            // Preload master item (ID + Nama Barang) dari sheet "LIST", sama seperti Form PO
+            preloadSourceItems();
+
+            // Tampilkan preview No. Tiket awal
+            updateFsPreview();
+
+            // Muat daftar No. Tiket bulan berjalan untuk dropdown "Revisi Form Service"
+            _loadRevisiFormServiceDropdown();
+        }
+
+        // ── Tipe Permintaan (Pick Up / Return) — checkbox saling eksklusif ──
+        window._fsType = null; // 'pickup' | 'return' | null
+
+        function toggleFsType(type) {
+            const pickupEl = document.getElementById('fs-type-pickup');
+            const returnEl = document.getElementById('fs-type-return');
+            const titleEl = document.getElementById('fs-table-title');
+            if (type === 'pickup' && pickupEl && pickupEl.checked) {
+                if (returnEl) returnEl.checked = false;
+                window._fsType = 'pickup';
+            } else if (type === 'return' && returnEl && returnEl.checked) {
+                if (pickupEl) pickupEl.checked = false;
+                window._fsType = 'return';
+            } else if (pickupEl && returnEl && !pickupEl.checked && !returnEl.checked) {
+                window._fsType = null;
+            }
+            if (titleEl) {
+                if (window._fsType === 'pickup') titleEl.textContent = 'Tabel Pick Up';
+                else if (window._fsType === 'return') titleEl.textContent = 'Tabel Return';
+                else titleEl.textContent = 'Detail Item (pilih "Pick Up" atau "Return" terlebih dahulu)';
+            }
+        }
+
+        /** Tampilkan preview No. Tiket Form Service: Service-DDMMYYYY-00? */
+        function updateFsPreview() {
+            const preview = document.getElementById('fs-preview');
+            if (!preview) return;
+            if (window._revisiFormServiceActive) {
+                preview.textContent = 'REVISI — ' + window._revisiFormServiceActive;
+                preview.className = 'w-full p-3 border border-indigo-300 rounded-lg bg-indigo-50 text-indigo-700 text-sm font-mono tracking-wide font-bold';
+                return;
+            }
+            preview.textContent = `Service-${formatDateForPO(new Date())}-00?`;
+            preview.className = 'w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold';
+        }
+
+        /** Tambah baris item Form Service: ID, Nama Barang, Qty, UOM, Serial Number, Remark */
+        function tambahBarisFormService(autoFocus = true) {
+            const tbody = document.getElementById('fs-item-table-body');
+            if (!tbody) return;
+            const placeholder = tbody.querySelector('tr[data-placeholder]');
+            if (placeholder) placeholder.remove();
+
+            const UOM_OPTIONS = ['Pcs', 'Box', 'Unit', 'Pack', 'Karton', 'Kg', 'Ltr', 'Lusin', 'Set', 'Roll', 'Sheet', 'Btl', 'Dus', 'Meter'];
+            const uomOpts = UOM_OPTIONS.map(o => `<option value="${o}">${o}</option>`).join('');
+
+            const bg = tbody.querySelectorAll('tr').length % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            const tr = document.createElement('tr');
+            tr.className = `${bg} border-b border-gray-100`;
+
+            tr.innerHTML = `
+                <td class="p-2 align-top">
+                    <input type="text"
+                        class="fs-item-id w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none"
+                        style="min-height:42px;"
+                        placeholder="ID">
+                </td>
+                <td class="p-2 font-medium relative">
+                    <div class="relative">
+                        <div class="fs-item-nama-wrap relative">
+                            <input type="text"
+                                class="fs-item-nama w-full text-sm border border-gray-300 rounded-lg py-2.5 pl-2.5 pr-7 focus:ring-1 focus:ring-amber-400 outline-none bg-white whitespace-normal"
+                                style="min-height:42px;"
+                                placeholder="Ketik atau pilih item..."
+                                autocomplete="off">
+                            <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                        <ul class="autocomplete-list absolute z-50 left-0 top-full mt-1 w-full min-w-[280px] bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto hidden text-sm"></ul>
+                    </div>
+                </td>
+                <td class="p-2 text-center">
+                    <input type="number" min="1" value="1" class="fs-item-qty w-full p-1.5 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none" style="min-width:70px">
+                </td>
+                <td class="p-2 text-center">
+                    <select class="fs-item-uom w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px; min-width:80px;">
+                        ${uomOpts}
+                    </select>
+                </td>
+                <td class="p-2">
+                    <input type="text" class="fs-item-serial w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number">
+                </td>
+                <td class="p-2">
+                    <input type="text" class="fs-item-remark w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Catatan...">
+                </td>
+                <td class="p-2 text-center">
+                    <button onclick="hapusBarisFormService(this)" title="Hapus baris"
+                        class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </td>`;
+
+            tbody.appendChild(tr);
+
+            const input = tr.querySelector('.fs-item-nama');
+            const list = tr.querySelector('.autocomplete-list');
+            const idInput = tr.querySelector('.fs-item-id');
+            attachItemAutocomplete(input, list, tr, tbody, {
+                onEnterNoList: () => { if (input.value.trim()) tambahBarisFormService(); },
+                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
+            });
+
+            if (autoFocus) input.focus();
+            return tr;
+        }
+
+        function hapusBarisFormService(btn) {
+            const tr = btn.closest('tr');
+            const tbody = document.getElementById('fs-item-table-body');
+            if (!tbody) return;
+            tr.remove();
+            if (tbody.querySelectorAll('tr').length === 0) {
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+            }
+        }
+
+        // =========================================================================
+        // FORM SERVICE: DOWNLOAD SERVICE ORDER PDF (mirip Download Request Order PDF di Form PO)
+        // =========================================================================
+        async function downloadServiceOrderPDF() {
+            const dlBtn = document.getElementById('fs-downloadBtn');
+            const dlIcon = document.getElementById('fs-downloadIcon');
+            const dlLabel = document.getElementById('fs-downloadLabel');
+            const setDlLoading = (loading) => {
+                if (!dlBtn) return;
+                dlBtn.disabled = loading;
+                if (dlIcon) dlIcon.classList.toggle('hidden', loading);
+                if (dlLabel) dlLabel.textContent = loading ? 'Memproses...' : 'Download PDF';
+                let spinner = dlBtn.querySelector('.dl-spinner');
+                if (loading) {
+                    if (!spinner) {
+                        spinner = document.createElement('svg');
+                        spinner.className = 'dl-spinner animate-spin h-4 w-4 flex-shrink-0';
+                        spinner.setAttribute('viewBox', '0 0 24 24');
+                        spinner.setAttribute('fill', 'none');
+                        spinner.innerHTML = '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
+                        dlBtn.insertBefore(spinner, dlLabel);
+                    }
+                } else if (spinner) {
+                    spinner.remove();
+                }
+            };
+            setDlLoading(true);
+            try {
+                await downloadServiceOrderPDFInner();
+            } finally {
+                setDlLoading(false);
+            }
+        }
+
+        async function downloadServiceOrderPDFInner() {
+            const namaEl = document.getElementById('fs-nama');
+            const preview = document.getElementById('fs-preview');
+
+            const orderedBy = namaEl ? namaEl.value : '';
+            const type = window._fsType === 'pickup' ? 'Pick Up' : (window._fsType === 'return' ? 'Return' : '');
+            const customer = document.getElementById('fs-customer')?.value?.trim() || '';
+            const alamat = document.getElementById('fs-alamat')?.value?.trim() || '';
+            const phone = document.getElementById('fs-phone')?.value?.trim() || '';
+            const today = new Date().toISOString().split('T')[0];
+
+            if (!orderedBy) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon (Ordered By) terlebih dahulu.'); return; }
+            if (!type) { showAlert('warning', 'Belum Lengkap', 'Pilih tipe "Pick Up" atau "Return" terlebih dahulu.'); return; }
+            if (!customer) { showAlert('warning', 'Belum Lengkap', 'Isi field "Customer" terlebih dahulu.'); return; }
+
+            const rows = document.querySelectorAll('#fs-item-table-body tr:not([data-placeholder])');
+            const items = [];
+            rows.forEach(row => {
+                const nama = row.querySelector('.fs-item-nama')?.value?.trim() || '';
+                if (!nama) return;
+                const id = row.querySelector('.fs-item-id')?.value?.trim() || '';
+                const qty = row.querySelector('.fs-item-qty')?.value || '1';
+                const uom = row.querySelector('.fs-item-uom')?.value || '-';
+                const serial = row.querySelector('.fs-item-serial')?.value?.trim() || '';
+                const remark = row.querySelector('.fs-item-remark')?.value?.trim() || '';
+                items.push({ id, nama, qty, uom, serial, remark });
+            });
+
+            if (items.length === 0) {
+                showAlert('warning', 'Tabel Kosong', 'Tambahkan minimal satu item sebelum download.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const marginX = 14;
+
+            // ── Hitung No. Tiket berikutnya dari data yang sudah ada (jika backend sudah menyediakan endpoint-nya) ──
+            let resolvedTicketNumber = null;
+            const prefix = `Service-${formatDateForPO(new Date())}-`;
+            try {
+                let fsData = [];
+                try {
+                    const r = await fetchWithTimeout(API_URLS.serviceCenter + '?action=getFormServiceData');
+                    const raw = await r.json();
+                    fsData = Array.isArray(raw) ? raw : [];
+                } catch (_) { }
+                let maxSeq = 0;
+                fsData.slice(1).forEach(row => {
+                    const no = String(row[1] || '').trim();
+                    if (no.startsWith(prefix)) {
+                        const seq = parseInt(no.replace(prefix, ''), 10);
+                        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                    }
+                });
+                resolvedTicketNumber = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+            } catch (_) { }
+
+            const ticketLabel = window._revisiFormServiceActive || resolvedTicketNumber ||
+                (preview && preview.textContent.trim() !== 'Service-...-00?' ? preview.textContent.trim() : `${prefix}001`);
+
+            // ── Header Background Image ──
+            try {
+                doc.addImage(HEADER_BG_IMG, 'PNG', 0, 0, pageWidth, 32);
+            } catch (_) { }
+
+            // ── Logo NOD ──
+            const logoData = await loadImageAsDataURL(NOD_LOGO_URL);
+            let logoBottomY = 18;
+            if (logoData) {
+                try {
+                    const dims = getImageFitDims(logoData, 26, 14);
+                    doc.addImage(logoData.dataUrl, logoData.format, marginX, 8, dims.w, dims.h);
+                    logoBottomY = 8 + dims.h;
+                } catch (_) {
+                    drawFallbackLogo(doc, marginX);
+                    logoBottomY = 22;
+                }
+            } else {
+                drawFallbackLogo(doc, marginX);
+                logoBottomY = 22;
+            }
+
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(7.5);
+            doc.setTextColor(120, 113, 108);
+            doc.text('Your All-in-One Drink Maker', marginX, logoBottomY + 4);
+
+            doc.setTextColor(17, 24, 39);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.text('SERVICE ORDER', pageWidth - marginX, 16, { align: 'right' });
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(107, 114, 128);
+            doc.text('No. Tiket: ' + ticketLabel, pageWidth - marginX, 22, { align: 'right' });
+
+            doc.setDrawColor(229, 231, 235);
+            doc.setLineWidth(0.4);
+            doc.line(marginX, 28, pageWidth - marginX, 28);
+
+            let y = 36;
+            doc.setFontSize(10);
+            doc.setTextColor(31, 41, 55);
+
+            const infoLeft = [
+                ['Tanggal', formatTanggalIndo(today)],
+                ['No. Tiket', ticketLabel],
+                ['Ordered By', orderedBy || '-'],
+                ['Category', 'Service'],
+            ];
+            const infoRight = [
+                ['Tipe', type || '-'],
+                ['Customer', customer || '-'],
+                ['Alamat', alamat || '-'],
+                ['No. Telepon', phone || '-'],
+            ];
+
+            const colLeftX = marginX;
+            const colLeftLabelW = 28;
+            const colRightX = pageWidth / 2 + 4;
+            const colRightLabelW = 28;
+            const lineH = 6;
+            const colRightValueX = colRightX + colRightLabelW + 3;
+            const colRightMaxW = pageWidth - marginX - colRightValueX;
+
+            infoLeft.forEach((row, i) => {
+                const yy = y + i * lineH;
+                doc.setFont('helvetica', 'bold'); doc.text(row[0], colLeftX, yy);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colLeftX + colLeftLabelW, yy);
+                doc.text(String(row[1] || '-'), colLeftX + colLeftLabelW + 3, yy);
+            });
+
+            let rightY = y;
+            infoRight.forEach((row) => {
+                if (!row[0]) return;
+                doc.setFont('helvetica', 'bold'); doc.text(row[0], colRightX, rightY);
+                doc.setFont('helvetica', 'normal'); doc.text(':', colRightX + colRightLabelW, rightY);
+                const wrapped = doc.splitTextToSize(String(row[1] || '-'), colRightMaxW);
+                doc.text(wrapped, colRightValueX, rightY);
+                rightY += lineH * wrapped.length;
+            });
+
+            y += Math.max(infoLeft.length * lineH, rightY - y) + 6;
+
+            const tableBody = items.map((it, idx) => [
+                String(idx + 1),
+                it.id || '-',
+                it.nama,
+                it.qty || '-',
+                it.uom || '-',
+                it.serial || '-',
+                it.remark || '-'
+            ]);
+
+            doc.autoTable({
+                startY: y,
+                head: [['No', 'ID', 'Nama Barang', 'Qty', 'UOM', 'Serial Number', 'Remark']],
+                body: tableBody,
+                theme: 'grid',
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
+                headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 8 },
+                    1: { halign: 'center', cellWidth: 18 },
+                    3: { halign: 'center', cellWidth: 14 },
+                    4: { halign: 'center', cellWidth: 16 },
+                    5: { cellWidth: 30 },
+                },
+                margin: { left: marginX, right: marginX },
+            });
+
+            let finalY = doc.lastAutoTable.finalY + 12;
+            const pageHeight = doc.internal.pageSize.getHeight();
+            if (finalY > pageHeight - 90) { doc.addPage(); finalY = 30; }
+
+            const sigColW = (pageWidth - marginX * 2) / 3;
+            const sigLabels = ['Diminta oleh,', 'Diserahkan oleh,', 'Diterima oleh,'];
+            const sigNames = [orderedBy || '', '', ''];
+
+            sigLabels.forEach((label, i) => {
+                const x = marginX + i * sigColW;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(31, 41, 55);
+                doc.text(label, x, finalY);
+                doc.line(x, finalY + 18, x + sigColW - 10, finalY + 18);
+                doc.setFont('helvetica', 'bold');
+                doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
+            });
+
+            const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(180, 180, 180);
+            doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
+
+            const safeCustomer = (customer || '').replace(/[\\/:*?"<>|]/g, '').trim();
+            const fileName = `Service_Order_${ticketLabel}${safeCustomer ? '_' + safeCustomer : ''}.pdf`;
+
+            doc.save(fileName);
+
+            try {
+                const pdfBlob = doc.output('blob');
+                const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(pdfFile);
+                const fileInput = document.getElementById('fs-pdfFile');
+                if (fileInput) {
+                    fileInput.files = dataTransfer.files;
+                    const statusEl = document.getElementById('fs-pdfFile-status');
+                    const labelEl  = document.getElementById('fs-pdfFile-label');
+                    if (statusEl) statusEl.className = 'w-full p-3 border border-green-300 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2';
+                    if (labelEl)  labelEl.textContent = '✓ ' + fileName;
+                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                window._fsResolvedTicket = ticketLabel;
+                showAlert('success', 'PDF Siap', 'Service Order berhasil dibuat dan otomatis dilampirkan.');
+            } catch (err) {
+                showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan coba klik Download PDF sekali lagi.');
+            }
+        }
+
+        // =========================================================================
+        // FORM SERVICE: SUBMIT
+        // =========================================================================
+        async function submitFormService() {
+            if (window._revisiFormServiceActive) { return _doSubmitRevisiFormService(); }
+            const namaEl = document.getElementById('fs-nama');
+            const fileInput = document.getElementById('fs-pdfFile');
+            const btn = document.getElementById('fs-submitBtn');
+            const btnLabel = document.getElementById('fs-submitBtnLabel');
+
+            if (!namaEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon terlebih dahulu.'); return; }
+            if (!window._fsType) { showAlert('warning', 'Belum Lengkap', 'Pilih tipe "Pick Up" atau "Return" terlebih dahulu.'); return; }
+            const customer = document.getElementById('fs-customer')?.value?.trim() || '';
+            if (!customer) { showAlert('warning', 'Belum Lengkap', 'Isi field "Customer" terlebih dahulu.'); return; }
+            const alamat = document.getElementById('fs-alamat')?.value?.trim() || '';
+            if (!alamat) { showAlert('warning', 'Belum Lengkap', 'Isi field "Alamat" terlebih dahulu.'); return; }
+            const phone = document.getElementById('fs-phone')?.value?.trim() || '';
+            if (!phone) { showAlert('warning', 'Belum Lengkap', 'Isi field "No. Telepon" terlebih dahulu.'); return; }
+            const file = fileInput.files[0];
+            if (!file) { showAlert('warning', 'Belum Lengkap', 'Klik "Download PDF" untuk membuat & melampirkan file PDF terlebih dahulu.'); return; }
+
+            const rows = document.querySelectorAll('#fs-item-table-body tr:not([data-placeholder])');
+            const items = [];
+            rows.forEach(row => {
+                const nama = row.querySelector('.fs-item-nama')?.value?.trim() || '';
+                if (!nama) return;
+                items.push({
+                    id: row.querySelector('.fs-item-id')?.value?.trim() || '',
+                    nama,
+                    qty: row.querySelector('.fs-item-qty')?.value || '1',
+                    uom: row.querySelector('.fs-item-uom')?.value || '-',
+                    serial: row.querySelector('.fs-item-serial')?.value?.trim() || '',
+                    remark: row.querySelector('.fs-item-remark')?.value?.trim() || '',
+                });
+            });
+            if (items.length === 0) { showAlert('warning', 'Tabel Kosong', 'Tambahkan minimal satu item terlebih dahulu.'); return; }
+
+            const setSubmitLoading = (loading) => {
+                btn.disabled = loading;
+                let spinner = btn.querySelector('.submit-spinner');
+                if (loading) {
+                    if (!spinner) {
+                        spinner = document.createElement('svg');
+                        spinner.className = 'submit-spinner animate-spin h-4 w-4 flex-shrink-0';
+                        spinner.setAttribute('viewBox', '0 0 24 24');
+                        spinner.setAttribute('fill', 'none');
+                        spinner.innerHTML = '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
+                        btn.insertBefore(spinner, btnLabel);
+                    }
+                    btnLabel.textContent = 'Mengirim...';
+                } else {
+                    if (spinner) spinner.remove();
+                    btnLabel.textContent = 'Kirim Form Service';
+                }
+            };
+
+            setSubmitLoading(true);
+
+            const reader = new FileReader();
+            reader.onload = async function (e) {
+                const payload = {
+                    action: 'submitFormService',
+                    token: sessionToken,
+                    noTiket: window._fsResolvedTicket || document.getElementById('fs-preview')?.textContent?.trim() || '',
+                    orderedBy: namaEl.value,
+                    category: 'Service',
+                    type: window._fsType === 'pickup' ? 'Pick Up' : 'Return',
+                    customer,
+                    alamat,
+                    phone,
+                    tanggal: formatDateForPO(new Date()),
+                    items,
+                    fileData: e.target.result.split(',')[1],
+                    fileName: file.name,
+                    fileType: file.type,
+                };
+                try {
+                    const response = await fetch(API_URLS.serviceCenter, {
+                        method: 'POST',
+                        redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    showAlert('success', 'Form Service Berhasil Dikirim!', 'No. Tiket: ' + (result.noTiket || result.ticket || payload.noTiket));
+                    resetFormService();
+                } catch (err) {
+                    showAlert('error', 'Gagal Mengirim Form Service', err.message);
+                } finally {
+                    setSubmitLoading(false);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        /** Reset semua kotak pengisian di Form Service agar siap digunakan kembali */
+        function resetFormService() {
+            const namaEl = document.getElementById('fs-nama');
+            const pickupEl = document.getElementById('fs-type-pickup');
+            const returnEl = document.getElementById('fs-type-return');
+            const customerEl = document.getElementById('fs-customer');
+            const alamatEl = document.getElementById('fs-alamat');
+            const phoneEl = document.getElementById('fs-phone');
+            const fileInput = document.getElementById('fs-pdfFile');
+            const tbody = document.getElementById('fs-item-table-body');
+            const titleEl = document.getElementById('fs-table-title');
+
+            if (namaEl) namaEl.selectedIndex = 0;
+            if (pickupEl) pickupEl.checked = false;
+            if (returnEl) returnEl.checked = false;
+            window._fsType = null;
+            if (titleEl) titleEl.textContent = 'Detail Item (pilih "Pick Up" atau "Return" terlebih dahulu)';
+            if (customerEl) customerEl.value = '';
+            if (alamatEl) alamatEl.value = '';
+            if (phoneEl) phoneEl.value = '';
+            if (fileInput) fileInput.value = '';
+
+            const statusEl = document.getElementById('fs-pdfFile-status');
+            const labelEl  = document.getElementById('fs-pdfFile-label');
+            if (statusEl) statusEl.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2';
+            if (labelEl)  labelEl.textContent = 'Klik "Download PDF" untuk membuat & melampirkan file';
+
+            if (tbody) {
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+            }
+
+            window._fsResolvedTicket = null;
+            updateFsPreview();
+        }
+
+        // =========================================================================
+        // REVISI FORM SERVICE — tarik ulang data tiket yang sudah ada agar bisa diedit.
+        // Saat disubmit, baris data yang SAMA (No. Tiket tidak berubah) akan ditimpa
+        // dengan data terbaru (lihat action 'revisiFormService' di Code.gs), bukan
+        // membuat No. Tiket baru.
+        // =========================================================================
+        window._revisiFormServiceActive = null; // No. Tiket yang sedang direvisi; null = mode buat baru
+        let _fsRevisiListCache = null;
+
+        /** Muat dropdown "Revisi Form Service": daftar No. Tiket bulan berjalan dari action 'getFormServiceList' */
+        async function _loadRevisiFormServiceDropdown() {
+            const sel = document.getElementById('revisi-fs-select');
+            const status = document.getElementById('revisi-fs-status');
+            if (!sel) return;
+            try {
+                const res = await fetchWithTimeout(API_URLS.serviceCenter + '?action=getFormServiceList');
+                const raw = await res.json();
+                const list = Array.isArray(raw) ? raw : [];
+                _fsRevisiListCache = list;
+                let options = '<option value="">— Buat Form Service baru —</option>';
+                list.forEach((item, idx) => {
+                    const noTiket = item.noTiket || item.no_tiket || item.ticket || '';
+                    if (!noTiket) return;
+                    options += `<option value="${idx}">${escapeHtml(noTiket)}</option>`;
+                });
+                sel.innerHTML = options;
+                if (status) status.textContent = list.length ? '' : 'Belum ada tiket bulan ini.';
+            } catch (err) {
+                sel.innerHTML = '<option value="">— Gagal memuat daftar tiket —</option>';
+                if (status) status.textContent = 'Gagal memuat daftar No. Tiket.';
+            }
+        }
+
+        /** Dipanggil saat user memilih No. Tiket di dropdown "Revisi Form Service" */
+        async function handleRevisiFormServiceSelect(idx) {
+            if (idx === '' || idx === null || typeof idx === 'undefined') { _exitRevisiFormServiceMode(); return; }
+            const item = _fsRevisiListCache && _fsRevisiListCache[idx];
+            if (!item) { _exitRevisiFormServiceMode(); return; }
+
+            const noTiket = item.noTiket || item.no_tiket || item.ticket || '';
+            window._revisiFormServiceActive = noTiket;
+
+            const namaEl = document.getElementById('fs-nama');
+            if (namaEl && item.orderedBy && [...namaEl.options].some(o => o.value === item.orderedBy)) {
+                namaEl.value = item.orderedBy;
+            }
+            const type = String(item.type || '').toLowerCase();
+            const pickupEl = document.getElementById('fs-type-pickup');
+            const returnEl = document.getElementById('fs-type-return');
+            if (type.includes('pick') && pickupEl) { pickupEl.checked = true; toggleFsType('pickup'); }
+            else if (type.includes('return') && returnEl) { returnEl.checked = true; toggleFsType('return'); }
+
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+            setVal('fs-customer', item.customer);
+            setVal('fs-alamat', item.alamat);
+            setVal('fs-phone', item.phone);
+
+            const tbody = document.getElementById('fs-item-table-body');
+            if (tbody) {
+                tbody.innerHTML = '';
+                (item.items || []).forEach(it => {
+                    const tr = tambahBarisFormService(false);
+                    if (!tr) return;
+                    const idEl = tr.querySelector('.fs-item-id');
+                    const namaBarangEl = tr.querySelector('.fs-item-nama');
+                    const qtyEl = tr.querySelector('.fs-item-qty');
+                    const uomEl = tr.querySelector('.fs-item-uom');
+                    const serialEl = tr.querySelector('.fs-item-serial');
+                    const remarkEl = tr.querySelector('.fs-item-remark');
+                    if (idEl) idEl.value = it.id || '';
+                    if (namaBarangEl) { namaBarangEl.value = it.nama || ''; namaBarangEl.title = namaBarangEl.value; }
+                    if (qtyEl) qtyEl.value = it.qty || '1';
+                    if (uomEl) {
+                        const match = [...uomEl.options].find(o => o.value.toLowerCase() === String(it.uom || '').toLowerCase());
+                        uomEl.value = match ? match.value : (uomEl.options[0]?.value || '');
+                    }
+                    if (serialEl) serialEl.value = it.serial || '';
+                    if (remarkEl) remarkEl.value = it.remark || '';
+                });
+                if (tbody.querySelectorAll('tr').length === 0) {
+                    tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+                }
+            }
+
+            updateFsPreview();
+            const submitBtnLabel = document.getElementById('fs-submitBtnLabel');
+            if (submitBtnLabel) submitBtnLabel.textContent = 'Simpan Revisi';
+            _showBatalRevisiButton('fs');
+
+            const status = document.getElementById('revisi-fs-status');
+            if (status) status.textContent = 'Mode revisi aktif untuk ' + noTiket + '. Data lama sudah dimuat ke form.';
+        }
+
+        /** Keluar dari mode Revisi Form Service, kembali ke mode buat tiket baru */
+        function _exitRevisiFormServiceMode() {
+            window._revisiFormServiceActive = null;
+            const submitBtnLabel = document.getElementById('fs-submitBtnLabel');
+            if (submitBtnLabel) submitBtnLabel.textContent = 'Kirim Form Service';
+            const cancelBtn = document.getElementById('batal-revisi-fs-btn');
+            if (cancelBtn) cancelBtn.remove();
+            const status = document.getElementById('revisi-fs-status');
+            if (status) status.textContent = '';
+            updateFsPreview();
+        }
+
+        /** Submit khusus mode Revisi Form Service — menimpa baris data yang sama (No. Tiket tetap) */
+        async function _doSubmitRevisiFormService() {
+            const namaEl = document.getElementById('fs-nama');
+            const fileInput = document.getElementById('fs-pdfFile');
+            const btn = document.getElementById('fs-submitBtn');
+            const btnLabel = document.getElementById('fs-submitBtnLabel');
+            const noTiket = window._revisiFormServiceActive;
+
+            if (!namaEl.value) { showAlert('warning', 'Belum Lengkap', 'Pilih nama pemohon terlebih dahulu.'); return; }
+            if (!window._fsType) { showAlert('warning', 'Belum Lengkap', 'Pilih tipe "Pick Up" atau "Return" terlebih dahulu.'); return; }
+            const customer = document.getElementById('fs-customer')?.value?.trim() || '';
+            const alamat = document.getElementById('fs-alamat')?.value?.trim() || '';
+            const phone = document.getElementById('fs-phone')?.value?.trim() || '';
+
+            const rows = document.querySelectorAll('#fs-item-table-body tr:not([data-placeholder])');
+            const items = [];
+            rows.forEach(row => {
+                const nama = row.querySelector('.fs-item-nama')?.value?.trim() || '';
+                if (!nama) return;
+                items.push({
+                    id: row.querySelector('.fs-item-id')?.value?.trim() || '',
+                    nama,
+                    qty: row.querySelector('.fs-item-qty')?.value || '1',
+                    uom: row.querySelector('.fs-item-uom')?.value || '-',
+                    serial: row.querySelector('.fs-item-serial')?.value?.trim() || '',
+                    remark: row.querySelector('.fs-item-remark')?.value?.trim() || '',
+                });
+            });
+
+            const setSubmitLoading = (loading) => {
+                btn.disabled = loading;
+                btnLabel.textContent = loading ? 'Menyimpan Revisi...' : 'Simpan Revisi';
+            };
+            setSubmitLoading(true);
+
+            const finishSubmit = async (fileData, fileName, fileType) => {
+                const payload = {
+                    action: 'revisiFormService',
+                    token: sessionToken,
+                    noTiket,
+                    orderedBy: namaEl.value,
+                    category: 'Service',
+                    type: window._fsType === 'pickup' ? 'Pick Up' : 'Return',
+                    customer, alamat, phone,
+                    items,
+                };
+                if (fileData) { payload.fileData = fileData; payload.fileName = fileName; payload.fileType = fileType; }
+                try {
+                    const response = await fetch(API_URLS.serviceCenter, {
+                        method: 'POST',
+                        redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    showAlert('success', 'Revisi Tersimpan!', 'No. Tiket ' + noTiket + ' berhasil diperbarui.');
+                    resetFormService();
+                    _exitRevisiFormServiceMode();
+                    _loadRevisiFormServiceDropdown();
+                } catch (err) {
+                    showAlert('error', 'Gagal Menyimpan Revisi', err.message);
+                } finally {
+                    setSubmitLoading(false);
+                }
+            };
+
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => finishSubmit(e.target.result.split(',')[1], file.name, file.type);
+                reader.readAsDataURL(file);
+            } else {
+                await finishSubmit(null, null, null);
+            }
         }
 
         // =========================================================================
@@ -8048,9 +8905,9 @@
 
         /** Tambahkan tombol "Batal Revisi" di samping tombol submit (Form PO / Form RO) */
         function _showBatalRevisiButton(kind) {
-            const containerId = kind === 'po' ? 'submitBtn' : 'retur-submitBtn';
-            const btnId = kind === 'po' ? 'batal-revisi-po-btn' : 'batal-revisi-ro-btn';
-            const exitFnName = kind === 'po' ? '_exitRevisiPOMode' : '_exitRevisiROMode';
+            const containerId = kind === 'po' ? 'submitBtn' : (kind === 'fs' ? 'fs-submitBtn' : 'retur-submitBtn');
+            const btnId = kind === 'po' ? 'batal-revisi-po-btn' : (kind === 'fs' ? 'batal-revisi-fs-btn' : 'batal-revisi-ro-btn');
+            const exitFnName = kind === 'po' ? '_exitRevisiPOMode' : (kind === 'fs' ? '_exitRevisiFormServiceMode' : '_exitRevisiROMode');
             if (document.getElementById(btnId)) return;
             const submitBtn = document.getElementById(containerId);
             if (!submitBtn || !submitBtn.parentElement) return;
