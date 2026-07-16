@@ -3296,7 +3296,7 @@
             }
         }
 
-        window.handleFsCustomerSelect = function(idx) {
+        window.handleFsCustomerSelect = async function(idx) {
             const list = window._fsCustomerListCache;
             if (!list || !list[idx]) {
                 // Kosongkan Alamat & Phone jika tidak ada pilihan
@@ -3311,7 +3311,283 @@
             const phoneEl = document.getElementById('fs-phone');
             if (alamatEl) alamatEl.value = item.alamat || '';
             if (phoneEl) phoneEl.value = item.phone || '';
+
+            // Auto-fill PDF dan tabel item dari PDF yang sudah ada di Drive
+            // (khusus tipe Return)
+            if (window._fsType === 'return' && item.customer) {
+                await _autoFillFsPdfAndItems(item.customer);
+            }
         };
+
+        /** Auto-fill PDF file input dan tabel item dari PDF Customer di Drive (untuk Return) */
+        async function _autoFillFsPdfAndItems(customerName) {
+            const fileInput = document.getElementById('fs-pdfFile');
+            const statusEl = document.getElementById('fs-pdfFile-status');
+            const labelEl = document.getElementById('fs-pdfFile-label');
+
+            try {
+                const url = API_URLS.purchaseOrder + '?action=getFormServicePDFByCustomer&customer=' + encodeURIComponent(customerName);
+                const res = await fetchWithTimeout(url);
+                const result = await res.json();
+
+                if (!result.success || !result.fileData) {
+                    // PDF tidak ditemukan, kosongkan
+                    if (fileInput) fileInput.value = '';
+                    if (statusEl) statusEl.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2';
+                    if (labelEl) labelEl.textContent = 'PDF tidak ditemukan untuk Customer ini. Klik "Download PDF" untuk membuat baru.';
+                    return;
+                }
+
+                // Konversi base64 ke File object dan masukkan ke file input
+                const byteChars = atob(result.fileData);
+                const byteNumbers = new Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) {
+                    byteNumbers[i] = byteChars.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const file = new File([blob], result.fileName, { type: 'application/pdf' });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                if (fileInput) {
+                    fileInput.files = dataTransfer.files;
+                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                if (statusEl) statusEl.className = 'w-full p-3 border border-green-300 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2';
+                if (labelEl) labelEl.textContent = '✓ ' + result.fileName + ' (auto-filled dari Drive)';
+
+                // Simpan resolved ticket dari nama file untuk submit nanti
+                // Format: "Service_Order_Service-16072026-001_opiq.pdf" atau "Pengembalian_Unit_Retur-Service-16072026-001_opiq.pdf"
+                const match = result.fileName.match(/(?:Service-(\d{8})-(\d+))|(?:Retur-Service-(\d{8})-(\d+))/);
+                if (match) {
+                    const ticketNo = match[0]; // e.g. "Service-16072026-001" atau "Retur-Service-16072026-001"
+                    window._fsResolvedTicket = ticketNo;
+                    updateFsPreview();
+                }
+
+                // Ekstrak item dari PDF dan isi tabel
+                await _extractAndFillFsItemsFromPdf(result.fileData, result.fileName);
+
+            } catch (err) {
+                if (statusEl) statusEl.className = 'w-full p-3 border border-orange-200 rounded-lg bg-orange-50 text-orange-700 text-sm flex items-center gap-2';
+                if (labelEl) labelEl.textContent = 'Gagal mengambil PDF: ' + err.message;
+            }
+        }
+
+        /** Ekstrak item dari PDF Form Service dan isi tabel — parser khusus untuk layout
+         *  Form Service PDF: No | ID | Nama Barang | Qty | UOM | Serial Number | Remark
+         *  Hanya ekstrak: ID, Nama Barang, Qty, UOM, Serial Number (abaikan No dan Remark) */
+        async function _extractAndFillFsItemsFromPdf(base64Data, fileName) {
+            const tbody = document.getElementById('fs-item-table-body');
+            if (!tbody) return;
+
+            try {
+                // Konversi base64 → File object
+                const byteChars = atob(base64Data);
+                const byteArray = new Uint8Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const pdfFile = new File([blob], fileName || 'Service_Order.pdf', { type: 'application/pdf' });
+
+                // Gunakan extractTextFromPDF yang sudah ada untuk mendapat pageData + rawText
+                const { text: rawText, pageData } = await extractTextFromPDF(pdfFile);
+
+                // Kosongkan tabel dulu
+                tbody.innerHTML = '';
+
+                // Cek apakah rawText mengandung header tabel Form Service
+                const lowerText = rawText.toLowerCase();
+                if (lowerText.indexOf('nama barang') === -1) {
+                    // Bukan PDF Form Service atau tidak ada tabel item
+                    tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">PDF tidak mengandung tabel item. Klik "Tambah Baris" untuk menambah item manual.</td></tr>';
+                    return;
+                }
+
+                const allItems = [];
+
+                for (const rows of pageData) {
+                    if (!rows || rows.length === 0) continue;
+
+                    // Cari baris header: baris yang punya token "Nama Barang" (atau "Nama" + "Barang")
+                    let headerRowIdx = -1;
+                    let headerTokens = []; // semua token di baris header
+                    for (let ri = 0; ri < rows.length; ri++) {
+                        const joined = rows[ri].tokens.map(t => t.str.toLowerCase().trim()).join(' ');
+                        if (joined.indexOf('nama') !== -1 && joined.indexOf('barang') !== -1) {
+                            headerRowIdx = ri;
+                            headerTokens = rows[ri].tokens.map(t => ({ str: t.str.trim(), x: t.x }));
+                            break;
+                        }
+                    }
+                    if (headerRowIdx === -1) continue;
+
+                    console.log('[FS] Header found at row', headerRowIdx, 'tokens:', headerTokens.map(t => t.str + '@' + t.x).join(', '));
+
+                    // Bangun daftar kolom dari header berdasarkan X-position
+                    // Hanya ambil kolom yang dibutuhkan: ID, Nama Barang, Qty, UOM, Serial Number
+                    const headerKeywords = []; // [{ name, x }]
+                    let pendingTokens = [];
+                    for (const ht of headerTokens) {
+                        pendingTokens.push(ht);
+                    }
+                    // Gabungkan token yang sangat berdekatan (gap < 10pt) → satu "sel header"
+                    const cells = [];
+                    let currentCell = [pendingTokens[0]];
+                    for (let i = 1; i < pendingTokens.length; i++) {
+                        const prev = pendingTokens[i - 1];
+                        const curr = pendingTokens[i];
+                        const gap = curr.x - prev.x; // jarak absolut antar token
+                        if (gap < 10) {
+                            currentCell.push(curr);
+                        } else {
+                            cells.push(currentCell);
+                            currentCell = [curr];
+                        }
+                    }
+                    cells.push(currentCell);
+
+                    // Cocokkan setiap cell ke nama kolom (hanya yang dibutuhkan)
+                    for (const cell of cells) {
+                        const cellText = cell.map(t => t.str).join(' ').toLowerCase().trim();
+                        const cellX = cell[0].x;
+                        if (cellText === 'id') {
+                            headerKeywords.push({ name: 'id', x: cellX });
+                        } else if (cellText.indexOf('nama') !== -1) {
+                            headerKeywords.push({ name: 'nama', x: cellX });
+                        } else if (cellText === 'qty') {
+                            headerKeywords.push({ name: 'qty', x: cellX });
+                        } else if (cellText === 'uom') {
+                            headerKeywords.push({ name: 'uom', x: cellX });
+                        } else if (cellText.indexOf('serial') !== -1) {
+                            headerKeywords.push({ name: 'serial', x: cellX });
+                        }
+                        // Abaikan "No" dan "Remark"
+                    }
+
+                    // Sort by X
+                    headerKeywords.sort((a, b) => a.x - b.x);
+                    if (headerKeywords.length < 3) continue; // terlalu sedikit kolom, skip
+
+                    console.log('[FS] Columns detected:', headerKeywords.map(k => k.name + '@' + k.x).join(', '));
+
+                    // Baca baris data setelah header
+                    let dataRowCount = 0;
+                    let colBoundaries = null; // akan dihitung dari baris data pertama
+
+                    for (let ri = headerRowIdx + 1; ri < rows.length; ri++) {
+                        const row = rows[ri];
+                        if (!row || !row.tokens || row.tokens.length === 0) continue;
+
+                        // Skip baris footer/total
+                        const rowText = row.tokens.map(t => t.str).join(' ').toLowerCase();
+                        if (rowText.includes('total') || rowText.includes('diminta oleh') || rowText.includes('diserahkan') || rowText.includes('catatan')) break;
+
+                        // Debug: log first 3 data rows
+                        if (dataRowCount < 3) {
+                            console.log(`[FS] Data row ${dataRowCount}:`, row.tokens.map(t => t.str + '@' + t.x).join(', '));
+                        }
+
+                        // Hitung boundary kolom dari baris data pertama yang valid
+                        if (!colBoundaries && row.tokens.length >= 3) {
+                            // Group tokens by X position (tolerance 10pt)
+                            const groups = [];
+                            let currentGroup = { x: row.tokens[0].x, tokens: [row.tokens[0]] };
+                            for (let i = 1; i < row.tokens.length; i++) {
+                                const t = row.tokens[i];
+                                if (t.x - currentGroup.x < 10) {
+                                    currentGroup.tokens.push(t);
+                                } else {
+                                    groups.push(currentGroup);
+                                    currentGroup = { x: t.x, tokens: [t] };
+                                }
+                            }
+                            groups.push(currentGroup);
+
+                            // Skip first group if it looks like "No" column (single digit/number)
+                            let startIdx = 0;
+                            if (groups.length > headerKeywords.length) {
+                                const firstGroupText = groups[0].tokens.map(t => t.str).join(' ').trim();
+                                if (/^\d+$/.test(firstGroupText)) {
+                                    startIdx = 1; // skip "No" column
+                                }
+                            }
+
+                            // Build boundaries from data groups
+                            colBoundaries = [];
+                            for (let gi = startIdx; gi < groups.length && colBoundaries.length < headerKeywords.length; gi++) {
+                                const g = groups[gi];
+                                const nextG = (gi + 1 < groups.length) ? groups[gi + 1] : null;
+                                colBoundaries.push({
+                                    name: headerKeywords[colBoundaries.length].name,
+                                    left: g.x - 5,
+                                    right: nextG ? nextG.x - 5 : Infinity
+                                });
+                            }
+                            console.log('[FS] Column boundaries from data:', colBoundaries.map(b => b.name + ':' + b.left + '-' + b.right).join(', '));
+                        }
+
+                        dataRowCount++;
+
+                        // Distribusikan token ke kolom berdasarkan boundary
+                        const colValues = {};
+                        if (colBoundaries) {
+                            for (const bound of colBoundaries) {
+                                const tokens = row.tokens.filter(t => {
+                                    return t.x >= bound.left && t.x < bound.right;
+                                });
+                                colValues[bound.name] = tokens.map(t => t.str.trim()).join(' ').trim();
+                            }
+                        }
+
+                        if (dataRowCount <= 3) {
+                            console.log(`[FS] Data row ${dataRowCount - 1} colValues:`, colValues);
+                        }
+
+                        const nama = colValues.nama || '';
+                        if (!nama || /^\d+$/.test(nama)) continue; // skip jika kosong atau hanya angka
+
+                        allItems.push({
+                            id: colValues.id || '',
+                            nama_barang: nama,
+                            qty: colValues.qty || '1',
+                            uom: colValues.uom || '-',
+                            serial: colValues.serial || ''
+                        });
+                    }
+                }
+
+                // Isi tabel dengan item yang diekstrak
+                console.log('[FS] Total items extracted:', allItems.length, allItems);
+                if (allItems.length > 0) {
+                    allItems.forEach(it => {
+                        const tr = tambahBarisFormService(false);
+                        if (!tr) return;
+                        const idEl = tr.querySelector('.fs-item-id');
+                        const namaEl = tr.querySelector('.fs-item-nama');
+                        const qtyEl = tr.querySelector('.fs-item-qty');
+                        const uomEl = tr.querySelector('.fs-item-uom');
+                        const serialEl = tr.querySelector('.fs-item-serial');
+                        if (idEl) idEl.value = it.id || '';
+                        if (namaEl) { namaEl.value = it.nama_barang || ''; namaEl.title = namaEl.value; }
+                        if (qtyEl) qtyEl.value = it.qty || '1';
+                        if (uomEl) {
+                            const match = [...uomEl.options].find(o => o.value.toLowerCase() === String(it.uom || '').toLowerCase());
+                            uomEl.value = match ? match.value : (uomEl.options[0]?.value || '-');
+                        }
+                        if (serialEl) serialEl.value = it.serial || '';
+                        // Remark tidak diisi dari PDF
+                    });
+                } else {
+                    // Tidak ada item yang diekstrak, tampilkan placeholder
+                    tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+                }
+
+            } catch (err) {
+                console.error('[FS] Ekstraksi PDF gagal:', err);
+                // Ekstraksi gagal, biarkan tabel kosong
+                tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Gagal ekstraksi PDF. Klik "Tambah Baris" untuk menambah item manual.</td></tr>';
+            }
+        }
 
         // ── Status Category (Warranty / Non-Warranty) — checkbox saling eksklusif ──
         window._fsStatusCategory = null; // 'warranty' | 'nonwarranty' | null
@@ -3330,7 +3606,7 @@
             }
         }
 
-        /** Tampilkan preview No. Tiket Form Service: Service-DDMMYYYY-00? */
+        /** Tampilkan preview No. Tiket Form Service: Service-DDMMYYYY-00? atau Retur-Service-DDMMYYYY-00? */
         function updateFsPreview() {
             const preview = document.getElementById('fs-preview');
             if (!preview) return;
@@ -3339,7 +3615,8 @@
                 preview.className = 'w-full p-3 border border-indigo-300 rounded-lg bg-indigo-50 text-indigo-700 text-sm font-mono tracking-wide font-bold';
                 return;
             }
-            preview.textContent = `Service-${formatDateForPO(new Date())}-00?`;
+            const prefix = window._fsType === 'return' ? 'Retur-Service' : 'Service';
+            preview.textContent = `${prefix}-${formatDateForPO(new Date())}-00?`;
             preview.className = 'w-full p-3 border border-amber-200 rounded-lg bg-amber-50 text-amber-700 text-sm font-mono tracking-wide font-bold';
         }
 
@@ -3466,7 +3743,17 @@
 
             const orderedBy = namaEl ? namaEl.value : '';
             const type = window._fsType === 'pickup' ? 'Pick Up' : (window._fsType === 'return' ? 'Return' : '');
-            const customer = document.getElementById('fs-customer')?.value?.trim() || '';
+            // Ambil nilai Customer dari sumber yang benar tergantung Tipe Permintaan:
+            // - Return: dari dropdown (fs-customer-select), nilai = nama customer dari cache
+            // - Pick Up: dari input teks (fs-customer)
+            let customer = '';
+            if (window._fsType === 'return') {
+                const selIdx = document.getElementById('fs-customer-select')?.value;
+                const list = window._fsCustomerListCache || [];
+                customer = (list[selIdx] && list[selIdx].customer) || '';
+            } else {
+                customer = document.getElementById('fs-customer')?.value?.trim() || '';
+            }
             const alamat = document.getElementById('fs-alamat')?.value?.trim() || '';
             const phone = document.getElementById('fs-phone')?.value?.trim() || '';
             const shipTo = window._fsType === 'pickup' ? (document.getElementById('fs-shipto')?.value?.trim() || '') : '';
@@ -3501,7 +3788,8 @@
 
             // ── Hitung No. Tiket berikutnya dari data yang sudah ada (jika backend sudah menyediakan endpoint-nya) ──
             let resolvedTicketNumber = null;
-            const prefix = `Service-${formatDateForPO(new Date())}-`;
+            const basePrefix = `Service-${formatDateForPO(new Date())}-`;
+            const prefix = window._fsType === 'return' ? `Retur-${basePrefix}` : basePrefix;
             try {
                 let fsData = [];
                 try {
@@ -3520,8 +3808,9 @@
                 resolvedTicketNumber = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
             } catch (_) { }
 
+            const previewDefault = window._fsType === 'return' ? 'Retur-Service-...-00?' : 'Service-...-00?';
             const ticketLabel = window._revisiFormServiceActive || resolvedTicketNumber ||
-                (preview && preview.textContent.trim() !== 'Service-...-00?' ? preview.textContent.trim() : `${prefix}001`);
+                (preview && preview.textContent.trim() !== previewDefault ? preview.textContent.trim() : `${prefix}001`);
 
             // ── Header Background Image ──
             try {
@@ -3553,7 +3842,8 @@
             doc.setTextColor(17, 24, 39);
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(16);
-            doc.text('SERVICE ORDER', pageWidth - marginX, 16, { align: 'right' });
+            const pdfTitle = window._fsType === 'return' ? 'PENGEMBALIAN UNIT' : 'SERVICE ORDER';
+            doc.text(pdfTitle, pageWidth - marginX, 16, { align: 'right' });
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
             doc.setTextColor(107, 114, 128);
@@ -3663,7 +3953,8 @@
             doc.text('Generated by NOD Warehouse System — ' + new Date().toLocaleString('id-ID'), marginX, footerY - 2);
 
             const safeCustomer = (customer || '').replace(/[\\/:*?"<>|]/g, '').trim();
-            const fileName = `Service_Order_${ticketLabel}${safeCustomer ? '_' + safeCustomer : ''}.pdf`;
+            const filePrefix = window._fsType === 'return' ? 'Pengembalian_Unit' : 'Service_Order';
+            const fileName = `${filePrefix}_${ticketLabel}${safeCustomer ? '_' + safeCustomer : ''}.pdf`;
 
             doc.save(fileName);
 
@@ -3682,7 +3973,8 @@
                     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
                 }
                 window._fsResolvedTicket = ticketLabel;
-                showAlert('success', 'PDF Siap', 'Service Order berhasil dibuat dan otomatis dilampirkan.');
+                const pdfLabel = window._fsType === 'return' ? 'Pengembalian Unit' : 'Service Order';
+                showAlert('success', 'PDF Siap', pdfLabel + ' berhasil dibuat dan otomatis dilampirkan.');
             } catch (err) {
                 showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan coba klik Download PDF sekali lagi.');
             }
