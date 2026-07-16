@@ -2458,6 +2458,17 @@
                 ? 'bg-amber-500 text-white'
                 : (statusLower === 'pending' ? 'bg-orange-500 text-white' : 'bg-emerald-500 text-white');
             const slaCell = showSla ? `<td class="px-4 py-3">${renderSlaBadge(row.inboundDate)}</td>` : '';
+            const exLocationText = escapeHtml(row.exLocation || '-');
+            // Pada tabel "On Going & Pending" (showSla=true), Ex Location/Customer bisa diklik untuk
+            // langsung diarahkan ke menu Task Technician dengan Serial Number & datanya otomatis terisi.
+            const exLocationCell = (showSla && row.serialNumber)
+                ? `<td class="px-4 py-3">
+                        <button type="button" onclick="openTaskTechnicianWithSerial('${escapeHtml(row.serialNumber).replace(/'/g, "\\'")}')"
+                            class="text-amber-700 hover:text-amber-900 font-semibold underline decoration-dotted underline-offset-2 text-left">
+                            ${exLocationText}
+                        </button>
+                   </td>`
+                : `<td class="px-4 py-3 text-gray-600">${exLocationText}</td>`;
             return `
             <tr class="border-t border-gray-100 hover:bg-gray-50">
                 <td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">${escapeHtml(row.serialNumber || '-')}</td>
@@ -2468,7 +2479,7 @@
                     </span>
                 </td>
                 ${slaCell}
-                <td class="px-4 py-3 text-gray-600">${escapeHtml(row.exLocation || '-')}</td>
+                ${exLocationCell}
             </tr>`;
         }
 
@@ -2598,6 +2609,17 @@
         let ttOngoingSerials = [];  // Serial Number berstatus "On Going" dari backend
         let ttPendingSerials = [];  // Serial Number berstatus "Pending" dari backend
 
+        // Serial Number yang akan otomatis diisi & dipanggil datanya saat halaman Task Technician
+        // dibuka dari klik "Ex Location/Customer" pada tabel "On Going & Pending" (Report Status Repair)
+        let pendingTtAutoSerial = null;
+
+        /** Dipanggil saat "Ex Location/Customer" di tabel On Going & Pending diklik:
+         *  arahkan ke menu Task Technician & otomatis isi + panggil data Serial Number tsb. */
+        function openTaskTechnicianWithSerial(serial) {
+            pendingTtAutoSerial = serial;
+            navTo('Task Technician');
+        }
+
         async function showTaskTechnician() {
             document.getElementById('content-area').innerHTML = `
             <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700 mb-1">Task Technician</h1>
@@ -2683,7 +2705,18 @@
                 </div>
             </div>`;
 
-            loadTtInit();
+            await loadTtInit();
+
+            // Jika halaman ini dibuka dari klik "Ex Location/Customer" di tabel On Going & Pending
+            // (Report Status Repair), otomatis isi Serial Number & panggil semua datanya.
+            if (pendingTtAutoSerial) {
+                const serialEl = document.getElementById('tt-serial');
+                if (serialEl) {
+                    serialEl.value = pendingTtAutoSerial;
+                    onTtSerialChange();
+                }
+                pendingTtAutoSerial = null;
+            }
         }
 
         /** Muat daftar Serial Number On Going, peta info mesin, daftar sparepart, & daftar teknisi dari backend */
