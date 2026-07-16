@@ -10392,7 +10392,13 @@
                 onEnterNoList: () => { if (input.value.trim()) tambahBarisFormRetur(); },
                 // Begitu Nama Barang dipilih dari dropdown (sumber: sheet "LIST"),
                 // kolom ID otomatis terisi dengan ID pasangannya (kolom A di LIST).
-                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
+                // [FIX BARU] UOM & Description pada baris yang sama juga otomatis
+                // ikut terisi (lihat autoFillUomDescForRow — sumber: sheet
+                // "Report Summary" untuk UOM, sheet "List Category" untuk Description).
+                onSelect: (item) => {
+                    if (idInput) idInput.value = item.id || '';
+                    autoFillUomDescForRow(tr, item.nama);
+                }
             });
 
             if (autoFocus) input.focus();
@@ -10882,7 +10888,13 @@
                 onEnterNoList: () => { if (input.value.trim()) tambahBarisFormPO(); },
                 // Begitu Nama Barang dipilih dari dropdown (sumber: sheet "LIST"),
                 // kolom ID otomatis terisi dengan ID pasangannya (kolom A di LIST).
-                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
+                // [FIX BARU] UOM & Description pada baris yang sama juga otomatis
+                // ikut terisi (lihat autoFillUomDescForRow — sumber: sheet
+                // "Report Summary" untuk UOM, sheet "List Category" untuk Description).
+                onSelect: (item) => {
+                    if (idInput) idInput.value = item.id || '';
+                    autoFillUomDescForRow(tr, item.nama);
+                }
             });
 
             if (autoFocus) input.focus();
@@ -13072,8 +13084,78 @@
             return _sourceItemsCache;
         }
 
-        // Preload saat halaman Process PO dibuka
-        function preloadSourceItems() { getSourceItems(); }
+        // Preload saat halaman Process PO / Form PO / Form RO dibuka.
+        // [FIX BARU] Ikut memanaskan cache getItemAutoFillData() (UOM &
+        // Description) supaya begitu user mulai mengisi tabel Detail Item,
+        // auto-isi UOM/Description tidak menunggu fetch pertama.
+        function preloadSourceItems() { getSourceItems(); getItemAutoFillData(); }
+
+        // =========================================================================
+        // [FIX BARU] AUTO-ISI UOM & DESCRIPTION BERDASARKAN "Item" DI FORM PO / FORM RO
+        // Sumber data (lewat endpoint GAS ?action=getItemAutoFillData):
+        //   - UOM         : sheet "Report Summary" (kolom C = ITEM, kolom D = UOM)
+        //   - Description : sheet "List Category"  (kolom C = Nama Barang,
+        //                    kolom D = Kategori — dipakai sebagai "Description")
+        // Kedua map di-cache di memori (sekali fetch per sesi halaman), key
+        // dinormalisasi (trim + lowercase) supaya pencocokan nama item tidak
+        // peduli huruf besar/kecil.
+        // =========================================================================
+        let _itemAutoFillCache = null;
+
+        async function getItemAutoFillData() {
+            if (_itemAutoFillCache) return _itemAutoFillCache;
+            try {
+                const res = await fetch(PO_GAS_URL + '?action=getItemAutoFillData', { redirect: 'follow' });
+                const data = await res.json();
+                _itemAutoFillCache = {
+                    uomMap: (data && data.uomMap) || {},
+                    descriptionMap: (data && data.descriptionMap) || {}
+                };
+            } catch (_) {
+                _itemAutoFillCache = { uomMap: {}, descriptionMap: {} };
+            }
+            return _itemAutoFillCache;
+        }
+
+        /** Pilih <option> pada elemen <select> yang cocok (tanpa peduli huruf
+         *  besar/kecil atau spasi berlebih) dengan `value`. Dipakai untuk
+         *  mengisi <select> UOM/Description (opsinya tetap daftar tetap/fixed)
+         *  berdasarkan hasil lookup dari sheet "Report Summary"/"List Category"
+         *  yang penulisannya bisa saja beda kapitalisasi. Kalau tidak ada opsi
+         *  yang cocok, <select> dibiarkan apa adanya (tidak dipaksa/ditambah). */
+        function _setSelectValueCaseInsensitive(selectEl, value) {
+            if (!selectEl || !value) return false;
+            const target = String(value).trim().toLowerCase();
+            if (!target) return false;
+            const opt = Array.from(selectEl.options).find(o => o.value.trim().toLowerCase() === target);
+            if (opt) {
+                selectEl.value = opt.value;
+                return true;
+            }
+            return false;
+        }
+
+        /** Dipanggil begitu Nama Barang (Item) di baris tabel Detail Item Form
+         *  PO/RO terisi (dipilih dari dropdown ataupun diketik manual & cocok
+         *  persis dengan master data). Mengisi otomatis kolom UOM (dari sheet
+         *  "Report Summary") dan Description (dari sheet "List Category") pada
+         *  baris <tr> yang sama, berdasarkan nama item tsb. */
+        async function autoFillUomDescForRow(tr, namaItem) {
+            if (!tr || !namaItem) return;
+            const uomEl = tr.querySelector('.po-item-uom');
+            const descEl = tr.querySelector('.po-item-desc');
+            if (!uomEl && !descEl) return;
+
+            const { uomMap, descriptionMap } = await getItemAutoFillData();
+            const key = String(namaItem).trim().toLowerCase();
+
+            if (uomEl && uomMap[key]) {
+                _setSelectValueCaseInsensitive(uomEl, uomMap[key]);
+            }
+            if (descEl && descriptionMap[key]) {
+                _setSelectValueCaseInsensitive(descEl, descriptionMap[key]);
+            }
+        }
 
         // =========================================================================
         // AUTOCOMPLETE ITEM (DROPDOWN MENGAMBANG DI LUAR TABEL)
