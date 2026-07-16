@@ -523,19 +523,19 @@
                         </button>
                         <div id="service-center-sub"
                             class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
-                            <button onclick="navTo('Form Service')"
+                            <button id="sub-form-service" onclick="navTo('Form Service')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Form
                                 Service</button>
-                            <button onclick="navTo('Check Machine')"
+                            <button id="sub-check-machine" onclick="navTo('Check Machine')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Check
                                 Machine</button>
-                            <button onclick="navTo('Riwayat Penukaran')"
+                            <button id="sub-riwayat-penukaran" onclick="navTo('Riwayat Penukaran')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Riwayat
                                 Penukaran</button>
-                            <button onclick="navTo('Report Status Repair')"
+                            <button id="sub-report-status" onclick="navTo('Report Status Repair')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report
                                 Status Repair</button>
-                            <button onclick="navTo('Task Technician')"
+                            <button id="sub-task-technician" onclick="navTo('Task Technician')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Task
                                 Technician</button>
                         </div>
@@ -1073,8 +1073,8 @@
                 document.getElementById('team-delivery-sub').classList.remove('hidden');
                 document.getElementById('arrow-team-delivery').textContent = '▲';
                 navTo(_getRestorePage('Route'));
-            } else if (currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') {
-                // CS_User & Teknisi: hanya tampilkan menu Service Center
+            } else if (currentUserRole === 'CS_User') {
+                // CS_User: tampilkan semua menu Service Center
                 document.getElementById('menu-dashboard').classList.add('hidden');
                 document.getElementById('menu-inventory').classList.add('hidden');
                 document.getElementById('menu-plan-task').classList.add('hidden');
@@ -1089,7 +1089,36 @@
                 // Buka submenu Service Center otomatis
                 document.getElementById('service-center-sub').classList.remove('hidden');
                 document.getElementById('arrow-service-center').textContent = '▲';
+                // CS_User bisa akses semua sub-menu Service Center
+                document.getElementById('sub-form-service').classList.remove('hidden');
+                document.getElementById('sub-check-machine').classList.remove('hidden');
+                document.getElementById('sub-riwayat-penukaran').classList.remove('hidden');
+                document.getElementById('sub-report-status').classList.remove('hidden');
+                document.getElementById('sub-task-technician').classList.remove('hidden');
                 navTo(_getRestorePage('Check Machine'));
+            } else if (currentUserRole === 'Teknisi') {
+                // Teknisi: HANYA tampilkan "Report Status Repair" dan "Task Technician"
+                document.getElementById('menu-dashboard').classList.add('hidden');
+                document.getElementById('menu-inventory').classList.add('hidden');
+                document.getElementById('menu-plan-task').classList.add('hidden');
+                document.getElementById('menu-maintenance').classList.add('hidden');
+                document.getElementById('menu-po').classList.add('hidden');
+                document.getElementById('menu-process-po').classList.add('hidden');
+                document.getElementById('menu-process-inbound').classList.add('hidden');
+                document.getElementById('menu-team-delivery').classList.add('hidden');
+                document.getElementById('menu-catalogue').classList.add('hidden');
+                // Tampilkan Service Center
+                document.getElementById('menu-service-center').classList.remove('hidden');
+                // Buka submenu Service Center otomatis
+                document.getElementById('service-center-sub').classList.remove('hidden');
+                document.getElementById('arrow-service-center').textContent = '▲';
+                // Teknisi HANYA bisa akses Report Status Repair & Task Technician
+                document.getElementById('sub-form-service').classList.add('hidden');
+                document.getElementById('sub-check-machine').classList.add('hidden');
+                document.getElementById('sub-riwayat-penukaran').classList.add('hidden');
+                document.getElementById('sub-report-status').classList.remove('hidden');
+                document.getElementById('sub-task-technician').classList.remove('hidden');
+                navTo(_getRestorePage('Report Status Repair'));
             } else {
                 // ADMIN: semua menu tampil termasuk Process PO & Team Delivery
                 document.getElementById('menu-process-po').classList.remove('hidden');
@@ -1151,6 +1180,10 @@
             }
             if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(saved) &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi')) {
+                return defaultPage;
+            }
+            // Teknisi hanya bisa akses Report Status Repair & Task Technician
+            if (['Check Machine', 'Riwayat Penukaran', 'Form Service'].includes(saved) && currentUserRole === 'Teknisi') {
                 return defaultPage;
             }
             return saved;
@@ -1744,10 +1777,16 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Service Center" hanya dapat diakses oleh Admin, CS User, dan Teknisi.');
                 return;
             }
-            // ── AKSES KONTROL: CS_User & Teknisi HANYA bisa akses Service Center ──
-            if ((currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') &&
+            // ── AKSES KONTROL: CS_User HANYA bisa akses Service Center ──
+            if (currentUserRole === 'CS_User' &&
                 !['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician', 'Form Service'].includes(pageName)) {
-                showAlert('error', 'Akses Ditolak', 'Role "' + currentUserRole + '" hanya dapat mengakses menu Service Center.');
+                showAlert('error', 'Akses Ditolak', 'Role "CS User" hanya dapat mengakses menu Service Center.');
+                return;
+            }
+            // ── AKSES KONTROL: Teknisi HANYA bisa akses Report Status Repair & Task Technician ──
+            if (currentUserRole === 'Teknisi' &&
+                !['Report Status Repair', 'Task Technician'].includes(pageName)) {
+                showAlert('error', 'Akses Ditolak', 'Role "Teknisi" hanya dapat mengakses menu Report Status Repair dan Task Technician.');
                 return;
             }
             const titles = {
@@ -2371,10 +2410,11 @@
                                 <th class="px-4 py-3 text-left font-semibold">Status</th>
                                 <th class="px-4 py-3 text-left font-semibold">SLA</th>
                                 <th class="px-4 py-3 text-left font-semibold">Ex Location/Customer</th>
+                                <th class="px-4 py-3 text-left font-semibold">Alasan Pending</th>
                             </tr>
                         </thead>
                         <tbody id="rsr-ongoing-tbody">
-                            <tr><td colspan="5" class="px-4 py-10 text-center text-gray-400">
+                            <tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
                                 <div class="flex items-center justify-center gap-3">
                                     <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
                                     Memuat data...
@@ -2399,10 +2439,11 @@
                                 <th class="px-4 py-3 text-left font-semibold">Type Machine</th>
                                 <th class="px-4 py-3 text-left font-semibold">Status</th>
                                 <th class="px-4 py-3 text-left font-semibold">Ex Location/Customer</th>
+                                <th class="px-4 py-3 text-left font-semibold">Teknisi</th>
                             </tr>
                         </thead>
                         <tbody id="rsr-solved-tbody">
-                            <tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">
+                            <tr><td colspan="5" class="px-4 py-10 text-center text-gray-400">
                                 <div class="flex items-center justify-center gap-3">
                                     <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
                                     Memuat data...
@@ -2456,7 +2497,8 @@
         }
 
         /** Render 1 baris tabel Report Status Repair (dipakai bersama oleh tabel On Going/Pending & Solved).
-         *  showSla=true untuk menampilkan kolom SLA (dipakai di tabel On Going & Pending). */
+         *  showSla=true untuk tabel On Going & Pending (ada kolom SLA + Alasan Pending),
+         *  showSla=false untuk tabel Solved (ada kolom Teknisi). */
         function renderReportStatusRepairRow(row, showSla) {
             const statusLower = (row.status || '').toLowerCase();
             const badgeClass = statusLower === 'on going'
@@ -2474,6 +2516,12 @@
                         </button>
                    </td>`
                 : `<td class="px-4 py-3 text-gray-600">${exLocationText}</td>`;
+            // Kolom tambahan setelah Ex Location/Customer:
+            // - On Going & Pending: "Alasan Pending" (dari sheet Repair kolom Remark Pending)
+            // - Solved: "Teknisi" (dari sheet Repair kolom PIC)
+            const extraCell = showSla
+                ? `<td class="px-4 py-3 text-gray-600">${escapeHtml(row.remarkPending || '-')}</td>`
+                : `<td class="px-4 py-3 text-gray-600">${escapeHtml(row.pic || '-')}</td>`;
             return `
             <tr class="border-t border-gray-100 hover:bg-gray-50">
                 <td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">${escapeHtml(row.serialNumber || '-')}</td>
@@ -2485,6 +2533,7 @@
                 </td>
                 ${slaCell}
                 ${exLocationCell}
+                ${extraCell}
             </tr>`;
         }
 
@@ -2507,7 +2556,7 @@
             const pageRows = rsrOngoingAllRows.slice(startIdx, startIdx + RSR_ONGOING_PAGE_SIZE);
 
             ongoingTbody.innerHTML = pageRows.length === 0
-                ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                ? `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
                 : pageRows.map(row => renderReportStatusRepairRow(row, true)).join('');
 
             if (paginationEl) {
@@ -2546,8 +2595,8 @@
             if (!ongoingTbody || !solvedTbody) return;
 
             if (!SERVICE_CENTER_GAS_URL || SERVICE_CENTER_GAS_URL.startsWith('GANTI_DENGAN')) {
-                ongoingTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
-                solvedTbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
+                ongoingTbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
+                solvedTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</td></tr>`;
                 return;
             }
 
@@ -2580,11 +2629,11 @@
                 renderRsrOngoingPage(1);
 
                 solvedTbody.innerHTML = solvedRows.length === 0
-                    ? `<tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                    ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
                     : solvedRows.map(row => renderReportStatusRepairRow(row, false)).join('');
             } catch (err) {
-                ongoingTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
-                solvedTbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                ongoingTbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                solvedTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
                 if (paginationEl) paginationEl.innerHTML = '';
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
@@ -2607,6 +2656,7 @@
         // Data referensi dari backend (diisi oleh loadTtInit())
         let ttSerialInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer, kendala } }
         let ttRepairInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer } } fallback dari sheet "Repair" (kolom C/D/H) kalau tidak ketemu di "Penukaran Mesin NOD"
+        let ttCustomerTypeKendalaMap = {}; // { "customer|type" -> kendala } fallback dari "Penukaran Mesin NOD" kalau serial tidak cocok
         let ttSparepartMap = {};    // { namaSparepart -> idSparepart }
         let ttSparepartList = [];   // [{ name, id }] daftar sparepart dari backend, untuk pencarian multi-pilih
         let ttSelectedSpareparts = []; // [{ name, id }] sparepart yang sudah dipilih user (bisa lebih dari 1)
@@ -2738,6 +2788,7 @@
 
                 ttSerialInfoMap = result.serialInfoMap || {};
                 ttRepairInfoMap = result.repairInfoMap || {};
+                ttCustomerTypeKendalaMap = result.customerTypeKendalaMap || {};
                 ttTeknisiList = result.teknisiList || [];
 
                 ttOngoingSerials = result.ongoingSerials || [];
@@ -2824,7 +2875,15 @@
             if (repairInfo) {
                 if (typeEl) typeEl.value = repairInfo.typeMachine || '';
                 if (customerEl) customerEl.value = repairInfo.namaCustomer || 'Unknown';
-                if (kendalaEl) kendalaEl.value = '';
+                // Fallback kendala: cari via (customer + type machine) di peta
+                // "Penukaran Mesin NOD" — jaga-jaga kalau format Serial Number
+                // di sheet "Repair" berbeda dengan di "Penukaran Mesin NOD".
+                let fallbackKendala = '';
+                if (repairInfo.namaCustomer && repairInfo.typeMachine) {
+                    const ctKey = (repairInfo.namaCustomer.toLowerCase() + '|' + (repairInfo.typeMachine || '').toLowerCase());
+                    fallbackKendala = ttCustomerTypeKendalaMap[ctKey] || '';
+                }
+                if (kendalaEl) kendalaEl.value = fallbackKendala;
             } else {
                 if (typeEl) typeEl.value = '';
                 if (customerEl) customerEl.value = 'Unknown';
