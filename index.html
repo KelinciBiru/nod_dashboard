@@ -14281,7 +14281,27 @@
                     return true;
                 });
 
-                if (allRows.length === 0 && openRORows.length === 0) {
+                // ── Pisahkan tiket "Form Service" (Pick Up & Return) dari PO/RO biasa ──
+                // Pick Up  → tercatat di PO_Data dengan No. PO berformat "Service-DDMMYYYY-00X"
+                // Return   → tercatat di Retur_Data dengan No. RO berformat "Retur-Service-DDMMYYYY-00X"
+                const isFsPickupTicket = (v) => /^Service-\d{8}-\d+$/i.test(String(v || '').trim());
+                const isFsReturnTicket = (v) => /^Retur-Service-\d{8}-\d+$/i.test(String(v || '').trim());
+
+                // [FIX] GAS (submitFormService) sebenarnya menyimpan tiket "Pick Up" ke
+                // Retur_Data (No. Tiket "Service-DDMMYYYY-00X", alur RO: Ready To PickUp →
+                // On Delivery), dan tiket "Return" ke PO_Data (No. Tiket
+                // "Retur-Service-DDMMYYYY-00X", alur PO: Ready To Ship → On-Delivery →
+                // Done). Sebelumnya kode ini salah mengambil sumber data (Pick Up dari
+                // PO_Data, Return dari Retur_Data), sehingga tiket "Retur-Service-..."
+                // tidak pernah cocok di tabel manapun dan jatuh ke tabel PO biasa.
+                const fsPickupRows  = openRORows.filter(row => isFsPickupTicket(row[1]));
+                const regularRORows = openRORows.filter(row => !isFsPickupTicket(row[1]));
+
+                const fsReturnRows  = allRows.filter(row => isFsReturnTicket(row[1]));
+                const regularPORows = allRows.filter(row => !isFsReturnTicket(row[1]));
+
+                if (regularPORows.length === 0 && regularRORows.length === 0 &&
+                    fsPickupRows.length === 0 && fsReturnRows.length === 0) {
                     smoothSwapContent(contentArea, `
                     <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
                     <div class="p-8 text-center bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -14290,8 +14310,20 @@
                     return;
                 }
 
+                // Helper cetak PDF sederhana untuk tiket Form Service — membuka langsung
+                // Link PDF yang sudah tersimpan di kolom F (sudah dilampirkan saat submit
+                // Form Service), karena tiket ini tidak melalui alur Request/Delivery Order
+                // yang dicari dari folder Drive seperti PO/RO biasa.
+                window.printFormServiceLinkPDF = function (link, noTiket) {
+                    if (!link) {
+                        showAlert('warning', 'PDF Tidak Ditemukan', `Link PDF untuk tiket "${noTiket}" belum tersedia.`);
+                        return;
+                    }
+                    window.open(link, '_blank');
+                };
+
                 let rows_html = '';
-                allRows.forEach(row => {
+                regularPORows.forEach(row => {
                     const noPO      = row[1] || '-';
                     const orderedBy = row[2] || '-';   // kolom C
                     const shipTo    = row[3] || '-';   // kolom D
@@ -14376,7 +14408,7 @@
 
                 // ── Build tabel RO ──
                 let ro_rows_html = '';
-                openRORows.forEach(row => {
+                regularRORows.forEach(row => {
                     const noRO         = row[1] || '-';
                     const orderedBy    = row[2] || '-';
                     const fromLocation = row[11] || '-';
@@ -14437,7 +14469,7 @@
                 });
 
                 const roTheadExtra = isAdmin ? '<th class="p-3">Link PDF</th><th class="p-3">Aksi</th>' : '';
-                const roSection = openRORows.length > 0 ? `
+                const roSection = regularRORows.length > 0 ? `
                 <h2 class="text-lg font-bold text-gray-700 mt-8 mb-3">Report Status RO</h2>
                 <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                     <table class="w-full text-xs text-center border-collapse">
@@ -14455,7 +14487,196 @@
                     </table>
                 </div>` : '';
 
-                // Header: PO_User hanya 4 kolom, Admin + kolom Link & Aksi
+                // ── Build tabel Tiket Form Service - Pick Up (dari Retur_Data, alur RO) ──
+                // Header: No. Tiket, Ordered By, From Location, Ship To, Status, Link PDF, Aksi
+                let fs_pickup_rows_html = '';
+                fsPickupRows.forEach(row => {
+                    const noTiket     = row[1] || '-';
+                    const orderedBy   = row[2] || '-';
+                    const shipTo      = row[3] || '-';
+                    const status      = row[4];
+                    const link        = row[5];
+                    const fromLoc     = row[11] || '-'; // kolom "From Location" (Customer) di Retur_Data
+                    const statusStr   = status ? status.toString().trim() : '';
+                    const isClosed    = statusStr === 'Closed';
+                    const isReadyPickup  = statusStr === 'Ready To PickUp';
+                    const isOnDeliveryRO = statusStr === 'On Delivery';
+
+                    // [FIX 8] Alur status RO: "Ready To PickUp" → "On Delivery" → "Closed"
+                    const statusBadge = isClosed
+                        ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Closed</span>`
+                        : isOnDeliveryRO
+                            ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700">On Delivery</span>`
+                            : isReadyPickup
+                                ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Ready To PickUp</span>`
+                                : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">${escapeHtml(statusStr || 'Open')}</span>`;
+
+                    const printBtn = `
+                        <button onclick="printFormServiceLinkPDF('${link || ''}', '${noTiket}')"
+                            title="Print"
+                            class="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-gray-200 text-gray-600 hover:text-blue-600 transition align-middle">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
+                            </svg>
+                        </button>`;
+
+                    const linkCell = (link && link !== '')
+                        ? `<span class="inline-flex items-center justify-center gap-1">
+                              <a href="${link}" target="_blank"
+                                 class="inline-block max-w-[160px] truncate align-middle text-blue-600 underline hover:text-blue-800 text-xs">
+                                 Lihat PDF
+                              </a>
+                              ${printBtn}
+                           </span>`
+                        : '-';
+
+                    const fsPickupKey = noTiket.replace(/[^a-zA-Z0-9\-]/g, '_');
+                    const aksiCell = isAdmin ? `
+                        <td class="p-3 border-b">
+                            ${isClosed
+                                ? `<button id="robtn-${fsPickupKey}" onclick="removeRORow('${noTiket}')"
+                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1 mx-auto">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    Remove
+                                   </button>`
+                                : `<button id="robtn-${fsPickupKey}" onclick="closeRO('${noTiket}')"
+                                    class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-xs font-semibold transition">
+                                    Closed
+                                   </button>`
+                            }
+                        </td>` : '';
+
+                    const rowBg = isClosed ? 'bg-gray-50 opacity-60' : 'hover:bg-amber-50';
+
+                    fs_pickup_rows_html += `
+                    <tr id="row-ro-${fsPickupKey}" class="${rowBg}">
+                        <td class="p-3 border-b font-mono text-left">${escapeHtml(noTiket)}</td>
+                        <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
+                        <td class="p-3 border-b">${escapeHtml(fromLoc)}</td>
+                        <td class="p-3 border-b">${escapeHtml(shipTo)}</td>
+                        <td class="p-3 border-b" id="rostatus-${fsPickupKey}">${statusBadge}</td>
+                        ${isAdmin ? `<td class="p-3 border-b">${linkCell}</td>` : ''}
+                        ${aksiCell}
+                    </tr>`;
+                });
+
+                const fsPickupTheadExtra = isAdmin ? '<th class="p-3">Link PDF</th><th class="p-3">Aksi</th>' : '';
+                const fsPickupSection = fsPickupRows.length > 0 ? `
+                <h2 class="text-lg font-bold text-gray-700 mt-8 mb-3">Report Status Form Service - Pick Up</h2>
+                <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
+                    <table class="w-full text-xs text-center border-collapse">
+                        <thead>
+                            <tr class="bg-amber-700 text-white">
+                                <th class="p-3 text-left">No. Tiket</th>
+                                <th class="p-3">Ordered By</th>
+                                <th class="p-3">From Location</th>
+                                <th class="p-3">Ship To</th>
+                                <th class="p-3">Status</th>
+                                ${fsPickupTheadExtra}
+                            </tr>
+                        </thead>
+                        <tbody id="fs-pickup-table-body">${fs_pickup_rows_html}</tbody>
+                    </table>
+                </div>` : '';
+
+                // ── Build tabel Tiket Form Service - Return (dari PO_Data, alur PO) ──
+                // Header: No. Tiket, Ordered By, Ship To, Status, Link PDF, Aksi
+                let fs_return_rows_html = '';
+                fsReturnRows.forEach(row => {
+                    const noTiket   = row[1] || '-';
+                    const orderedBy = row[2] || '-';  // kolom C = Nama (PO_Data)
+                    const shipTo    = row[6] || '-';  // kolom G = Ship To (PO_Data)
+                    const status    = row[4] || '';
+                    const link      = row[5] || '';
+                    const statusStr = status ? status.toString().trim() : '';
+                    const isClosed  = statusStr === 'Closed';
+                    const isReady   = statusStr === 'Ready To Ship';
+                    const isOnDelivery = statusStr === 'On-Delivery';
+                    const isDone    = statusStr === 'Done';
+
+                    const statusBadge = isClosed
+                        ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Closed</span>`
+                        : isDone
+                            ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Done</span>`
+                            : isReady
+                                ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Ready To Ship</span>`
+                                : isOnDelivery
+                                    ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700">On-Delivery</span>`
+                                    : `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Open</span>`;
+
+                    const printBtn = `
+                        <button onclick="printFormServiceLinkPDF('${link || ''}', '${noTiket}')"
+                            title="Print"
+                            class="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-gray-200 text-gray-600 hover:text-blue-600 transition align-middle">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
+                            </svg>
+                        </button>`;
+
+                    const linkCell = (link && link !== '')
+                        ? `<span class="inline-flex items-center justify-center gap-1">
+                              <a href="${link}" target="_blank"
+                                 class="inline-block max-w-[200px] truncate align-middle text-blue-600 underline hover:text-blue-800 text-xs">
+                                 Lihat PDF
+                              </a>
+                              ${printBtn}
+                           </span>`
+                        : '-';
+
+                    const fsKey = noTiket.replace(/[^a-zA-Z0-9\-]/g, '_');
+                    const aksiCell = isAdmin ? `
+                        <td class="p-3 border-b">
+                            ${isClosed
+                                ? `<button id="btn-${fsKey}" onclick="removePORow('${noTiket}')"
+                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1 mx-auto">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    Remove
+                                   </button>`
+                                : `<button id="btn-${fsKey}" onclick="closePO('${noTiket}')"
+                                    class="${isDone ? 'bg-emerald-500 hover:bg-emerald-600' : isReady ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'} text-white px-3 py-1 rounded text-xs font-semibold transition">
+                                    Closed
+                                   </button>`
+                            }
+                        </td>` : '';
+
+                    const rowBg = isClosed ? 'bg-gray-50 opacity-60'
+                                : isDone   ? 'bg-emerald-50'
+                                : isReady  ? 'bg-blue-50'
+                                           : 'hover:bg-purple-50';
+                    fs_return_rows_html += `
+                    <tr id="row-${fsKey}" class="${rowBg}">
+                        <td class="p-3 border-b font-mono text-left">${escapeHtml(noTiket)}</td>
+                        <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
+                        <td class="p-3 border-b">${escapeHtml(shipTo)}</td>
+                        <td class="p-3 border-b" id="status-${fsKey}">${statusBadge}</td>
+                        ${isAdmin ? `<td class="p-3 border-b">${linkCell}</td>` : ''}
+                        ${aksiCell}
+                    </tr>`;
+                });
+
+                const fsReturnTheadExtra = isAdmin ? '<th class="p-3">Link PDF</th><th class="p-3">Aksi</th>' : '';
+                const fsReturnSection = fsReturnRows.length > 0 ? `
+                <h2 class="text-lg font-bold text-gray-700 mt-8 mb-3">Report Status Form Service - Return</h2>
+                <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
+                    <table class="w-full text-xs text-center border-collapse">
+                        <thead>
+                            <tr class="bg-purple-900 text-white">
+                                <th class="p-3 text-left">No. Tiket</th>
+                                <th class="p-3">Ordered By</th>
+                                <th class="p-3">Ship To</th>
+                                <th class="p-3">Status</th>
+                                ${fsReturnTheadExtra}
+                            </tr>
+                        </thead>
+                        <tbody id="fs-return-table-body">${fs_return_rows_html}</tbody>
+                    </table>
+                </div>` : '';
+
+
                 const theadExtra = isAdmin ? '<th class="p-3">Link PDF</th><th class="p-3">Aksi</th>' : '';
 
                 smoothSwapContent(contentArea, `
@@ -14474,7 +14695,9 @@
                         <tbody id="po-table-body">${rows_html}</tbody>
                     </table>
                 </div>
-                ${roSection}`);
+                ${roSection}
+                ${fsPickupSection}
+                ${fsReturnSection}`);
 
                 // ── Daftarkan LiveSync sekali saja (aman dipanggil berkali-kali) ──
                 LiveSync.register('Report Status', {
