@@ -12694,6 +12694,23 @@
                 if (doLabel) doLabel.textContent = 'Delivery Order';
             };
 
+            // ── Ambil No. Telepon dari sheet PO_Data berdasarkan No. PO ──
+            let phoneDO = '';
+            try {
+                console.log('[DO Phone] Mengambil No. Telepon untuk No. PO:', noPO);
+                const phoneRes = await fetch(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                const phoneData = await phoneRes.json();
+                console.log('[DO Phone] Response dari GAS:', phoneData);
+                if (phoneData && phoneData.success) {
+                    phoneDO = phoneData.phone || '';
+                    console.log('[DO Phone] No. Telepon:', phoneDO);
+                } else {
+                    console.warn('[DO Phone] Gagal:', phoneData?.message);
+                }
+            } catch (err) {
+                console.warn('[DO Phone] Gagal mengambil No. Telepon:', err);
+            }
+
             // Ambil alamat dari dataset proc-ordered-by (diisi saat load PO)
             const alamatDO = document.getElementById('proc-ordered-by')?.dataset?.alamat || shipTo;
             const mapsUrlDO = document.getElementById('proc-ordered-by')?.dataset?.mapsurl || '';
@@ -12766,6 +12783,7 @@
             const infoRight = [
                 ['Ordered By', orderedBy || '-'],
                 ['Ship To', shipTo || '-'],
+                ['Phone', phoneDO || '-'],
                 ['Shipping Date', shippingDate || '-'],
             ];
 
@@ -15075,7 +15093,7 @@
             }, 300);
         }
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwCQdrE3yYQJM7lygHP2xAJfEFdEDxaykm0vMn7pxN9RPBgDFFCynhXJvdE90mJRMGM/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyVMbKOUK1uvYOilDFUzMxBVHDj3UdhPNUlh5erwaiqAMZTO_CF9WvjgYgSOTl5UBoO/exec";
 
         async function simpanOutboundFinal() {
             const orderedByEl = document.getElementById('proc-ordered-by');
