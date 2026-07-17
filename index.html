@@ -6166,6 +6166,12 @@
                 </a>`;
         }
 
+        // ── Nama-nama Driver/PIC yang merupakan jasa kurir pihak ketiga —
+        //    untuk kurir-kurir ini, card PO di menu Route BOLEH di-Start lebih
+        //    dari satu sekaligus (tidak dikunci seperti driver internal biasa
+        //    yang cuma bisa jalan 1 rute dalam satu waktu). ──
+        const ROUTE_MULTI_START_DRIVERS = ['JNT Cargo', 'Poslog', 'JNE', '21Express', 'Paxel', 'MJT'];
+
         // ── State: track apakah ada card yang sedang On-Delivery di session ini ──
         // Key: driverName, Value: idx yang sedang On-Delivery (-1 = belum ada)
         const _routeActiveDelivery = {}; // { driverName: idx | null }
@@ -6174,6 +6180,12 @@
             // Kunci semua tombol Start milik driver yang sama (kecuali card yang baru di-Start).
             // [Multi-start RO] Card RO (data-is-ro="1") DIKECUALIKAN dari penguncian —
             // Start RO tidak pernah mengunci PO/RO lain, dan Start PO tidak mengunci RO.
+            // [Multi-start kurir eksternal] Driver kurir pihak ketiga (JNT Cargo, Poslog,
+            // JNE, 21Express, Paxel, MJT) juga dikecualikan — boleh Start banyak card sekaligus.
+            const isMultiStartCourier = ROUTE_MULTI_START_DRIVERS.some(
+                name => name.toLowerCase() === String(driverName || '').toLowerCase()
+            );
+            if (isMultiStartCourier) return;
             document.querySelectorAll('[data-driver-group]').forEach(btn => {
                 if (btn.dataset.isRo === '1') return;
                 if (btn.dataset.driverGroup === driverName && btn.dataset.cardIdx !== String(activeIdx)) {
@@ -6271,10 +6283,18 @@
                 data-shipping-date="${shippingDate}"
                 data-driver="${driver.replace(/"/g,'&quot;')}"`;
 
+            // [Multi-start kurir eksternal] Driver berupa jasa kurir pihak ketiga
+            // (JNT Cargo, Poslog, JNE, 21Express, Paxel, MJT) boleh Start lebih dari
+            // satu card PO sekaligus — mereka bukan 1 orang/1 kendaraan seperti
+            // driver internal, jadi tidak perlu dikunci menunggu rute lain selesai.
+            const isMultiStartCourier = ROUTE_MULTI_START_DRIVERS.some(
+                name => name.toLowerCase() === driver.toLowerCase()
+            );
+
             // Cek apakah driver ini sudah ada yang On-Delivery (di-load dari data).
             // [Multi-start RO] Card RO tidak pernah dikunci oleh pengiriman aktif lain —
             // hanya card PO yang saling mengunci sesama PO milik driver yang sama.
-            const driverHasActive = (isOnDelivery || isRO) ? false : (driver && _routeActiveDelivery[driver] != null);
+            const driverHasActive = (isOnDelivery || isRO || isMultiStartCourier) ? false : (driver && _routeActiveDelivery[driver] != null);
             const startBtnLocked  = driverHasActive;
 
             // Tombol Cancel
