@@ -3745,7 +3745,15 @@
             const idInput = tr.querySelector('.fs-item-id');
             attachItemAutocomplete(input, list, tr, tbody, {
                 onEnterNoList: () => { if (input.value.trim()) tambahBarisFormService(); },
-                onSelect: (item) => { if (idInput) idInput.value = item.id || ''; }
+                // Begitu Nama Barang dipilih dari dropdown (sumber: sheet "LIST")
+                // ataupun diketik manual & cocok persis, kolom ID otomatis terisi
+                // dengan ID pasangannya (kolom A di LIST), dan kolom UOM ikut
+                // otomatis terisi (lihat autoFillUomDescForRow — sumber: sheet
+                // "Report Summary" kolom C=ITEM, D=UOM).
+                onSelect: (item) => {
+                    if (idInput) idInput.value = item.id || '';
+                    autoFillUomDescForRow(tr, item.nama);
+                }
             });
 
             if (autoFocus) input.focus();
@@ -13136,13 +13144,16 @@
         }
 
         /** Dipanggil begitu Nama Barang (Item) di baris tabel Detail Item Form
-         *  PO/RO terisi (dipilih dari dropdown ataupun diketik manual & cocok
-         *  persis dengan master data). Mengisi otomatis kolom UOM (dari sheet
-         *  "Report Summary") dan Description (dari sheet "List Category") pada
-         *  baris <tr> yang sama, berdasarkan nama item tsb. */
+         *  PO/RO (atau Tabel Pick Up di Form Service) terisi (dipilih dari
+         *  dropdown ataupun diketik manual & cocok persis dengan master data).
+         *  Mengisi otomatis kolom UOM (dari sheet "Report Summary") dan, kalau
+         *  baris tsb punya kolom Description (Form PO/RO), Description (dari
+         *  sheet "List Category") pada baris <tr> yang sama, berdasarkan nama
+         *  item tsb. Form Service (.fs-item-uom) tidak punya kolom Description,
+         *  jadi descEl akan null di sana — itu normal, hanya UOM yang diisi. */
         async function autoFillUomDescForRow(tr, namaItem) {
             if (!tr || !namaItem) return;
-            const uomEl = tr.querySelector('.po-item-uom');
+            const uomEl = tr.querySelector('.po-item-uom, .fs-item-uom');
             const descEl = tr.querySelector('.po-item-desc');
             if (!uomEl && !descEl) return;
 
