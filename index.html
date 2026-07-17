@@ -14439,6 +14439,25 @@
                     window.open(link, '_blank');
                 };
 
+                // Urutan tabel Report Status PO: baris berstatus "Open" (murni,
+                // bukan Closed/Done/Ready To Ship/On-Delivery) selalu di paling atas,
+                // lalu diurutkan dari tanggal PO paling lama ke paling baru.
+                const isOpenStatusPO = (row) => {
+                    const s = row[4] ? row[4].toString().trim() : '';
+                    return !(s === 'Closed' || s === 'Done' || s === 'Ready To Ship' || s === 'On-Delivery');
+                };
+                regularPORows.sort((a, b) => {
+                    const aOpen = isOpenStatusPO(a);
+                    const bOpen = isOpenStatusPO(b);
+                    if (aOpen !== bOpen) return aOpen ? -1 : 1;
+                    const tglA = parseTanggalPO(a[0]);
+                    const tglB = parseTanggalPO(b[0]);
+                    if (!tglA && !tglB) return 0;
+                    if (!tglA) return 1;
+                    if (!tglB) return -1;
+                    return tglA - tglB;
+                });
+
                 let rows_html = '';
                 regularPORows.forEach(row => {
                     const noPO      = row[1] || '-';
