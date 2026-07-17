@@ -1148,6 +1148,10 @@
                 cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData').catch(() => {});
                 cachedFetch(API_URLS.purchaseOrder + '?action=getReturData', 'getReturData').catch(() => {});
             }
+            // Prefetch daftar PIC untuk dropdown "Ordered By" di Form Service
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User') {
+                cachedFetch(API_URLS.serviceCenter + '?action=getPICList', 'getPICList').catch(() => {});
+            }
         }
 
         /**
@@ -3089,8 +3093,9 @@
 
             let namaOptions = '<option value="">-- Pilih Nama --</option>';
             try {
-                const names = await cachedFetch(API_URLS.purchaseOrder + '?action=getNames', 'getNames');
-                if (Array.isArray(names)) {
+                const resp = await cachedFetch(API_URLS.serviceCenter + '?action=getPICList', 'getPICList');
+                const names = (resp && resp.success && Array.isArray(resp.data)) ? resp.data : [];
+                if (names.length > 0) {
                     names.filter(n => n && String(n).trim() !== '').forEach(name => {
                         namaOptions += `<option value="${name}">${name}</option>`;
                     });
