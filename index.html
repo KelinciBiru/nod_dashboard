@@ -8986,6 +8986,84 @@
             return `${dd}${mm}${yyyy}`;
         }
 
+        // =========================================================================
+        // CHECKBOX "Staff Outlet" — Form PO & Form RO
+        // Saat dicentang, dropdown "Ordered By" (id="nama" di Form PO / id="retur-nama"
+        // di Form RO) diisi ulang dengan daftar nama Staff Outlet (sheet "Source"
+        // kolom I), menggantikan daftar nama biasa (dari action "getNames").
+        // Saat dicentang lagi (uncheck), dropdown dikembalikan ke daftar nama biasa.
+        // =========================================================================
+        let _staffOutletNamesCache = null;
+        async function getStaffOutletNamesList() {
+            if (_staffOutletNamesCache) return _staffOutletNamesCache;
+            try {
+                const names = await cachedFetch(API_URLS.purchaseOrder + '?action=getStaffOutletNames', 'getStaffOutletNames');
+                _staffOutletNamesCache = Array.isArray(names) ? names : [];
+            } catch (e) {
+                _staffOutletNamesCache = [];
+            }
+            return _staffOutletNamesCache;
+        }
+
+        async function handleStaffOutletToggle(formType) {
+            const isRO = formType === 'ro';
+            const checkboxId = isRO ? 'ro-staff-outlet-toggle' : 'po-staff-outlet-toggle';
+            const selectId = isRO ? 'retur-nama' : 'nama';
+            const checkbox = document.getElementById(checkboxId);
+            const selectEl = document.getElementById(selectId);
+            if (!checkbox || !selectEl) return;
+
+            const prevValue = selectEl.value;
+            selectEl.disabled = true;
+
+            if (checkbox.checked) {
+                selectEl.innerHTML = '<option value="">Memuat staff outlet...</option>';
+                const staffNames = await getStaffOutletNamesList();
+                let opts = '<option value="">-- Pilih Staff Outlet --</option>';
+                staffNames.filter(n => n && String(n).trim() !== '').forEach(name => {
+                    opts += `<option value="${name}">${name}</option>`;
+                });
+                if (staffNames.length === 0) opts += '<option disabled>Gagal memuat staff outlet</option>';
+                selectEl.innerHTML = opts;
+            } else {
+                selectEl.innerHTML = '<option value="">Memuat nama...</option>';
+                let opts = '<option value="">-- Pilih Nama --</option>';
+                try {
+                    const names = await cachedFetch(API_URLS.purchaseOrder + '?action=getNames', 'getNames');
+                    if (Array.isArray(names)) {
+                        names.filter(n => n && String(n).trim() !== '').forEach(name => {
+                            opts += `<option value="${name}">${name}</option>`;
+                        });
+                    } else {
+                        opts += '<option disabled>Gagal memuat nama</option>';
+                    }
+                } catch (e) {
+                    opts += '<option disabled>Gagal memuat nama</option>';
+                }
+                selectEl.innerHTML = opts;
+            }
+
+            selectEl.disabled = false;
+            // Pertahankan pilihan sebelumnya kalau masih ada di daftar yang baru
+            if (prevValue && [...selectEl.options].some(o => o.value === prevValue)) {
+                selectEl.value = prevValue;
+            }
+
+            // Saat dicentang, otomatis isi field "Kategori" dengan "Outlet"
+            if (checkbox.checked) {
+                const categoryId = isRO ? 'retur-category' : 'category';
+                const categoryEl = document.getElementById(categoryId);
+                if (categoryEl && [...categoryEl.options].some(o => o.value === 'Outlet')) {
+                    categoryEl.value = 'Outlet';
+                    if (isRO) {
+                        await handleFormReturCategoryChange();
+                    } else {
+                        await handleFormPOCategoryChange();
+                    }
+                }
+            }
+        }
+
         async function showFormPO() {
             setLoading('Memuat form...');
             const contentArea = document.getElementById('content-area');
@@ -9021,7 +9099,14 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ordered By</label>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm font-semibold text-gray-700">Ordered By</label>
+                            <label class="flex items-center gap-1.5 text-xs font-medium text-gray-600 cursor-pointer select-none">
+                                <input type="checkbox" id="po-staff-outlet-toggle" onchange="handleStaffOutletToggle('po')"
+                                    class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                Staff Outlet
+                            </label>
+                        </div>
                         <select id="nama"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             ${namaOptions}
@@ -9807,7 +9892,14 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ordered By</label>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm font-semibold text-gray-700">Ordered By</label>
+                            <label class="flex items-center gap-1.5 text-xs font-medium text-gray-600 cursor-pointer select-none">
+                                <input type="checkbox" id="ro-staff-outlet-toggle" onchange="handleStaffOutletToggle('ro')"
+                                    class="rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                Staff Outlet
+                            </label>
+                        </div>
                         <select id="retur-nama"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                             ${namaOptions}
