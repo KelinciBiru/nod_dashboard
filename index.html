@@ -628,7 +628,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzBgmNWjbdett4k09AvdWlkEPyyO8JFeF3GZCh6CVjJ3WrJ1LiILhaBX84s3hh5dDRa/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLGJJPNRaK9OqiktxYPhm-PWlMakBXUYSytnHkwv3em-a0svLbMrCk8XG-hdGJPn8J/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
@@ -11375,6 +11375,28 @@
         }
 
         // =========================================================================
+        // AUTO-FILL NO. TELEPON & ALAMAT (Process PO) BERDASARKAN NO. PO
+        // Sumber data: sheet PO_Data (kolom H=Alamat, I=Phone) via action getPhoneByPO.
+        // ========================================================================
+        async function _autoFillPhoneAlamatForPO(noPO) {
+            const phoneEl = document.getElementById('proc-phone');
+            const alamatEl = document.getElementById('proc-alamat');
+            if (!noPO || (!phoneEl && !alamatEl)) return;
+            try {
+                const res = await fetch(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                const data = await res.json();
+                if (data && data.success) {
+                    if (phoneEl) phoneEl.value = data.phone || '';
+                    if (alamatEl) alamatEl.value = data.alamat || '';
+                } else {
+                    console.warn('[Process PO] No. Telepon/Alamat tidak ditemukan:', data?.message);
+                }
+            } catch (err) {
+                console.warn('[Process PO] Gagal auto-fill No. Telepon/Alamat:', err);
+            }
+        }
+
+        // =========================================================================
         // LOAD DAFTAR PO STATUS "OPEN" UNTUK DROPDOWN DI PROCESS PO
         // =========================================================================
         async function loadOpenPOList() {
@@ -11440,7 +11462,8 @@
                     sel.appendChild(opt);
                 });
 
-                // Auto-fill field Ship To + auto-tarik PDF Request Order ketika user memilih PO dari dropdown
+                // Auto-fill field Ship To + No. Telepon + Alamat + auto-tarik PDF Request Order
+                // ketika user memilih PO dari dropdown
                 sel.onchange = function () {
                     const selectedOpt = sel.options[sel.selectedIndex];
                     const shipToVal = selectedOpt?.dataset?.shipTo || '';
@@ -11448,6 +11471,13 @@
                     if (procShipEl && shipToVal) {
                         procShipEl.value = shipToVal;
                     }
+                    // Reset dulu sebelum diisi ulang, supaya tidak menampilkan sisa
+                    // data PO sebelumnya selama proses fetch berlangsung.
+                    const procPhoneEl = document.getElementById('proc-phone');
+                    const procAlamatEl = document.getElementById('proc-alamat');
+                    if (procPhoneEl) procPhoneEl.value = '';
+                    if (procAlamatEl) procAlamatEl.value = '';
+                    _autoFillPhoneAlamatForPO(sel.value);
                     _maybeAutoPullRequestOrderForSelectedPO();
                 };
 
@@ -11559,7 +11589,7 @@
         </div>
 
         <!-- Baris 2: Ordered By, Ship To, Shipping Date -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">ORDERED BY</label>
                 <input type="text" id="proc-ordered-by" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none" placeholder="Otomatis terisi dari PDF...">
@@ -11571,6 +11601,18 @@
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">SHIPPING DATE</label>
                 <input type="text" id="proc-shipping-date" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none" placeholder="Otomatis terisi dari PDF...">
+            </div>
+        </div>
+
+        <!-- Baris 2b: No. Telepon, Alamat (otomatis terisi berdasarkan No. PO yang dipilih) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
+                <label class="block text-xs font-bold text-gray-500 mb-2">NO. TELEPON</label>
+                <input type="tel" id="proc-phone" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none" placeholder="Otomatis terisi dari No. PO...">
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200 md:col-span-2">
+                <label class="block text-xs font-bold text-gray-500 mb-2">ALAMAT</label>
+                <input type="text" id="proc-alamat" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none" placeholder="Otomatis terisi dari No. PO...">
             </div>
         </div>
 
@@ -11647,6 +11689,8 @@
                 orderedByNoPO: document.getElementById('proc-ordered-by')?.dataset?.nopo || '',
                 shipTo: document.getElementById('proc-ship')?.value || '',
                 shippingDate: document.getElementById('proc-shipping-date')?.value || '',
+                phone: document.getElementById('proc-phone')?.value || '',
+                alamat: document.getElementById('proc-alamat')?.value || '',
                 kategori: document.getElementById('proc-kategori')?.value || '',
                 tableHTML: hasRealRows ? tbody.innerHTML : null
                 // Catatan: file PDF yang sudah dipilih tidak bisa disimpan ke
@@ -11669,6 +11713,8 @@
             }
             if (draft.shipTo) document.getElementById('proc-ship').value = draft.shipTo;
             if (draft.shippingDate) document.getElementById('proc-shipping-date').value = draft.shippingDate;
+            if (draft.phone) document.getElementById('proc-phone').value = draft.phone;
+            if (draft.alamat) document.getElementById('proc-alamat').value = draft.alamat;
             if (draft.kategori) document.getElementById('proc-kategori').value = draft.kategori;
             if (draft.tableHTML) {
                 document.getElementById('proc-table-body').innerHTML = draft.tableHTML;
@@ -12314,6 +12360,7 @@
                 document.getElementById('proc-ordered-by').dataset.nopo = parsed.no_po || '';
                 document.getElementById('proc-ordered-by').dataset.alamat = parsed.alamat || '';
                 document.getElementById('proc-ordered-by').dataset.mapsurl = parsed.mapsUrl || '';
+                if (parsed.no_po) _autoFillPhoneAlamatForPO(parsed.no_po);
 
                 // ── Isi tabel items ──
                 const tbody = document.getElementById('proc-table-body');
@@ -12694,25 +12741,38 @@
                 if (doLabel) doLabel.textContent = 'Delivery Order';
             };
 
-            // ── Ambil No. Telepon dari sheet PO_Data berdasarkan No. PO ──
-            let phoneDO = '';
-            try {
-                console.log('[DO Phone] Mengambil No. Telepon untuk No. PO:', noPO);
-                const phoneRes = await fetch(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
-                const phoneData = await phoneRes.json();
-                console.log('[DO Phone] Response dari GAS:', phoneData);
-                if (phoneData && phoneData.success) {
-                    phoneDO = phoneData.phone || '';
-                    console.log('[DO Phone] No. Telepon:', phoneDO);
-                } else {
-                    console.warn('[DO Phone] Gagal:', phoneData?.message);
+            // ── No. Telepon & Alamat: utamakan isian field form (proc-phone/proc-alamat,
+            // sudah otomatis terisi saat No. PO dipilih & bisa dikoreksi manual oleh user).
+            // Fetch ke sheet PO_Data hanya dipakai sebagai fallback kalau field kosong. ──
+            const procPhoneEl = document.getElementById('proc-phone');
+            const procAlamatEl = document.getElementById('proc-alamat');
+            let phoneDO = procPhoneEl?.value?.trim() || '';
+            let alamatFromServer = procAlamatEl?.value?.trim() || '';
+
+            if (!phoneDO || !alamatFromServer) {
+                try {
+                    console.log('[DO Contact] Mengambil No. Telepon & Alamat untuk No. PO:', noPO);
+                    const phoneRes = await fetch(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                    const phoneData = await phoneRes.json();
+                    console.log('[DO Contact] Response dari GAS:', phoneData);
+                    if (phoneData && phoneData.success) {
+                        phoneDO = phoneDO || phoneData.phone || '';
+                        alamatFromServer = alamatFromServer || phoneData.alamat || '';
+                        // Sinkronkan balik ke field form supaya terlihat oleh user juga.
+                        if (procPhoneEl && !procPhoneEl.value.trim() && phoneDO) procPhoneEl.value = phoneDO;
+                        if (procAlamatEl && !procAlamatEl.value.trim() && alamatFromServer) procAlamatEl.value = alamatFromServer;
+                    } else {
+                        console.warn('[DO Contact] Gagal:', phoneData?.message);
+                    }
+                } catch (err) {
+                    console.warn('[DO Contact] Gagal mengambil No. Telepon/Alamat:', err);
                 }
-            } catch (err) {
-                console.warn('[DO Phone] Gagal mengambil No. Telepon:', err);
             }
 
-            // Ambil alamat dari dataset proc-ordered-by (diisi saat load PO)
-            const alamatDO = document.getElementById('proc-ordered-by')?.dataset?.alamat || shipTo;
+            // Alamat: utamakan isian field form/server, lalu dataset proc-ordered-by
+            // (diisi saat scan/import PDF), baru fallback ke Ship To.
+            const alamatDatasetDO = document.getElementById('proc-ordered-by')?.dataset?.alamat || '';
+            const alamatDO = alamatFromServer || alamatDatasetDO || shipTo;
             const mapsUrlDO = document.getElementById('proc-ordered-by')?.dataset?.mapsurl || '';
 
             // ── Generate QR Code (berisi Google Maps URL lokasi alamat PO) ──
@@ -12783,7 +12843,8 @@
             const infoRight = [
                 ['Ordered By', orderedBy || '-'],
                 ['Ship To', shipTo || '-'],
-                ['Phone', phoneDO || '-'],
+                ['No. Telepon', phoneDO || '-'],
+                ['Alamat', alamatDO || '-'],
                 ['Shipping Date', shippingDate || '-'],
             ];
 
@@ -12792,6 +12853,8 @@
             const colRightX = pageWidth / 2 + 4;
             const colRightLabelW = 28;
             const lineH = 6;
+            const colRightValueX = colRightX + colRightLabelW + 3;
+            const colRightMaxW = pageWidth - marginX - colRightValueX;
 
             infoLeft.forEach((row, i) => {
                 const yy = y + i * lineH;
@@ -12802,19 +12865,19 @@
                 doc.text(String(row[1] || '-'), colLeftX + colLeftLabelW + 3, yy);
             });
 
-            infoRight.forEach((row, i) => {
-                const yy = y + i * lineH;
+            let rightY = y;
+            infoRight.forEach(row => {
+                if (!row[0]) return;
                 doc.setFont('helvetica', 'bold');
-                doc.text(row[0], colRightX, yy);
+                doc.text(row[0], colRightX, rightY);
                 doc.setFont('helvetica', 'normal');
-                doc.text(':', colRightX + colRightLabelW, yy);
-                const textVal = String(row[1] || '-');
-                const maxW = pageWidth - marginX - (colRightX + colRightLabelW + 3);
-                const wrapped = doc.splitTextToSize(textVal, maxW);
-                doc.text(wrapped, colRightX + colRightLabelW + 3, yy);
+                doc.text(':', colRightX + colRightLabelW, rightY);
+                const wrapped = doc.splitTextToSize(String(row[1] || '-'), colRightMaxW);
+                doc.text(wrapped, colRightValueX, rightY);
+                rightY += lineH * wrapped.length;
             });
 
-            y += infoLeft.length * lineH + 6;
+            y += Math.max(infoLeft.length * lineH, rightY - y) + 6;
 
             // ── Tabel Item ──
             const tableBody = items.map((it, idx) => [
@@ -15093,7 +15156,7 @@
             }, 300);
         }
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyVMbKOUK1uvYOilDFUzMxBVHDj3UdhPNUlh5erwaiqAMZTO_CF9WvjgYgSOTl5UBoO/exec";
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxToe8GzDCFzQYbKujTBWVlBU8k6JZAngEoO8Af6Q_55xls7xz0FyFoBAOFoh7yAJQW/exec";
 
         async function simpanOutboundFinal() {
             const orderedByEl = document.getElementById('proc-ordered-by');
@@ -15234,6 +15297,8 @@
                         document.getElementById('proc-ordered-by').dataset.nopo = '';
                         document.getElementById('proc-ship').value = '';
                         document.getElementById('proc-shipping-date').value = '';
+                        document.getElementById('proc-phone').value = '';
+                        document.getElementById('proc-alamat').value = '';
                         document.getElementById('proc-kategori').value = '';
                         document.getElementById('proc-tgl-proses').value = new Date().toISOString().split('T')[0];
                         document.getElementById('import-status').textContent = '';
