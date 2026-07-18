@@ -468,6 +468,9 @@
                         </button>
                         <div id="team-delivery-sub"
                             class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button id="sub-create-task" onclick="navTo('Create Task')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition hidden">Create
+                                Task</button>
                             <button onclick="navTo('Route')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Route</button>
                             <button onclick="navTo('Report Finish')"
@@ -628,7 +631,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLGJJPNRaK9OqiktxYPhm-PWlMakBXUYSytnHkwv3em-a0svLbMrCk8XG-hdGJPn8J/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwelinB-S7fdOaRoGYBYGiwuH_QLC4Otw0EB1jAP2ZsYV5Hvx5_GJqFXGh0NlK3k83C/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
@@ -1030,8 +1033,6 @@
                 document.getElementById('menu-service-center').classList.add('hidden');
                 // Tampilkan Receive PO di bawah submenu Purchase Order
                 document.getElementById('sub-receive-po').classList.remove('hidden');
-                // Tampilkan Warranty Registration di bawah submenu Purchase Order
-                document.getElementById('sub-product-registration').classList.remove('hidden');
                 // Buka PO submenu otomatis
                 document.getElementById('po-sub').classList.remove('hidden');
                 document.getElementById('arrow-po').textContent = '▲';
@@ -1065,6 +1066,8 @@
                 document.getElementById('menu-process-po').classList.add('hidden');
                 document.getElementById('menu-process-inbound').classList.add('hidden');
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
+                // Create Task hanya untuk ADMIN — Driver tidak perlu/tidak boleh akses
+                document.getElementById('sub-create-task').classList.add('hidden');
                 // Catalogue hanya untuk ADMIN, PO_User, dan Warehouse — Driver tidak perlu akses
                 document.getElementById('menu-catalogue').classList.add('hidden');
                 // Service Center bukan untuk Driver
@@ -1128,6 +1131,8 @@
                 // Tampilkan Warranty Registration di bawah submenu Purchase Order
                 document.getElementById('sub-product-registration').classList.remove('hidden');
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
+                // Create Task hanya untuk ADMIN
+                document.getElementById('sub-create-task').classList.remove('hidden');
                 // Service Center untuk ADMIN, CS_User, dan Teknisi
                 document.getElementById('menu-service-center').classList.remove('hidden');
                 navTo(_getRestorePage('Dashboard'));
@@ -1172,6 +1177,9 @@
             if (saved === 'Receive PO' && !(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
                 return defaultPage;
             }
+            if (saved === 'Create Task' && currentUserRole !== 'ADMIN') {
+                return defaultPage;
+            }
             if ((saved === 'Route' || saved === 'Report Finish') &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER')) {
                 return defaultPage;
@@ -1179,7 +1187,7 @@
             if (saved === 'Catalogue' && currentUserRole === 'DRIVER') {
                 return defaultPage;
             }
-            if (saved === 'Product Registration' && !(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
+            if (saved === 'Product Registration' && currentUserRole !== 'ADMIN') {
                 return defaultPage;
             }
             if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(saved) &&
@@ -1759,7 +1767,12 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Process Inbound" hanya dapat diakses oleh Team Warehouse dan Admin.');
                 return;
             }
-            // ── AKSES KONTROL: Team Delivery hanya untuk ADMIN dan DRIVER ──
+            // ── AKSES KONTROL: Create Task hanya untuk ADMIN ──
+            if (pageName === 'Create Task' && currentUserRole !== 'ADMIN') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Create Task" hanya dapat diakses oleh Admin.');
+                return;
+            }
+            // ── AKSES KONTROL: Team Delivery (Route/Report Finish) hanya untuk ADMIN dan DRIVER ──
             if ((pageName === 'Route' || pageName === 'Report Finish') &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER')) {
                 showAlert('error', 'Akses Ditolak', 'Menu "Team Delivery" hanya dapat diakses oleh Admin dan Driver.');
@@ -1770,9 +1783,9 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Catalogue" hanya dapat diakses oleh Admin, PO User, dan Team Warehouse.');
                 return;
             }
-            // ── AKSES KONTROL: Warranty Registration hanya untuk ADMIN dan PO_User ──
-            if (pageName === 'Product Registration' && !(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
-                showAlert('error', 'Akses Ditolak', 'Menu "Warranty Registration" hanya dapat diakses oleh Admin dan PO User.');
+            // ── AKSES KONTROL: Warranty Registration hanya untuk ADMIN ──
+            if (pageName === 'Product Registration' && currentUserRole !== 'ADMIN') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Warranty Registration" hanya dapat diakses oleh Admin.');
                 return;
             }
             // ── AKSES KONTROL: Service Center untuk ADMIN, CS_User, dan Teknisi ──
@@ -1807,6 +1820,7 @@
                 'Product Registration': 'Warranty Registration',
                 'Process PO': 'Proses PO Masuk',
                 'Process Inbound': 'Process Inbound',
+                'Create Task': 'Team Delivery - Create Task',
                 'Route': 'Team Delivery - Route',
                 'Report Finish': 'Team Delivery - Report Finish',
                 'Catalogue': 'Catalogue Produk',
@@ -1827,7 +1841,7 @@
         }
 
         // Halaman yang mendukung auto-update (LiveSync) tanpa perlu refresh manual
-        const LIVE_SYNC_PAGES = new Set(['Report Status', 'Route']);
+        const LIVE_SYNC_PAGES = new Set(['Report Status', 'Route', 'Create Task']);
 
         async function showPage(pageName) {
             // Hentikan kamera QR jika sedang aktif
@@ -1859,6 +1873,7 @@
                 case 'Process PO': await showProcessPO(); break;
                 case 'Receive PO': await showReceivePO(); break;
                 case 'Process Inbound': await showProcessInbound(); break;
+                case 'Create Task': await showTeamDeliveryCreateTask(); break;
                 case 'Route': await showTeamDeliveryRoute(); break;
                 case 'Report Finish': await showTeamDeliveryReportFinish(); break;
                 case 'Catalogue': await showCatalogue(); break;
@@ -5943,6 +5958,177 @@
                 };
                 modal.addEventListener('click', e => { if (e.target === modal) { modal.remove(); resolve(null); } });
             });
+        }
+
+        // =========================================================================
+        // HALAMAN: TEAM DELIVERY - CREATE TASK
+        // Tabel No. PO/RO/Tiket yang berstatus "Ready To Ship" (PO) atau
+        // "Ready To PickUp" (RO), dengan dropdown Driver (data dari sheet
+        // "Source" kolom E). Begitu Driver dipilih, otomatis dicatat ke
+        // PO_Data kolom L / Retur_Data kolom M via action "assignDriver".
+        // Status kolom bersifat dinamis: berubah otomatis mengikuti status
+        // asli di PO_Data / Retur_Data ("On Delivery" saat driver klik Start
+        // di menu Route, hilang dari tabel begitu berstatus "Done").
+        // =========================================================================
+        function _statusBadgeCreateTask(status) {
+            const map = {
+                'Ready To Ship':   { cls: 'bg-gray-100 text-gray-600', label: '🕓 Ready To Ship' },
+                'Ready To PickUp': { cls: 'bg-gray-100 text-gray-600', label: '🕓 Ready To PickUp' },
+                'On-Delivery':     { cls: 'bg-blue-100 text-blue-700', label: '🚚 On Delivery' },
+                'On Delivery':     { cls: 'bg-blue-100 text-blue-700', label: '🚚 On Delivery' }
+            };
+            return map[status] || { cls: 'bg-gray-100 text-gray-500', label: escapeHtml(status || '-') };
+        }
+
+        async function _onCreateTaskDriverChange(selectEl) {
+            const noPO = selectEl.dataset.nopo || '';
+            const driver = selectEl.value;
+            selectEl.disabled = true;
+            liveSyncNoteMutation();
+            try {
+                const res = await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action : 'assignDriver',
+                        token  : sessionToken,
+                        noPO   : noPO,
+                        driver : driver
+                    })
+                });
+                const result = await res.json();
+                if (!result.success) {
+                    showAlert('error', 'Gagal Assign Driver', result.message || 'Terjadi kesalahan saat menyimpan driver.');
+                }
+            } catch (err) {
+                showAlert('error', 'Gagal Assign Driver', err.message);
+            } finally {
+                selectEl.disabled = false;
+            }
+        }
+
+        async function showTeamDeliveryCreateTask(_preFetchedRaw) {
+            const contentArea = document.getElementById('content-area');
+            const isSilentUpdate = window.__liveSyncSilent && document.getElementById('create-task-table-area');
+
+            if (!isSilentUpdate) {
+                contentArea.innerHTML = `
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Create Task</h1>
+                        <p class="text-sm text-gray-500">Assign driver untuk setiap No. PO/RO/Tiket yang siap dikirim/dijemput.</p>
+                    </div>
+                    <button onclick="showTeamDeliveryCreateTask()"
+                        class="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg border border-amber-200 transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div id="create-task-table-area">
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-pulse">
+                        <div class="h-4 bg-gray-200 rounded w-1/3 mb-4"></div>
+                        <div class="h-3 bg-gray-100 rounded w-full mb-2"></div>
+                        <div class="h-3 bg-gray-100 rounded w-full mb-2"></div>
+                        <div class="h-3 bg-gray-100 rounded w-2/3"></div>
+                    </div>
+                </div>`;
+            }
+
+            LiveSync.register('Create Task', {
+                check: async () => {
+                    const r = await fetch(DELIVERY_GAS_URL + '?action=getCreateTaskData', { redirect: 'follow' });
+                    return await r.json();
+                },
+                onChange: async (freshRaw) => { await showTeamDeliveryCreateTask(freshRaw); }
+            });
+
+            const tableArea = document.getElementById('create-task-table-area');
+
+            // Event delegation dipasang SEKALI pada container (elemen ini tidak pernah
+            // diganti, hanya innerHTML-nya) — supaya tidak perlu querySelectorAll ulang
+            // setelah render, dan tetap aman meski smoothSwapContent menunda pergantian
+            // innerHTML (mis. saat auto-update/LiveSync).
+            if (tableArea && !tableArea.dataset.listenerAttached) {
+                tableArea.addEventListener('change', (e) => {
+                    const sel = e.target.closest('.create-task-driver-select');
+                    if (sel) _onCreateTaskDriverChange(sel);
+                });
+                tableArea.dataset.listenerAttached = '1';
+            }
+
+            try {
+                const [raw, driverListRaw] = await Promise.all([
+                    _preFetchedRaw || fetch(DELIVERY_GAS_URL + '?action=getCreateTaskData', { redirect: 'follow' }).then(r => r.json()),
+                    cachedFetch(DELIVERY_GAS_URL + '?action=getDriverList', 'getDriverList')
+                ]);
+
+                if (raw && raw.error) throw new Error(raw.error);
+                const tasks = Array.isArray(raw) ? raw : (raw.tasks || []);
+                const driverList = Array.isArray(driverListRaw) ? driverListRaw : [];
+
+                if (tasks.length === 0) {
+                    smoothSwapContent(tableArea, `
+                    <div class="flex flex-col items-center justify-center py-20 text-center bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <svg class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                        <p class="text-lg font-semibold text-gray-400">Tidak ada task yang perlu di-assign</p>
+                        <p class="text-sm text-gray-400 mt-1">Semua PO/RO belum siap kirim, atau sudah selesai (Done).</p>
+                    </div>`);
+                    return;
+                }
+
+                const rowsHtml = tasks.map(t => {
+                    const badge = _statusBadgeCreateTask(t.status);
+                    const safeNoPO = escapeHtml(t.noPO);
+                    const optionsHtml = ['<option value="">— Pilih Driver —</option>']
+                        .concat(driverList.map(d => `<option value="${escapeHtml(d)}" ${d === t.driver ? 'selected' : ''}>${escapeHtml(d)}</option>`))
+                        .join('');
+                    return `
+                    <tr class="border-b border-gray-100 hover:bg-gray-50/60 transition">
+                        <td class="px-4 py-3 text-sm font-semibold text-gray-700 whitespace-nowrap">${safeNoPO}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${t.fromLocation ? escapeHtml(t.fromLocation) : '<span class="text-gray-300">-</span>'}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(t.shipTo)}</td>
+                        <td class="px-4 py-3">
+                            <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${badge.cls}">${badge.label}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <select class="create-task-driver-select w-full max-w-[180px] text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                                data-nopo="${safeNoPO}">
+                                ${optionsHtml}
+                            </select>
+                        </td>
+                    </tr>`;
+                }).join('');
+
+                smoothSwapContent(tableArea, `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="bg-[#0f1f3d] border-b border-[#0f1f3d]">
+                                <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">No. PO/RO/Tiket</th>
+                                <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">From Location</th>
+                                <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">Ship To</th>
+                                <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">Status</th>
+                                <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">Driver</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>`);
+
+            } catch (err) {
+                tableArea.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+                    <p class="text-red-600 font-semibold mb-1">❌ Gagal memuat data Create Task</p>
+                    <p class="text-xs text-red-400">${escapeHtml(err.message)}</p>
+                    <p class="text-xs text-gray-500 mt-2">Pastikan GAS sudah mendukung <code>action=getCreateTaskData</code> &amp; <code>action=getDriverList</code>.</p>
+                </div>`;
+            }
         }
 
         async function showTeamDeliveryRoute(_preFetchedRaw) {
