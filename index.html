@@ -636,6 +636,9 @@
         // =========================================================================
         const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwelinB-S7fdOaRoGYBYGiwuH_QLC4Otw0EB1jAP2ZsYV5Hvx5_GJqFXGh0NlK3k83C/exec';
 
+        // TODO: Ganti dengan URL Google Apps Script Web App khusus Dashboard Log (deployment terpisah, lihat DashboardLog.gs)
+        const DASHBOARD_LOG_GAS_URL = 'https://script.google.com/macros/s/AKfycbxGTv8c9x0cv-qb5Dy_NokDKI3BrYcF_8AURc21o0lvSION-g83FuMaMHqTaPopEZJhMQ/exec';
+
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
 
@@ -881,6 +884,75 @@
         // Simpan data login sementara saat menunggu nama driver diisi
         let _pendingLoginData = null;
 
+        // =========================================================================
+        // LOG LOGIN -> Spreadsheet "Dashboard Log"
+        // =========================================================================
+        /** Deteksi jenis & label device dari User-Agent (Desktop / Mobile / Tablet) */
+        function _getDeviceLabel() {
+            const ua = navigator.userAgent || '';
+            const isTablet = /iPad|Tablet/i.test(ua) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isMobile = !isTablet && /Mobi|Android|iPhone|iPod/i.test(ua);
+            const type = isTablet ? 'Tablet' : (isMobile ? 'Mobile' : 'Desktop');
+
+            let os = 'Unknown OS';
+            if (/Windows/i.test(ua)) os = 'Windows';
+            else if (/Android/i.test(ua)) os = 'Android';
+            else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+            else if (/Mac OS X/i.test(ua)) os = 'MacOS';
+            else if (/Linux/i.test(ua)) os = 'Linux';
+
+            let browser = 'Unknown Browser';
+            if (/Edg\//i.test(ua)) browser = 'Edge';
+            else if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) browser = 'Chrome';
+            else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+            else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Safari';
+
+            return { type, label: `${type} - ${os} - ${browser}` };
+        }
+
+        /** Ambil titik lokasi (best-effort, tidak memblokir proses login jika ditolak/timeout) */
+        function _getLoginLocation() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) { resolve('Tidak didukung browser'); return; }
+                const timer = setTimeout(() => resolve('Timeout / tidak merespon'), 6000);
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        clearTimeout(timer);
+                        resolve(`${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`);
+                    },
+                    () => { clearTimeout(timer); resolve('Izin lokasi ditolak / tidak tersedia'); },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+                );
+            });
+        }
+
+        /**
+         * Catat aktivitas login ke spreadsheet "Dashboard Log" (via GAS action 'logLogin').
+         * Dijalankan async di background — kegagalan logging TIDAK menghentikan/menunda startApp().
+         */
+        async function recordLoginActivity(role) {
+            try {
+                const deviceInfo = _getDeviceLabel();
+                const location = await _getLoginLocation();
+                fetch(DASHBOARD_LOG_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'logLogin',
+                        device: deviceInfo.label,
+                        phone: '-', // Browser tidak bisa membaca no. HP perangkat secara otomatis
+                        location: location,
+                        role: role,
+                        hitApi: 'login'
+                    })
+                }).catch(() => { /* silent fail, jangan ganggu user */ });
+            } catch (e) {
+                // Jangan pernah biarkan kegagalan logging mengganggu proses login utama
+            }
+        }
+
         async function checkLogin() {
             const passInput = document.getElementById('passwordInput');
             const pass = passInput.value;
@@ -919,6 +991,7 @@
                         passInput.value = '';
                         // DEBUG: hapus baris ini setelah role CS_User/Teknisi terkonfirmasi benar
                         console.log('[LOGIN] Backend returned role:', JSON.stringify(data.role));
+                        recordLoginActivity(currentUserRole);
                         startApp();
                     }
                 } else {
@@ -964,6 +1037,7 @@
             error.classList.add('hidden');
             _pendingLoginData = null;
 
+            recordLoginActivity(currentUserRole);
             startApp();
         }
 
