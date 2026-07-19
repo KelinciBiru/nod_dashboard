@@ -3261,7 +3261,7 @@
                     </div>
                     <div id="fs-shipto-container" class="hidden">
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
-                        <input type="text" id="fs-shipto"
+                        <input type="text" id="fs-shipto" onblur="autoFillShipToWarehousePG(this)"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan Ship To">
                     </div>
@@ -9397,6 +9397,22 @@
             }
         }
 
+        // =========================================================================
+        // AUTO-FILL "Ship To" → "Jumpstart Warehouse Pulogadung"
+        // Dipakai di Form RO (id="retur-allocated-to") & Form Service saat Tipe
+        // Permintaan = Pick Up (id="fs-shipto"). Jika isi field (setelah trim,
+        // case-insensitive) persis sama dengan salah satu trigger di bawah,
+        // field otomatis diisi "Jumpstart Warehouse Pulogadung" saat blur.
+        // =========================================================================
+        function autoFillShipToWarehousePG(inputEl) {
+            if (!inputEl) return;
+            const val = inputEl.value.trim().toLowerCase();
+            const triggers = ['wh pg', 'warehouse pg', 'wh'];
+            if (triggers.includes(val)) {
+                inputEl.value = 'Jumpstart Warehouse Pulogadung';
+            }
+        }
+
         async function showFormPO() {
             setLoading('Memuat form...');
             const contentArea = document.getElementById('content-area');
@@ -10294,7 +10310,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
-                        <input type="text" id="retur-allocated-to"
+                        <input type="text" id="retur-allocated-to" onblur="autoFillShipToWarehousePG(this)"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan Nama (Warehouse/Penerima)">
                     </div>
