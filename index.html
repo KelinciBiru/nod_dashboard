@@ -15317,6 +15317,17 @@
                     const statusBadgeClass = tableKey === 'preorder'
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-red-100 text-red-700';
+                    // Tombol kedua berbeda per tabel: "Cancelled" untuk Pre-Order,
+                    // "Rejected" untuk Need Approval.
+                    const secondBtn = tableKey === 'preorder'
+                        ? `<button id="poa-btn2-${tableKey}-${rowKey}" onclick="cancelPreOrderUI('${row.noPO}', '${tableKey}')"
+                                class="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1 rounded text-xs font-semibold transition ml-2">
+                                Cancelled
+                            </button>`
+                        : `<button id="poa-btn2-${tableKey}-${rowKey}" onclick="rejectNeedApprovalUI('${row.noPO}', '${tableKey}')"
+                                class="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1 rounded text-xs font-semibold transition ml-2">
+                                Rejected
+                            </button>`;
                     return `
                     <tr id="poa-row-${tableKey}-${rowKey}">
                         <td class="p-3 border-b font-mono text-left">${escapeHtml(row.noPO || '-')}</td>
@@ -15324,11 +15335,11 @@
                         <td class="p-3 border-b">${escapeHtml(row.shipTo || '-')}</td>
                         <td class="p-3 border-b"><span class="inline-block px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass}">${escapeHtml(row.status || '-')}</span></td>
                         <td class="p-3 border-b">${linkCell}</td>
-                        <td class="p-3 border-b">
+                        <td class="p-3 border-b whitespace-nowrap">
                             <button id="poa-btn-${tableKey}-${rowKey}" onclick="releasePOStatusUI('${row.noPO}', '${tableKey}')"
                                 class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 rounded text-xs font-semibold transition">
                                 Release
-                            </button>
+                            </button>${secondBtn}
                         </td>
                     </tr>`;
                 };
@@ -15423,6 +15434,96 @@
             } catch (err) {
                 showAlert('error', 'Terjadi Kesalahan', err.message);
                 if (btn) { btn.disabled = false; btn.innerText = 'Release'; }
+            }
+        }
+
+        /**
+         * Batalkan satu baris PO dari tabel "Pre-Order" — status PO_Data (kolom E)
+         * diubah menjadi "Cancel" dan baris langsung hilang dari daftar ini.
+         */
+        async function cancelPreOrderUI(noPO, tableKey) {
+            const ok = await showConfirm('Batalkan PO?', `PO ${noPO} akan diubah statusnya menjadi "Cancel" dan akan hilang dari daftar ini.`);
+            if (!ok) return;
+
+            const rowKey = String(noPO || '').replace(/[^a-zA-Z0-9\-]/g, '_');
+            const btn = document.getElementById(`poa-btn2-${tableKey}-${rowKey}`);
+            const btnRelease = document.getElementById(`poa-btn-${tableKey}-${rowKey}`);
+            if (btn) {
+                btn.disabled = true;
+                if (btnRelease) btnRelease.disabled = true;
+                btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>Memproses...';
+            }
+
+            try {
+                const response = await fetch(API_URLS.purchaseOrder, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    body: JSON.stringify({ action: 'cancelPreOrderPO', token: sessionToken, noPO }),
+                });
+                const result = await response.json();
+                if (result.success) {
+                    const row = document.getElementById(`poa-row-${tableKey}-${rowKey}`);
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s, transform 0.3s';
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(20px)';
+                        setTimeout(() => row.remove(), 300);
+                    }
+                    showAlert('success', 'PO Berhasil Dibatalkan', `PO ${noPO} sekarang berstatus "Cancel".`);
+                } else {
+                    showAlert('error', 'Gagal Membatalkan PO', result.message || 'Terjadi kesalahan, coba lagi.');
+                    if (btn) { btn.disabled = false; btn.innerText = 'Cancelled'; }
+                    if (btnRelease) btnRelease.disabled = false;
+                }
+            } catch (err) {
+                showAlert('error', 'Terjadi Kesalahan', err.message);
+                if (btn) { btn.disabled = false; btn.innerText = 'Cancelled'; }
+                if (btnRelease) btnRelease.disabled = false;
+            }
+        }
+
+        /**
+         * Tolak satu baris PO dari tabel "Need Approval" — status PO_Data (kolom E)
+         * diubah menjadi "Rejected" dan baris langsung hilang dari daftar ini.
+         */
+        async function rejectNeedApprovalUI(noPO, tableKey) {
+            const ok = await showConfirm('Tolak PO?', `PO ${noPO} akan diubah statusnya menjadi "Rejected" dan akan hilang dari daftar ini.`);
+            if (!ok) return;
+
+            const rowKey = String(noPO || '').replace(/[^a-zA-Z0-9\-]/g, '_');
+            const btn = document.getElementById(`poa-btn2-${tableKey}-${rowKey}`);
+            const btnRelease = document.getElementById(`poa-btn-${tableKey}-${rowKey}`);
+            if (btn) {
+                btn.disabled = true;
+                if (btnRelease) btnRelease.disabled = true;
+                btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>Memproses...';
+            }
+
+            try {
+                const response = await fetch(API_URLS.purchaseOrder, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    body: JSON.stringify({ action: 'rejectNeedApprovalPO', token: sessionToken, noPO }),
+                });
+                const result = await response.json();
+                if (result.success) {
+                    const row = document.getElementById(`poa-row-${tableKey}-${rowKey}`);
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s, transform 0.3s';
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(20px)';
+                        setTimeout(() => row.remove(), 300);
+                    }
+                    showAlert('success', 'PO Berhasil Ditolak', `PO ${noPO} sekarang berstatus "Rejected".`);
+                } else {
+                    showAlert('error', 'Gagal Menolak PO', result.message || 'Terjadi kesalahan, coba lagi.');
+                    if (btn) { btn.disabled = false; btn.innerText = 'Rejected'; }
+                    if (btnRelease) btnRelease.disabled = false;
+                }
+            } catch (err) {
+                showAlert('error', 'Terjadi Kesalahan', err.message);
+                if (btn) { btn.disabled = false; btn.innerText = 'Rejected'; }
+                if (btnRelease) btnRelease.disabled = false;
             }
         }
 
