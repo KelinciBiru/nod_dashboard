@@ -4063,7 +4063,7 @@
                 styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 8 },
+                    0: { halign: 'center', cellWidth: 11 },
                     1: { halign: 'center', cellWidth: 18 },
                     3: { halign: 'center', cellWidth: 14 },
                     4: { halign: 'center', cellWidth: 16 },
@@ -6038,6 +6038,34 @@
             return map[status] || { cls: 'bg-gray-100 text-gray-500', label: escapeHtml(status || '-') };
         }
 
+        // Cek apakah nama driver yang dipilih adalah kurir "JNT Cargo" (case-insensitive).
+        function _isJntCargoDriver(driver) {
+            return String(driver || '').trim().toLowerCase() === 'jnt cargo';
+        }
+
+        // Bangun HTML untuk sel "No. Resi" & "SLA" pada satu baris Create Task.
+        // - Jika driver = JNT Cargo → tampilkan input teks (No. Resi) & input tanggal (SLA).
+        // - Selain itu → tampilkan "-" (tidak relevan untuk driver lain).
+        function _buildResiSlaCellsHtml(t, idx, isJnt) {
+            if (!isJnt) {
+                return `
+                <td class="px-4 py-3 text-sm text-gray-300 create-task-resi-cell" data-idx="${idx}">-</td>
+                <td class="px-4 py-3 text-sm text-gray-300 create-task-sla-cell" data-idx="${idx}">-</td>`;
+            }
+            const noResi = escapeHtml(t.noResi || '');
+            const sla    = escapeHtml(t.sla || '');
+            const safeNoPO = escapeHtml(t.noPO);
+            return `
+                <td class="px-4 py-3 create-task-resi-cell" data-idx="${idx}">
+                    <input type="text" class="create-task-resi-input w-full min-w-[120px] text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                        placeholder="No. Resi" data-nopo="${safeNoPO}" value="${noResi}">
+                </td>
+                <td class="px-4 py-3 create-task-sla-cell" data-idx="${idx}">
+                    <input type="date" class="create-task-sla-input w-full min-w-[130px] text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                        data-nopo="${safeNoPO}" value="${sla}">
+                </td>`;
+        }
+
         async function _onCreateTaskDriverChange(selectEl) {
             const noPO = selectEl.dataset.nopo || '';
             const driver = selectEl.value;
@@ -6058,11 +6086,66 @@
                 const result = await res.json();
                 if (!result.success) {
                     showAlert('error', 'Gagal Assign Driver', result.message || 'Terjadi kesalahan saat menyimpan driver.');
+                } else {
+                    // ── Munculkan/hilangkan kolom "No. Resi" & "SLA" begitu Driver
+                    //    diganti ke/dari "JNT Cargo", tanpa reload seluruh tabel ──
+                    const row = selectEl.closest('tr');
+                    if (row) {
+                        const isJnt = _isJntCargoDriver(driver);
+                        const resiCell = row.querySelector('.create-task-resi-cell');
+                        const slaCell  = row.querySelector('.create-task-sla-cell');
+                        const idx = resiCell?.dataset.idx ?? slaCell?.dataset.idx ?? '';
+                        const cellsHtml = _buildResiSlaCellsHtml({ noPO, noResi: '', sla: '' }, idx, isJnt);
+                        if (resiCell && slaCell) {
+                            const tmp = document.createElement('tbody');
+                            tmp.innerHTML = `<tr>${cellsHtml}</tr>`;
+                            resiCell.replaceWith(tmp.querySelector('.create-task-resi-cell'));
+                            slaCell.replaceWith(tmp.querySelector('.create-task-sla-cell'));
+                        }
+                    }
                 }
             } catch (err) {
                 showAlert('error', 'Gagal Assign Driver', err.message);
             } finally {
                 selectEl.disabled = false;
+            }
+        }
+
+        // Dipanggil saat "No. Resi" atau "SLA" diisi/diubah pada baris driver "JNT Cargo".
+        // Mengirim action "setResiSla" ke GAS — backend yang menentukan:
+        //  - Menyimpan No. Resi / SLA ke Delivery_Log atau PO_Data/Retur_Data.
+        //  - Jika salah satu kolom (No. Resi / SLA) terisi → set status "On-Delivery" (setara klik Start di Route),
+        //    khusus untuk baris dengan Driver = "JNT Cargo".
+        //  - Jika SLA terisi → menjadwalkan/menandai "Delivered" otomatis begitu tanggal SLA tercapai
+        //    (perlu time-driven trigger di Apps Script agar tetap jalan walau halaman ini tidak dibuka).
+        async function _onCreateTaskResiSlaChange(inputEl) {
+            const noPO   = inputEl.dataset.nopo || '';
+            const row    = inputEl.closest('tr');
+            const noResi = row?.querySelector('.create-task-resi-input')?.value || '';
+            const sla    = row?.querySelector('.create-task-sla-input')?.value || '';
+            inputEl.disabled = true;
+            liveSyncNoteMutation();
+            try {
+                const res = await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action : 'setResiSla',
+                        token  : sessionToken,
+                        noPO   : noPO,
+                        noResi : noResi,
+                        sla    : sla
+                    })
+                });
+                const result = await res.json();
+                if (!result.success) {
+                    showAlert('error', 'Gagal Menyimpan No. Resi / SLA', result.message || 'Terjadi kesalahan saat menyimpan.');
+                }
+            } catch (err) {
+                showAlert('error', 'Gagal Menyimpan No. Resi / SLA', err.message);
+            } finally {
+                inputEl.disabled = false;
             }
         }
 
@@ -6112,7 +6195,9 @@
             if (tableArea && !tableArea.dataset.listenerAttached) {
                 tableArea.addEventListener('change', (e) => {
                     const sel = e.target.closest('.create-task-driver-select');
-                    if (sel) _onCreateTaskDriverChange(sel);
+                    if (sel) { _onCreateTaskDriverChange(sel); return; }
+                    const resiOrSla = e.target.closest('.create-task-resi-input, .create-task-sla-input');
+                    if (resiOrSla) _onCreateTaskResiSlaChange(resiOrSla);
                 });
                 tableArea.dataset.listenerAttached = '1';
             }
@@ -6140,9 +6225,10 @@
                     return;
                 }
 
-                const rowsHtml = tasks.map(t => {
+                const rowsHtml = tasks.map((t, idx) => {
                     const badge = _statusBadgeCreateTask(t.status);
                     const safeNoPO = escapeHtml(t.noPO);
+                    const isJnt = _isJntCargoDriver(t.driver);
                     const optionsHtml = ['<option value="">— Pilih Driver —</option>']
                         .concat(driverList.map(d => `<option value="${escapeHtml(d)}" ${d === t.driver ? 'selected' : ''}>${escapeHtml(d)}</option>`))
                         .join('');
@@ -6155,11 +6241,12 @@
                             <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${badge.cls}">${badge.label}</span>
                         </td>
                         <td class="px-4 py-3">
-                            <select class="create-task-driver-select w-full max-w-[180px] text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                            <select class="create-task-driver-select w-full min-w-[140px] max-w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-300"
                                 data-nopo="${safeNoPO}">
                                 ${optionsHtml}
                             </select>
                         </td>
+                        ${_buildResiSlaCellsHtml(t, idx, isJnt)}
                     </tr>`;
                 }).join('');
 
@@ -6173,6 +6260,8 @@
                                 <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">Ship To</th>
                                 <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">Status</th>
                                 <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">Driver</th>
+                                <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">No. Resi</th>
+                                <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">SLA</th>
                             </tr>
                         </thead>
                         <tbody>${rowsHtml}</tbody>
@@ -11113,7 +11202,7 @@
                 styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 9 },
+                    0: { halign: 'center', cellWidth: 11 },
                     2: { halign: 'center', cellWidth: 16 },
                     3: { halign: 'center', cellWidth: 18 },
                     5: { cellWidth: 35 },
@@ -11543,7 +11632,7 @@
                 styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 8 },
+                    0: { halign: 'center', cellWidth: 11 },
                     1: { halign: 'center', cellWidth: 18 },
                     3: { halign: 'center', cellWidth: 14 },
                     4: { halign: 'center', cellWidth: 16 },
@@ -13174,7 +13263,7 @@
                 styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 8 },
+                    0: { halign: 'center', cellWidth: 11 },
                     1: { halign: 'center', cellWidth: 18 },
                     3: { halign: 'center', cellWidth: 16 },
                     4: { halign: 'center', cellWidth: 16 },
@@ -17079,7 +17168,7 @@
                 styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { halign: 'center', cellWidth: 8 },
+                    0: { halign: 'center', cellWidth: 11 },
                     1: { halign: 'center', cellWidth: 16 },
                     3: { halign: 'center', cellWidth: 18 },
                     4: { halign: 'center', cellWidth: 18 },
