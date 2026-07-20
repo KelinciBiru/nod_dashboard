@@ -53,6 +53,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.4.4/qrcode.min.js"></script>
+    <!-- Leaflet (peta Pool Driver — Live Location) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 
 <body class="font-sans text-gray-800 bg-gray-50">
@@ -488,6 +491,9 @@
                                 Task</button>
                             <button onclick="navTo('Route')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Route</button>
+                            <button onclick="navTo('Pool Driver')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Pool
+                                Driver</button>
                             <button onclick="navTo('Report Finish')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Report
                                 Finish</button>
@@ -2024,8 +2030,8 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Create Task" hanya dapat diakses oleh Admin.');
                 return;
             }
-            // ── AKSES KONTROL: Team Delivery (Route/Report Finish) hanya untuk ADMIN dan DRIVER ──
-            if ((pageName === 'Route' || pageName === 'Report Finish') &&
+            // ── AKSES KONTROL: Team Delivery (Route/Pool Driver/Report Finish) hanya untuk ADMIN dan DRIVER ──
+            if ((pageName === 'Route' || pageName === 'Pool Driver' || pageName === 'Report Finish') &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER')) {
                 showAlert('error', 'Akses Ditolak', 'Menu "Team Delivery" hanya dapat diakses oleh Admin dan Driver.');
                 return;
@@ -2085,6 +2091,7 @@
                 'Process Inbound': 'Process Inbound',
                 'Create Task': 'Team Delivery - Create Task',
                 'Route': 'Team Delivery - Route',
+                'Pool Driver': 'Team Delivery - Pool Driver',
                 'Report Finish': 'Team Delivery - Report Finish',
                 'Catalogue': 'Catalogue Produk',
                 'Check Machine': 'Service Center - Check Machine',
@@ -2117,6 +2124,8 @@
 
             // Hentikan polling auto-update halaman sebelumnya sebelum pindah halaman
             LiveSync.stop();
+            // Hentikan polling peta Pool Driver jika sedang aktif & kita pindah ke halaman lain
+            if (typeof stopPoolDriverPolling === 'function') stopPoolDriverPolling();
 
             // Tampilkan dekorasi background (seperti halaman Login) di semua halaman menu,
             // supaya halamannya tidak putih polos.
@@ -2142,6 +2151,7 @@
                 case 'Process Inbound': await showProcessInbound(); break;
                 case 'Create Task': await showTeamDeliveryCreateTask(); break;
                 case 'Route': await showTeamDeliveryRoute(); break;
+                case 'Pool Driver': await showPoolDriver(); break;
                 case 'Report Finish': await showTeamDeliveryReportFinish(); break;
                 case 'Catalogue': await showCatalogue(); break;
                 case 'Check Machine': await showCheckMachine(); break;
@@ -5778,6 +5788,79 @@
         // =========================================================================
         const DELIVERY_GAS_URL = PO_GAS_URL; // Gunakan GAS yang sama (akan handle action deliveryDone)
 
+        // =========================================================================
+        // [Pool Driver] LIVE LOCATION TRACKING — dikirim otomatis oleh HP Driver
+        // selama minimal 1 PO/RO miliknya berstatus "On-Delivery"/"On Delivery".
+        // Dikecualikan: driver "JNT Cargo" (kurir eksternal, tidak pernah di-track).
+        //
+        // Backend (GAS/Code.gs) WAJIB menambahkan 2 action baru pada Web App yang
+        // sama dengan DELIVERY_GAS_URL (lihat file "Code_gs_Pool_Driver_ADDON.gs"
+        // yang disertakan terpisah untuk contoh implementasinya):
+        //   - action 'updateDriverLocation' { token, driver, lat, lng }
+        //        → upsert 1 baris per driver ke sheet "Driver_Location"
+        //          (Driver | Lat | Lng | Last Update)
+        //   - action 'clearDriverLocation'  { token, driver }
+        //        → hapus baris driver tsb dari "Driver_Location" (dipanggil saat
+        //          Delivered/Cancel & tidak ada lagi task aktif untuk driver itu)
+        //   - endpoint GET '?action=getDriverLocations'
+        //        → return array [[driver, lat, lng, lastUpdateISOString], ...]
+        //          untuk ditampilkan di peta menu "Pool Driver"
+        // =========================================================================
+        const _driverLocationTimers      = {}; // driver -> intervalId
+        const _driverLocationOrderCount  = {}; // driver -> jumlah task aktif yang sedang di-track
+
+        function _startDriverLocationTracking(driverName) {
+            const driver = String(driverName || '').trim();
+            if (!driver || _isJntCargoDriver(driver)) return; // JNT Cargo dikecualikan
+            _driverLocationOrderCount[driver] = (_driverLocationOrderCount[driver] || 0) + 1;
+            if (_driverLocationTimers[driver]) return; // sudah jalan, cukup naikkan counter di atas
+
+            const sendOnce = () => {
+                if (!navigator.geolocation) return;
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => _sendDriverLocation(driver, pos.coords.latitude, pos.coords.longitude),
+                    () => { /* diamkan — gagal ambil GPS tidak boleh mengganggu proses lain */ },
+                    { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
+                );
+            };
+            sendOnce(); // kirim titik pertama segera setelah Start
+            _driverLocationTimers[driver] = setInterval(sendOnce, 20000); // tiap 20 detik
+        }
+
+        function _stopDriverLocationTracking(driverName) {
+            const driver = String(driverName || '').trim();
+            if (!driver) return;
+            _driverLocationOrderCount[driver] = Math.max(0, (_driverLocationOrderCount[driver] || 1) - 1);
+            if (_driverLocationOrderCount[driver] > 0) return; // driver masih punya task aktif lain
+            if (_driverLocationTimers[driver]) {
+                clearInterval(_driverLocationTimers[driver]);
+                delete _driverLocationTimers[driver];
+            }
+            _clearDriverLocation(driver);
+        }
+
+        async function _sendDriverLocation(driver, lat, lng) {
+            try {
+                await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'updateDriverLocation', token: sessionToken, driver, lat, lng })
+                });
+            } catch (e) { /* fire-and-forget — jangan ganggu UI Route */ }
+        }
+
+        async function _clearDriverLocation(driver) {
+            try {
+                await fetch(DELIVERY_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'clearDriverLocation', token: sessionToken, driver })
+                });
+            } catch (e) { /* fire-and-forget */ }
+        }
+
         /**
          * Mengembalikan jam WIB format "HH:MM" yang aman lintas browser/environment.
          * Menghindari bug toLocaleTimeString yang kadang return tanggal di beberapa engine.
@@ -7088,6 +7171,8 @@
                     // ── Kunci tombol Start card lain milik driver yang sama ──
                     _routeActiveDelivery[driver] = idx;
                     _lockOtherStartButtons(driver, idx);
+                    // [Pool Driver] Mulai kirim titik GPS driver ini secara berkala
+                    _startDriverLocationTracking(driver);
                     const cardEl = document.getElementById(`route-card-${idx}`);
                     if (cardEl) {
                         cardEl.classList.remove('border-gray-100', 'bg-white');
@@ -7197,6 +7282,8 @@
                         delete _routeActiveDelivery[driver];
                         _unlockAllStartButtons(driver);
                     }
+                    // [Pool Driver] Hentikan kirim titik GPS driver ini (jika tidak ada task aktif lain)
+                    _stopDriverLocationTracking(driver);
                     // Animasi keluar → sembunyikan card
                     if (card) {
                         card.style.transition = 'opacity 0.4s, transform 0.4s';
@@ -7268,6 +7355,8 @@
                         delete _routeActiveDelivery[driverCancel];
                         _unlockAllStartButtons(driverCancel);
                     }
+                    // [Pool Driver] Hentikan kirim titik GPS driver ini (jika tidak ada task aktif lain)
+                    if (driverCancel) _stopDriverLocationTracking(driverCancel);
                     if (card) {
                         card.style.transition = 'opacity 0.4s, transform 0.4s';
                         card.style.opacity    = '0';
@@ -7380,6 +7469,8 @@
                     // [Multi-start RO] Start RO ("Ready To PickUp" -> "On Delivery") TIDAK mengunci
                     // tombol Start card lain (baik RO maupun PO) — driver bebas Start banyak RO
                     // sekaligus dan tetap bisa Start PO tanpa menunggu RO ini Delivered.
+                    // [Pool Driver] Mulai kirim titik GPS driver ini secara berkala
+                    _startDriverLocationTracking(driver);
                     const cardEl = document.getElementById(`route-card-${idx}`);
                     if (cardEl) {
                         cardEl.classList.remove('border-gray-100', 'bg-white');
@@ -7496,6 +7587,8 @@
                         delete _routeActiveDelivery[driver];
                         _unlockAllStartButtons(driver);
                     }
+                    // [Pool Driver] Hentikan kirim titik GPS driver ini (jika tidak ada task aktif lain)
+                    _stopDriverLocationTracking(driver);
                     // Animasi keluar → sembunyikan card
                     if (card) {
                         card.style.transition = 'opacity 0.4s, transform 0.4s';
@@ -7566,6 +7659,8 @@
                         delete _routeActiveDelivery[driverCancel];
                         _unlockAllStartButtons(driverCancel);
                     }
+                    // [Pool Driver] Hentikan kirim titik GPS driver ini (jika tidak ada task aktif lain)
+                    if (driverCancel) _stopDriverLocationTracking(driverCancel);
                     if (card) {
                         card.style.transition = 'opacity 0.4s, transform 0.4s';
                         card.style.opacity    = '0';
@@ -7596,6 +7691,137 @@
                 if (btn)       { btn.disabled = false; }
                 if (cancelBtn) { cancelBtn.disabled = false; cancelBtn.innerHTML = `<svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg> Cancel`; }
                 showAlert('error', 'Koneksi Error', 'Tidak dapat terhubung ke server: ' + err.message);
+            }
+        }
+
+        // =========================================================================
+        // HALAMAN: TEAM DELIVERY → POOL DRIVER (Live Location)
+        // Akses: ADMIN & DRIVER
+        // Menampilkan 1 peta penuh berisi posisi seluruh driver yang rute-nya
+        // sedang berstatus "On-Delivery"/"On Delivery" (kecuali driver "JNT Cargo",
+        // yang memang tidak pernah dikirim titik GPS-nya — lihat _startDriverLocationTracking).
+        // =========================================================================
+        let _poolDriverMap        = null;
+        let _poolDriverMarkers    = {};   // driver -> L.marker
+        let _poolDriverPollTimer  = null;
+
+        /** Hentikan polling peta Pool Driver (dipanggil setiap kali pindah halaman) */
+        function stopPoolDriverPolling() {
+            if (_poolDriverPollTimer) {
+                clearInterval(_poolDriverPollTimer);
+                _poolDriverPollTimer = null;
+            }
+        }
+
+        /** Format "Last Update" jadi teks relatif singkat, mis. "5 detik lalu" */
+        function _formatDriverLastUpdate(iso) {
+            if (!iso) return '-';
+            const t = new Date(iso).getTime();
+            if (isNaN(t)) return String(iso);
+            const diffSec = Math.max(0, Math.round((Date.now() - t) / 1000));
+            if (diffSec < 60) return `${diffSec} detik lalu`;
+            const diffMin = Math.round(diffSec / 60);
+            if (diffMin < 60) return `${diffMin} menit lalu`;
+            const diffJam = Math.round(diffMin / 60);
+            return `${diffJam} jam lalu`;
+        }
+
+        async function showPoolDriver() {
+            trackActivity('Membuka menu: Pool Driver');
+            const contentArea = document.getElementById('content-area');
+
+            contentArea.innerHTML = `
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Pool Driver</h1>
+                    <p class="text-sm text-gray-500">Live location seluruh driver yang sedang On-Delivery (kurir "JNT Cargo" tidak ditampilkan).</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="pool-driver-last-refresh" class="text-xs text-gray-400"></span>
+                    <button onclick="_refreshPoolDriverMarkers(true)"
+                        class="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg border border-amber-200 transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div id="pool-driver-empty" class="hidden flex flex-col items-center justify-center py-20 text-center bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <svg class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <p class="text-lg font-semibold text-gray-400">Belum ada driver yang sedang On-Delivery</p>
+            </div>
+            <div id="pool-driver-map" class="rounded-2xl shadow-sm border border-gray-100 overflow-hidden" style="height:70vh; min-height:420px;"></div>`;
+
+            // Inisialisasi peta Leaflet (default center: area Pulogadung, Jakarta Timur)
+            if (_poolDriverMap) { _poolDriverMap.remove(); _poolDriverMap = null; }
+            _poolDriverMarkers = {};
+            _poolDriverMap = L.map('pool-driver-map').setView([-6.1901, 106.9002], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(_poolDriverMap);
+
+            await _refreshPoolDriverMarkers(false);
+
+            // Auto-refresh posisi tiap 15 detik selama halaman ini terbuka
+            stopPoolDriverPolling();
+            _poolDriverPollTimer = setInterval(() => _refreshPoolDriverMarkers(false), 15000);
+        }
+
+        /**
+         * Ambil data terbaru dari sheet "Driver_Location" via GAS (action getDriverLocations)
+         * dan perbarui marker di peta tanpa mereset zoom/posisi peta.
+         */
+        async function _refreshPoolDriverMarkers(manual) {
+            if (!_poolDriverMap) return;
+            try {
+                const raw = await fetch(DELIVERY_GAS_URL + '?action=getDriverLocations', { redirect: 'follow' }).then(r => r.json());
+                const rows = Array.isArray(raw) ? raw : (raw.data || []);
+                if (raw && raw.error) throw new Error(raw.error);
+
+                // Baris: [driver, lat, lng, lastUpdateISOString]
+                const seenDrivers = new Set();
+                rows.forEach(r => {
+                    const driver = String(r[0] || '').trim();
+                    const lat    = parseFloat(r[1]);
+                    const lng    = parseFloat(r[2]);
+                    const lastUpdate = r[3] || '';
+                    if (!driver || isNaN(lat) || isNaN(lng) || _isJntCargoDriver(driver)) return;
+                    seenDrivers.add(driver);
+
+                    const popupHtml = `<b>${escapeHtml(driver)}</b><br>Update: ${escapeHtml(_formatDriverLastUpdate(lastUpdate))}`;
+                    if (_poolDriverMarkers[driver]) {
+                        _poolDriverMarkers[driver].setLatLng([lat, lng]);
+                        _poolDriverMarkers[driver].setPopupContent(popupHtml);
+                    } else {
+                        _poolDriverMarkers[driver] = L.marker([lat, lng]).addTo(_poolDriverMap)
+                            .bindPopup(popupHtml);
+                    }
+                });
+
+                // Hapus marker driver yang sudah tidak lagi aktif (Delivered/Cancel)
+                Object.keys(_poolDriverMarkers).forEach(driver => {
+                    if (!seenDrivers.has(driver)) {
+                        _poolDriverMap.removeLayer(_poolDriverMarkers[driver]);
+                        delete _poolDriverMarkers[driver];
+                    }
+                });
+
+                document.getElementById('pool-driver-empty')?.classList.toggle('hidden', seenDrivers.size > 0);
+                const lastRefreshEl = document.getElementById('pool-driver-last-refresh');
+                if (lastRefreshEl) lastRefreshEl.textContent = 'Update terakhir: ' + getJamWIB() + ' WIB';
+
+                // Fit bounds otomatis hanya saat refresh manual & ada minimal 1 driver aktif
+                if (manual && seenDrivers.size > 0) {
+                    const group = L.featureGroup(Object.values(_poolDriverMarkers));
+                    _poolDriverMap.fitBounds(group.getBounds().pad(0.3));
+                }
+            } catch (err) {
+                if (manual) showAlert('error', 'Gagal Memuat Peta', 'Tidak dapat mengambil data lokasi driver: ' + err.message);
             }
         }
 
