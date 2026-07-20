@@ -491,7 +491,7 @@
                                 Task</button>
                             <button onclick="navTo('Route')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Route</button>
-                            <button onclick="navTo('Pool Driver')"
+                            <button id="sub-pool-driver" onclick="navTo('Pool Driver')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Pool
                                 Driver</button>
                             <button onclick="navTo('Report Finish')"
@@ -1286,6 +1286,8 @@
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
                 // Create Task hanya untuk ADMIN — Driver tidak perlu/tidak boleh akses
                 document.getElementById('sub-create-task').classList.add('hidden');
+                // Pool Driver hanya untuk ADMIN — Driver tidak perlu/tidak boleh akses
+                document.getElementById('sub-pool-driver').classList.add('hidden');
                 // Catalogue hanya untuk ADMIN, PO_User, dan Warehouse — Driver tidak perlu akses
                 document.getElementById('menu-catalogue').classList.add('hidden');
                 // Service Center bukan untuk Driver
@@ -1379,6 +1381,8 @@
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
                 // Create Task hanya untuk ADMIN
                 document.getElementById('sub-create-task').classList.remove('hidden');
+                // Pool Driver hanya untuk ADMIN
+                document.getElementById('sub-pool-driver').classList.remove('hidden');
                 // Service Center untuk ADMIN, CS_User, dan Teknisi
                 document.getElementById('menu-service-center').classList.remove('hidden');
                 navTo(_getRestorePage('Dashboard'));
@@ -1428,6 +1432,9 @@
             }
             if ((saved === 'Route' || saved === 'Report Finish') &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER')) {
+                return defaultPage;
+            }
+            if (saved === 'Pool Driver' && currentUserRole !== 'ADMIN') {
                 return defaultPage;
             }
             if (saved === 'Catalogue' && currentUserRole === 'DRIVER') {
@@ -2030,10 +2037,15 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Create Task" hanya dapat diakses oleh Admin.');
                 return;
             }
-            // ── AKSES KONTROL: Team Delivery (Route/Pool Driver/Report Finish) hanya untuk ADMIN dan DRIVER ──
-            if ((pageName === 'Route' || pageName === 'Pool Driver' || pageName === 'Report Finish') &&
+            // ── AKSES KONTROL: Team Delivery (Route/Report Finish) hanya untuk ADMIN dan DRIVER ──
+            if ((pageName === 'Route' || pageName === 'Report Finish') &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER')) {
                 showAlert('error', 'Akses Ditolak', 'Menu "Team Delivery" hanya dapat diakses oleh Admin dan Driver.');
+                return;
+            }
+            // ── AKSES KONTROL: Pool Driver hanya untuk ADMIN ──
+            if (pageName === 'Pool Driver' && currentUserRole !== 'ADMIN') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Pool Driver" hanya dapat diakses oleh Admin.');
                 return;
             }
             // ── AKSES KONTROL: Catalogue hanya untuk ADMIN, PO_User, dan Warehouse ──
@@ -7700,6 +7712,25 @@
             }
         }
 
+        /** Icon marker berbentuk mobil (SVG) untuk menandai posisi driver di peta Pool Driver,
+         *  menggantikan pin default Leaflet supaya lebih jelas ini adalah kendaraan yang bergerak. */
+        function _carMarkerIcon() {
+            return L.divIcon({
+                className: 'pool-driver-car-icon',
+                html: `<div style="background:#f59e0b;border:2px solid #fff;border-radius:9999px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.35);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 17h14v-4.5a1.5 1.5 0 00-.3-.9l-2.1-2.8a2 2 0 00-1.6-.8H8.9a2 2 0 00-1.6.8l-2.1 2.8a1.5 1.5 0 00-.3.9V17z"/>
+                        <path d="M5 17H3v-2a1 1 0 011-1h1M19 17h2v-2a1 1 0 00-1-1h-1"/>
+                        <circle cx="7.5" cy="17" r="1.5"/>
+                        <circle cx="16.5" cy="17" r="1.5"/>
+                    </svg>
+                </div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+                popupAnchor: [0, -15]
+            });
+        }
+
         /** Format "Last Update" jadi teks relatif singkat, mis. "5 detik lalu" */
         function _formatDriverLastUpdate(iso) {
             if (!iso) return '-';
@@ -7785,7 +7816,7 @@
                         _poolDriverMarkers[driver].setLatLng([lat, lng]);
                         _poolDriverMarkers[driver].setPopupContent(popupHtml);
                     } else {
-                        _poolDriverMarkers[driver] = L.marker([lat, lng]).addTo(_poolDriverMap)
+                        _poolDriverMarkers[driver] = L.marker([lat, lng], { icon: _carMarkerIcon() }).addTo(_poolDriverMap)
                             .bindPopup(popupHtml);
                     }
                 });
