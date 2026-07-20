@@ -3456,10 +3456,11 @@
                         <input type="text" id="fs-customer"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan nama customer">
-                        <select id="fs-customer-select" onchange="handleFsCustomerSelect(this.value)"
-                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none hidden">
-                            <option value="">-- Pilih Customer --</option>
-                        </select>
+                        <input type="text" id="fs-customer-return" list="fs-customer-datalist-list"
+                            oninput="handleFsCustomerInput(this.value)"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none hidden"
+                            placeholder="Pilih dari daftar atau ketik nama customer">
+                        <datalist id="fs-customer-datalist-list"></datalist>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat</label>
@@ -3605,21 +3606,22 @@
                 }
             }
 
-            // Kolom "Customer" berubah menjadi dropdown jika Tipe Permintaan = Return.
-            // Data dropdown diambil dari sheet Retur_Data kolom L (From Location).
-            // Alamat dan Phone otomatis terisi sesuai Customer yang dipilih.
+            // Kolom "Customer" berubah menjadi input+datalist (pilih dari daftar ATAU ketik manual)
+            // jika Tipe Permintaan = Return.
+            // Data datalist diambil dari sheet Retur_Data kolom L (From Location).
+            // Alamat dan Phone otomatis terisi sesuai Customer yang dipilih/diketik (jika cocok dengan data).
             const customerInput = document.getElementById('fs-customer');
-            const customerSelect = document.getElementById('fs-customer-select');
-            if (customerInput && customerSelect) {
+            const customerReturnInput = document.getElementById('fs-customer-return');
+            if (customerInput && customerReturnInput) {
                 if (window._fsType === 'return') {
                     customerInput.classList.add('hidden');
                     customerInput.value = '';
-                    customerSelect.classList.remove('hidden');
+                    customerReturnInput.classList.remove('hidden');
                     _loadFsCustomerList();
                 } else {
                     customerInput.classList.remove('hidden');
-                    customerSelect.classList.add('hidden');
-                    customerSelect.value = '';
+                    customerReturnInput.classList.add('hidden');
+                    customerReturnInput.value = '';
                     // Kosongkan Alamat & Phone saat kembali ke mode Pick Up
                     const alamatEl = document.getElementById('fs-alamat');
                     const phoneEl = document.getElementById('fs-phone');
@@ -3629,40 +3631,42 @@
             }
         }
 
-        // ── Cache & handler untuk dropdown Customer (Return) ──
+        // ── Cache & handler untuk input+datalist Customer (Return) ──
         window._fsCustomerListCache = null;
 
         async function _loadFsCustomerList() {
-            const sel = document.getElementById('fs-customer-select');
-            if (!sel) return;
-            sel.innerHTML = '<option value="">-- Memuat... --</option>';
+            const dl = document.getElementById('fs-customer-datalist-list');
+            if (!dl) return;
+            dl.innerHTML = '';
             try {
                 const res = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getFormServiceCustomerList');
                 const list = await res.json();
                 window._fsCustomerListCache = Array.isArray(list) ? list : [];
-                let options = '<option value="">-- Pilih Customer --</option>';
-                window._fsCustomerListCache.forEach((item, idx) => {
+                let options = '';
+                window._fsCustomerListCache.forEach((item) => {
                     const name = item.customer || '';
                     if (!name) return;
-                    options += `<option value="${idx}">${escapeHtml(name)}</option>`;
+                    options += `<option value="${escapeHtml(name)}"></option>`;
                 });
-                sel.innerHTML = options;
+                dl.innerHTML = options;
             } catch (err) {
-                sel.innerHTML = '<option value="">-- Gagal memuat data --</option>';
+                // Gagal memuat daftar saran; user tetap bisa mengetik nama customer secara manual.
             }
         }
 
-        window.handleFsCustomerSelect = async function(idx) {
+        /** Dipanggil setiap kali user mengetik/memilih nama Customer di kolom Return.
+         *  Jika nama cocok (persis, tanpa memperhatikan besar/kecil huruf) dengan salah satu
+         *  data di cache, Alamat & Phone otomatis terisi dan PDF/tabel item di-auto-fill.
+         *  Jika tidak cocok (nama baru yang diketik manual), Alamat & Phone tidak disentuh
+         *  agar bisa diisi manual oleh user. */
+        window.handleFsCustomerInput = async function(name) {
             const list = window._fsCustomerListCache;
-            if (!list || !list[idx]) {
-                // Kosongkan Alamat & Phone jika tidak ada pilihan
-                const alamatEl = document.getElementById('fs-alamat');
-                const phoneEl = document.getElementById('fs-phone');
-                if (alamatEl) alamatEl.value = '';
-                if (phoneEl) phoneEl.value = '';
-                return;
-            }
-            const item = list[idx];
+            const typed = (name || '').trim();
+            const item = Array.isArray(list)
+                ? list.find(it => (it.customer || '').trim().toLowerCase() === typed.toLowerCase())
+                : null;
+            if (!item) return;
+
             const alamatEl = document.getElementById('fs-alamat');
             const phoneEl = document.getElementById('fs-phone');
             if (alamatEl) alamatEl.value = item.alamat || '';
@@ -4108,13 +4112,11 @@
             const orderedBy = namaEl ? namaEl.value : '';
             const type = window._fsType === 'pickup' ? 'Pick Up' : (window._fsType === 'return' ? 'Return' : '');
             // Ambil nilai Customer dari sumber yang benar tergantung Tipe Permintaan:
-            // - Return: dari dropdown (fs-customer-select), nilai = nama customer dari cache
+            // - Return: dari input+datalist (fs-customer-return) — bisa dipilih dari daftar atau diketik manual
             // - Pick Up: dari input teks (fs-customer)
             let customer = '';
             if (window._fsType === 'return') {
-                const selIdx = document.getElementById('fs-customer-select')?.value;
-                const list = window._fsCustomerListCache || [];
-                customer = (list[selIdx] && list[selIdx].customer) || '';
+                customer = document.getElementById('fs-customer-return')?.value?.trim() || '';
             } else {
                 customer = document.getElementById('fs-customer')?.value?.trim() || '';
             }
@@ -4358,16 +4360,11 @@
             if (!window._fsType) { showAlert('warning', 'Belum Lengkap', 'Pilih tipe "Pick Up" atau "Return" terlebih dahulu.'); return; }
             if (!window._fsStatusCategory) { showAlert('warning', 'Belum Lengkap', 'Pilih Status Category "Warranty" atau "Non-Warranty" terlebih dahulu.'); return; }
             // Ambil nilai Customer dari sumber yang benar tergantung Tipe Permintaan:
-            // - Return: dari dropdown (fs-customer-select), nilai = nama customer dari cache
+            // - Return: dari input+datalist (fs-customer-return) — bisa dipilih dari daftar atau diketik manual
             // - Pick Up: dari input teks (fs-customer)
             let customer = '';
             if (window._fsType === 'return') {
-                const selIdx = document.getElementById('fs-customer-select')?.value;
-                if (selIdx === '' || selIdx == null) {
-                    showAlert('warning', 'Belum Lengkap', 'Pilih "Customer" terlebih dahulu.'); return;
-                }
-                const list = window._fsCustomerListCache || [];
-                customer = (list[selIdx] && list[selIdx].customer) || '';
+                customer = document.getElementById('fs-customer-return')?.value?.trim() || '';
             } else {
                 customer = document.getElementById('fs-customer')?.value?.trim() || '';
             }
@@ -4472,7 +4469,7 @@
             const warrantyEl = document.getElementById('fs-status-warranty');
             const nonWarrantyEl = document.getElementById('fs-status-nonwarranty');
             const customerEl = document.getElementById('fs-customer');
-            const customerSelectEl = document.getElementById('fs-customer-select');
+            const customerReturnEl = document.getElementById('fs-customer-return');
             const alamatEl = document.getElementById('fs-alamat');
             const phoneEl = document.getElementById('fs-phone');
             const shippingDateEl = document.getElementById('fs-shipping-date');
@@ -4491,7 +4488,7 @@
             window._fsStatusCategory = null;
             if (titleEl) titleEl.textContent = 'Detail Item (pilih "Pick Up" atau "Return" terlebih dahulu)';
             if (customerEl) { customerEl.value = ''; customerEl.classList.remove('hidden'); }
-            if (customerSelectEl) { customerSelectEl.value = ''; customerSelectEl.classList.add('hidden'); }
+            if (customerReturnEl) { customerReturnEl.value = ''; customerReturnEl.classList.add('hidden'); }
             if (alamatEl) alamatEl.value = '';
             if (phoneEl) phoneEl.value = '';
             if (shippingDateEl) shippingDateEl.value = '';
@@ -4570,19 +4567,11 @@
             setVal('fs-shipping-date', item.shippingDate);
             setVal('fs-shipto', item.shipTo);
 
-            // Untuk tipe Return, Customer ditampilkan sebagai dropdown.
-            // Cari index customer di cache lalu set dropdown ke index tsb.
+            // Untuk tipe Return, Customer ditampilkan sebagai input+datalist.
+            // Isi langsung dengan nama customer dari data tiket (baik yang ada di daftar
+            // maupun yang dulunya diketik manual).
             if (type.includes('return')) {
-                const customerName = item.customer || '';
-                const customerSelect = document.getElementById('fs-customer-select');
-                if (customerSelect && window._fsCustomerListCache) {
-                    const foundIdx = window._fsCustomerListCache.findIndex(c => c.customer === customerName);
-                    if (foundIdx >= 0) {
-                        customerSelect.value = String(foundIdx);
-                    } else {
-                        customerSelect.value = '';
-                    }
-                }
+                setVal('fs-customer-return', item.customer);
             } else {
                 setVal('fs-customer', item.customer);
             }
@@ -4648,9 +4637,7 @@
             // Ambil nilai Customer dari sumber yang benar tergantung Tipe Permintaan
             let customer = '';
             if (window._fsType === 'return') {
-                const selIdx = document.getElementById('fs-customer-select')?.value;
-                const list = window._fsCustomerListCache || [];
-                customer = (list[selIdx] && list[selIdx].customer) || '';
+                customer = document.getElementById('fs-customer-return')?.value?.trim() || '';
             } else {
                 customer = document.getElementById('fs-customer')?.value?.trim() || '';
             }
