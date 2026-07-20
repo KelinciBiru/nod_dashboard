@@ -636,6 +636,9 @@
         // =========================================================================
         const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwelinB-S7fdOaRoGYBYGiwuH_QLC4Otw0EB1jAP2ZsYV5Hvx5_GJqFXGh0NlK3k83C/exec';
 
+        // TODO: Ganti dengan URL Google Apps Script Web App khusus Dashboard Log (deployment terpisah, lihat DashboardLog.gs)
+        const DASHBOARD_LOG_GAS_URL = 'https://script.google.com/macros/s/AKfycbxGTv8c9x0cv-qb5Dy_NokDKI3BrYcF_8AURc21o0lvSION-g83FuMaMHqTaPopEZJhMQ/exec';
+
         // TODO: Ganti dengan URL Google Apps Script Web App untuk menu Process Inbound
         const INBOUND_GAS_URL = 'https://script.google.com/macros/s/AKfycbz-_cb09K1CAWtBIu2L6Zu1UWMhIqmyfQQ3vdHi50ZO9KiarJyiY5VGg-CL6WnyFUbC/exec';
 
@@ -881,6 +884,137 @@
         // Simpan data login sementara saat menunggu nama driver diisi
         let _pendingLoginData = null;
 
+        // Nomor baris di sheet "Login Log" untuk sesi login saat ini (diisi backend saat login,
+        // dipakai lagi saat logout untuk melengkapi kolom HIT API & Aktivitas User di baris yang sama)
+        let _dashboardLogRowIndex = null;
+
+        /**
+         * Catat satu aktivitas user ke daftar sementara (disimpan di sessionStorage supaya
+         * tidak hilang kalau halaman di-refresh sebelum logout). Dikirim ke Dashboard Log
+         * saat logout via recordLogoutActivity().
+         */
+        function trackActivity(label) {
+            try {
+                const timeStr = new Date().toLocaleTimeString('id-ID', { hour12: false });
+                const entry = `${timeStr} ${label}`;
+                let list = JSON.parse(sessionStorage.getItem('userActivityLog') || '[]');
+                list.push(entry);
+                // Batasi maksimal 200 entri per sesi supaya sessionStorage tidak membengkak
+                if (list.length > 200) list = list.slice(list.length - 200);
+                sessionStorage.setItem('userActivityLog', JSON.stringify(list));
+            } catch (e) { /* jangan sampai tracking mengganggu fungsi utama */ }
+        }
+
+        // =========================================================================
+        // LOG LOGIN -> Spreadsheet "Dashboard Log"
+        // =========================================================================
+        /** Deteksi jenis & label device dari User-Agent (Desktop / Mobile / Tablet) */
+        function _getDeviceLabel() {
+            const ua = navigator.userAgent || '';
+            const isTablet = /iPad|Tablet/i.test(ua) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isMobile = !isTablet && /Mobi|Android|iPhone|iPod/i.test(ua);
+            const type = isTablet ? 'Tablet' : (isMobile ? 'Mobile' : 'Desktop');
+
+            let os = 'Unknown OS';
+            if (/Windows/i.test(ua)) os = 'Windows';
+            else if (/Android/i.test(ua)) os = 'Android';
+            else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+            else if (/Mac OS X/i.test(ua)) os = 'MacOS';
+            else if (/Linux/i.test(ua)) os = 'Linux';
+
+            let browser = 'Unknown Browser';
+            if (/Edg\//i.test(ua)) browser = 'Edge';
+            else if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) browser = 'Chrome';
+            else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+            else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Safari';
+
+            return { type, label: `${type} - ${os} - ${browser}` };
+        }
+
+        /** Ambil titik lokasi (best-effort, tidak memblokir proses login jika ditolak/timeout) */
+        function _getLoginLocation() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) { resolve('Tidak didukung browser'); return; }
+                const timer = setTimeout(() => resolve('Timeout / tidak merespon'), 6000);
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        clearTimeout(timer);
+                        resolve(`${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`);
+                    },
+                    () => { clearTimeout(timer); resolve('Izin lokasi ditolak / tidak tersedia'); },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }
+                );
+            });
+        }
+
+        /**
+         * Catat aktivitas login ke spreadsheet "Dashboard Log" (via GAS action 'logLogin').
+         * Dijalankan async di background — kegagalan logging TIDAK menghentikan/menunda startApp().
+         */
+        async function recordLoginActivity(role) {
+            try {
+                const deviceInfo = _getDeviceLabel();
+                const location = await _getLoginLocation();
+                const res = await fetch(DASHBOARD_LOG_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'logLogin',
+                        device: deviceInfo.label,
+                        phone: '-', // Browser tidak bisa membaca no. HP perangkat secara otomatis
+                        location: location,
+                        role: role,
+                        hitApi: 'login'
+                    })
+                });
+                const data = await res.json().catch(() => null);
+                if (data && data.rowIndex) {
+                    _dashboardLogRowIndex = data.rowIndex;
+                    sessionStorage.setItem('dashboardLogRowIndex', String(data.rowIndex));
+                }
+                // Sesi baru dimulai -> kosongkan riwayat aktivitas sesi sebelumnya (jika ada sisa)
+                sessionStorage.setItem('userActivityLog', '[]');
+            } catch (e) {
+                // Jangan pernah biarkan kegagalan logging mengganggu proses login utama
+            }
+        }
+
+        /**
+         * Catat aktivitas logout ke baris "Dashboard Log" yang SAMA dengan baris login
+         * (direferensikan lewat _dashboardLogRowIndex). Melengkapi kolom HIT API dengan
+         * "logout" dan mengisi kolom Aktivitas User dengan seluruh aktivitas selama sesi.
+         * Fire-and-forget (tidak menunda proses logout/reset UI).
+         */
+        function recordLogoutActivity() {
+            try {
+                const rowIndex = _dashboardLogRowIndex ||
+                    parseInt(sessionStorage.getItem('dashboardLogRowIndex'), 10) || null;
+                const activities = JSON.parse(sessionStorage.getItem('userActivityLog') || '[]');
+
+                if (rowIndex) {
+                    fetch(DASHBOARD_LOG_GAS_URL, {
+                        method: 'POST',
+                        redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({
+                            action: 'logLogout',
+                            rowIndex: rowIndex,
+                            activities: activities,
+                            hitApi: 'logout'
+                        })
+                    }).catch(() => { /* silent fail */ });
+                }
+            } catch (e) {
+                // Jangan pernah biarkan kegagalan logging mengganggu proses logout utama
+            } finally {
+                sessionStorage.removeItem('userActivityLog');
+                sessionStorage.removeItem('dashboardLogRowIndex');
+                _dashboardLogRowIndex = null;
+            }
+        }
+
         async function checkLogin() {
             const passInput = document.getElementById('passwordInput');
             const pass = passInput.value;
@@ -919,6 +1053,7 @@
                         passInput.value = '';
                         // DEBUG: hapus baris ini setelah role CS_User/Teknisi terkonfirmasi benar
                         console.log('[LOGIN] Backend returned role:', JSON.stringify(data.role));
+                        recordLoginActivity(currentUserRole);
                         startApp();
                     }
                 } else {
@@ -964,6 +1099,7 @@
             error.classList.add('hidden');
             _pendingLoginData = null;
 
+            recordLoginActivity(currentUserRole);
             startApp();
         }
 
@@ -1242,6 +1378,10 @@
         /** Logout: reset state dan kembali ke halaman login */
         function logout() {
             if (!confirm('Yakin ingin logout?')) return;
+
+            // Catat aktivitas logout + daftar aktivitas selama sesi ke Dashboard Log
+            // SEBELUM sessionStorage (userActivityLog, rowIndex) dibersihkan di bawah.
+            recordLogoutActivity();
 
             // Hentikan polling auto-update (LiveSync) sebelum sesi dihapus
             if (typeof LiveSync !== 'undefined') LiveSync.stop();
@@ -1901,6 +2041,9 @@
         const LIVE_SYNC_PAGES = new Set(['Report Status', 'Route', 'Create Task']);
 
         async function showPage(pageName) {
+            // Catat aktivitas navigasi menu (skip kalau ini cuma silent refresh dari LiveSync, bukan aksi user)
+            if (!window.__liveSyncSilent) trackActivity(`Membuka menu: ${pageName}`);
+
             // Hentikan kamera QR jika sedang aktif
             if (typeof stopQRCamera === 'function') stopQRCamera();
             // Hentikan kamera scan Serial Number (Warranty Registration) jika sedang aktif
@@ -3261,7 +3404,7 @@
                     </div>
                     <div id="fs-shipto-container" class="hidden">
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
-                        <input type="text" id="fs-shipto"
+                        <input type="text" id="fs-shipto" onblur="autoFillShipToWarehousePG(this)"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan Ship To">
                     </div>
@@ -6548,18 +6691,29 @@
 
         function _buildRouteCard(r, idx) {
             const noPO         = String(r[0]  || '').trim();
-            // [FIX 8] Card RO (No. RO berprefix "Retur-") menampilkan "From
-            // Location" (kolom O Plan Driver, index 14) sebagai judul card —
-            // menggantikan "Ship To" yang dipakai card PO biasa. Nilai "Ship To"
-            // asli tetap disimpan di shipToActual, dipakai untuk baris info
-            // tambahan di card RO & data yang dikirim ke Delivery_Log.
-            const isRO         = noPO.startsWith('Retur-');
+            const status       = String(r[5]  || '').trim();
+            // [FIX 8] Card RO menampilkan "From Location" (kolom O Plan Driver,
+            // index 14) sebagai judul card — menggantikan "Ship To" yang dipakai
+            // card PO biasa. Nilai "Ship To" asli tetap disimpan di shipToActual,
+            // dipakai untuk baris info tambahan di card RO & data yang dikirim ke
+            // Delivery_Log.
+            // [FIX 24 — BARU] isRO TIDAK LAGI hanya dicek dari prefix "Retur-" —
+            // tiket Form Service tipe "Pick Up" juga disimpan di Retur_Data
+            // dengan status "Ready To PickUp"/"On Delivery", TAPI No. Tiket-nya
+            // berformat "Service-DDMMYYYY-00X" (TANPA prefix "Retur-"). Kalau
+            // hanya dicek dari prefix, card tiket Pick Up ini salah dianggap PO
+            // biasa (label "Ready To Ship", handler routeStartDelivery yang
+            // menulis ke Delivery_Log/PO_Data, bukan Retur_Data). Karena hanya
+            // baris asal Retur_Data yang bisa berstatus "Ready To PickUp" /
+            // "On Delivery" (lihat filter activeRows di atas), Status dipakai
+            // sebagai sinyal tambahan yang lebih andal daripada prefix saja.
+            const isRO         = noPO.startsWith('Retur-')
+                || status === 'Ready To PickUp' || status === 'On Delivery';
             const fromLocation = String(r[14] || '').trim();
             const shipToActual = String(r[1]  || '').trim();
             const customer     = isRO ? (fromLocation || shipToActual) : shipToActual;
             const alamat       = String(r[2]  || '').trim();
             // r[3]=Zona & r[4]=SLA_Status — tidak ditampilkan di card
-            const status       = String(r[5]  || '').trim();
             const orderedBy    = String(r[6]  || '').trim();
             const phone        = String(r[7]  || '').trim();
             const shippingDate = String(r[8]  || '').trim();
@@ -9397,6 +9551,22 @@
             }
         }
 
+        // =========================================================================
+        // AUTO-FILL "Ship To" → "Jumpstart Warehouse Pulogadung"
+        // Dipakai di Form RO (id="retur-allocated-to") & Form Service saat Tipe
+        // Permintaan = Pick Up (id="fs-shipto"). Jika isi field (setelah trim,
+        // case-insensitive) persis sama dengan salah satu trigger di bawah,
+        // field otomatis diisi "Jumpstart Warehouse Pulogadung" saat blur.
+        // =========================================================================
+        function autoFillShipToWarehousePG(inputEl) {
+            if (!inputEl) return;
+            const val = inputEl.value.trim().toLowerCase();
+            const triggers = ['wh pg', 'warehouse pg', 'wh'];
+            if (triggers.includes(val)) {
+                inputEl.value = 'Jumpstart Warehouse Pulogadung';
+            }
+        }
+
         async function showFormPO() {
             setLoading('Memuat form...');
             const contentArea = document.getElementById('content-area');
@@ -10294,7 +10464,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
-                        <input type="text" id="retur-allocated-to"
+                        <input type="text" id="retur-allocated-to" onblur="autoFillShipToWarehousePG(this)"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan Nama (Warehouse/Penerima)">
                     </div>
