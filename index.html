@@ -243,6 +243,18 @@
                 <input type="text" id="driverNameInput" onkeydown="if(event.key==='Enter') confirmDriverLogin()"
                     class="w-full p-2 border border-amber-400 rounded focus:ring-2 focus:ring-amber-500 outline-none"
                     placeholder="Masukan Nama">
+                <!-- [Car Refiller] Dropdown nama Team Car — menggantikan input teks bebas saat
+                     checkbox "Car Refiller" dicentang. Data diambil dari sheet "Source" kolom J
+                     lewat action 'getTeamCarList'. -->
+                <select id="driverNameSelect"
+                    class="hidden w-full p-2 border border-amber-400 rounded focus:ring-2 focus:ring-amber-500 outline-none bg-white">
+                    <option value="">Memuat daftar nama...</option>
+                </select>
+                <label class="flex items-center gap-2 mt-2 mb-1 text-left cursor-pointer select-none">
+                    <input type="checkbox" id="carRefillerCheckbox" onchange="toggleCarRefillerMode()"
+                        class="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500">
+                    <span class="text-xs text-gray-600">Car Refiller</span>
+                </label>
                 <button id="driverLoginBtn" onclick="confirmDriverLogin()" style="background-color: #14141e;"
                     class="w-full text-white py-2 rounded-full font-bold hover:opacity-90 transition mt-3">
                     Masuk sebagai Driver
@@ -1043,6 +1055,11 @@
                         loginBtn.classList.add('hidden');
                         passInput.disabled = true;
                         document.getElementById('driverNameWrap').classList.remove('hidden');
+                        // [Car Refiller] Pastikan mulai dari mode input teks biasa (checkbox
+                        // belum dicentang) setiap kali field nama driver ditampilkan ulang.
+                        const carRefillerChk = document.getElementById('carRefillerCheckbox');
+                        if (carRefillerChk) carRefillerChk.checked = false;
+                        toggleCarRefillerMode();
                         document.getElementById('driverNameInput').focus();
                     } else {
                         // Role lain: langsung masuk seperti biasa
@@ -1068,16 +1085,61 @@
             }
         }
 
+        /** [Car Refiller] Toggle antara input teks bebas "Nama Driver" dan dropdown
+         *  nama Team Car (sheet "Source" kolom J), tergantung status checkbox
+         *  #carRefillerCheckbox. Saat baru dicentang & dropdown belum pernah dimuat,
+         *  daftar nama ditarik sekali lewat action 'getTeamCarList' (di-cache lewat
+         *  cachedFetch, sama pola dengan getDriverList di menu Create Task). */
+        async function toggleCarRefillerMode() {
+            const chk = document.getElementById('carRefillerCheckbox');
+            const nameInput = document.getElementById('driverNameInput');
+            const nameSelect = document.getElementById('driverNameSelect');
+            const isChecked = !!(chk && chk.checked);
+
+            if (isChecked) {
+                nameInput.classList.add('hidden');
+                nameSelect.classList.remove('hidden');
+                nameInput.value = '';
+
+                if (!nameSelect.dataset.loaded) {
+                    nameSelect.innerHTML = '<option value="">Memuat daftar nama...</option>';
+                    try {
+                        const listRaw = await cachedFetch(PO_GAS_URL + '?action=getTeamCarList', 'getTeamCarList');
+                        const list = Array.isArray(listRaw) ? listRaw : [];
+                        if (list.length === 0) {
+                            nameSelect.innerHTML = '<option value="">Tidak ada data Team Car</option>';
+                        } else {
+                            nameSelect.innerHTML = '<option value="">-- Pilih Nama --</option>' +
+                                list.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+                            nameSelect.dataset.loaded = '1';
+                        }
+                    } catch (err) {
+                        nameSelect.innerHTML = '<option value="">Gagal memuat daftar nama</option>';
+                    }
+                }
+                nameSelect.focus();
+            } else {
+                nameSelect.classList.add('hidden');
+                nameInput.classList.remove('hidden');
+                nameSelect.value = '';
+                nameInput.focus();
+            }
+        }
+
         /** Konfirmasi nama driver lalu masuk ke app */
         function confirmDriverLogin() {
+            const chk = document.getElementById('carRefillerCheckbox');
+            const isCarRefiller = !!(chk && chk.checked);
             const nameInput = document.getElementById('driverNameInput');
-            const driverName = nameInput.value.trim();
+            const nameSelect = document.getElementById('driverNameSelect');
+            const activeField = isCarRefiller ? nameSelect : nameInput;
+            const driverName = (activeField.value || '').trim();
             const error = document.getElementById('loginError');
 
             if (!driverName) {
-                error.textContent = 'Nama wajib diisi!';
+                error.textContent = isCarRefiller ? 'Nama Team Car wajib dipilih!' : 'Nama wajib diisi!';
                 error.classList.remove('hidden');
-                nameInput.focus();
+                activeField.focus();
                 return;
             }
             if (!_pendingLoginData) return;
@@ -1094,6 +1156,10 @@
             document.getElementById('passwordInput').value = '';
             document.getElementById('passwordInput').disabled = false;
             nameInput.value = '';
+            nameSelect.value = '';
+            nameSelect.classList.add('hidden');
+            nameInput.classList.remove('hidden');
+            if (chk) chk.checked = false;
             document.getElementById('driverNameWrap').classList.add('hidden');
             document.getElementById('loginBtn').classList.remove('hidden');
             error.classList.add('hidden');
