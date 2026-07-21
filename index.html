@@ -652,7 +652,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbwelinB-S7fdOaRoGYBYGiwuH_QLC4Otw0EB1jAP2ZsYV5Hvx5_GJqFXGh0NlK3k83C/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxf17QFHo2eE5dDCPD9MM53GOxYzR73A2X9FrjzTc_7Mj7dDb0gvB3t6NO5u1S5FvdH/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App khusus Dashboard Log (deployment terpisah, lihat DashboardLog.gs)
         const DASHBOARD_LOG_GAS_URL = 'https://script.google.com/macros/s/AKfycbxGTv8c9x0cv-qb5Dy_NokDKI3BrYcF_8AURc21o0lvSION-g83FuMaMHqTaPopEZJhMQ/exec';
@@ -5792,21 +5792,104 @@
         // selama minimal 1 PO/RO miliknya berstatus "On-Delivery"/"On Delivery".
         // Dikecualikan: driver "JNT Cargo" (kurir eksternal, tidak pernah di-track).
         //
-        // Backend (GAS/Code.gs) WAJIB menambahkan 2 action baru pada Web App yang
-        // sama dengan DELIVERY_GAS_URL (lihat file "Code_gs_Pool_Driver_ADDON.gs"
-        // yang disertakan terpisah untuk contoh implementasinya):
-        //   - action 'updateDriverLocation' { token, driver, lat, lng }
+        // Backend (GAS/Code.gs) menambahkan action pada Web App yang sama dengan
+        // DELIVERY_GAS_URL (lihat "Code_gs_Pool_Driver_ADDON.gs"):
+        //   - action 'updateDriverLocation' { token, driver, lat, lng, accuracy }
         //        → upsert 1 baris per driver ke sheet "Driver_Location"
-        //          (Driver | Lat | Lng | Last Update)
+        //          (Driver | Lat | Lng | Accuracy | Last Update)
         //   - action 'clearDriverLocation'  { token, driver }
-        //        → hapus baris driver tsb dari "Driver_Location" (dipanggil saat
-        //          Delivered/Cancel & tidak ada lagi task aktif untuk driver itu)
-        //   - endpoint GET '?action=getDriverLocations'
-        //        → return array [[driver, lat, lng, lastUpdateISOString], ...]
-        //          untuk ditampilkan di peta menu "Pool Driver"
+        //        → hapus baris driver tsb dari "Driver_Location"
+        //   - endpoint GET '?action=getDriverLocations&lat=&lng=&radius='
+        //        → return array [[driver, lat, lng, accuracy, lastUpdateISOString], ...],
+        //          opsional difilter radius (km) dari titik lat/lng yang dikirim.
+        //
+        // 3 FILTER SISI DRIVER (supaya server tetap ringan & baterai HP hemat):
+        //   1) ACCURACY  — titik GPS dengan accuracy > 50m DIBUANG (terlalu kasar,
+        //      biasanya dari sinyal seluler/wifi, bukan GPS asli).
+        //   2) DISTANCE  — titik yang bergeser < 15m dari titik terakhir yang
+        //      TERKIRIM diabaikan (supaya tidak spam saat mobil berhenti di
+        //      lampu merah/parkir) — KECUALI sudah lewat KEEPALIVE_MS sejak
+        //      kiriman terakhir, supaya Admin tetap tahu driver ini "hidup"
+        //      (marker tidak dianggap basi/offline).
+        //   3) RATE LIMIT — maksimal 1x kirim per 5 detik, apapun sumber event-nya
+        //      (interval polling MAUPUN watchPosition).
         // =========================================================================
-        const _driverLocationTimers      = {}; // driver -> intervalId
+        const GPS_MIN_ACCURACY_M   = 50;    // buang titik dengan accuracy > 50m
+        const GPS_MIN_DISTANCE_M   = 15;    // abaikan pergeseran < 15m
+        const GPS_MIN_INTERVAL_MS  = 5000;  // maksimal 1x kirim / 5 detik
+        const GPS_KEEPALIVE_MS     = 25000; // paksa kirim tiap ≤25 detik walau diam di tempat
+
+        const _driverLocationTimers      = {}; // driver -> intervalId (fallback polling)
+        const _driverLocationWatchIds    = {}; // driver -> watchPosition id
         const _driverLocationOrderCount  = {}; // driver -> jumlah task aktif yang sedang di-track
+        const _driverLocationLastSent    = {}; // driver -> { lat, lng, at }
+        const _driverLocationWakeLock    = {}; // driver -> WakeLockSentinel
+
+        /** Jarak antar 2 titik GPS dalam meter (haversine). */
+        function _gpsDistanceMeters(lat1, lng1, lat2, lng2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2
+                + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        /** Terapkan 3 filter (accuracy/distance/rate-limit) lalu kirim kalau lolos. */
+        function _maybeSendDriverLocation(driver, pos) {
+            const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+
+            // FILTER 1 — accuracy
+            if (typeof accuracy === 'number' && accuracy > GPS_MIN_ACCURACY_M) return;
+
+            const now = Date.now();
+            const last = _driverLocationLastSent[driver];
+
+            // FILTER 3 — rate limit (maks 1x/5 detik), berlaku selalu
+            if (last && (now - last.at) < GPS_MIN_INTERVAL_MS) return;
+
+            // FILTER 2 — distance, kecuali sudah lewat batas keepalive
+            if (last) {
+                const moved = _gpsDistanceMeters(last.lat, last.lng, lat, lng);
+                const stale = (now - last.at) >= GPS_KEEPALIVE_MS;
+                if (moved < GPS_MIN_DISTANCE_M && !stale) return;
+            }
+
+            _driverLocationLastSent[driver] = { lat, lng, at: now };
+            _sendDriverLocation(driver, lat, lng, accuracy);
+        }
+
+        /** Minta Wake Lock (layar tetap menyala) selama tracking aktif — best-effort,
+         *  browser/OS tetap bisa melepasnya sendiri (mis. saat app benar2 di-close). */
+        async function _acquireDriverWakeLock(driver) {
+            try {
+                if (!('wakeLock' in navigator)) return;
+                _driverLocationWakeLock[driver] = await navigator.wakeLock.request('screen');
+            } catch (e) { /* diamkan — wake lock opsional, jangan ganggu tracking utama */ }
+        }
+        function _releaseDriverWakeLock(driver) {
+            try {
+                _driverLocationWakeLock[driver]?.release();
+            } catch (e) { /* noop */ }
+            delete _driverLocationWakeLock[driver];
+        }
+
+        // Saat tab kembali terlihat (driver membuka lagi HP-nya), re-acquire wake
+        // lock & langsung kirim 1 titik segar untuk semua driver yang masih ditrack
+        // — supaya marker di Admin langsung "hidup" lagi tanpa menunggu interval.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'visible') return;
+            Object.keys(_driverLocationTimers).forEach(driver => {
+                _acquireDriverWakeLock(driver);
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => _maybeSendDriverLocation(driver, pos),
+                        () => {},
+                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+                    );
+                }
+            });
+        });
 
         function _startDriverLocationTracking(driverName) {
             const driver = String(driverName || '').trim();
@@ -5814,16 +5897,34 @@
             _driverLocationOrderCount[driver] = (_driverLocationOrderCount[driver] || 0) + 1;
             if (_driverLocationTimers[driver]) return; // sudah jalan, cukup naikkan counter di atas
 
-            const sendOnce = () => {
+            _acquireDriverWakeLock(driver);
+
+            const pollOnce = () => {
                 if (!navigator.geolocation) return;
                 navigator.geolocation.getCurrentPosition(
-                    (pos) => _sendDriverLocation(driver, pos.coords.latitude, pos.coords.longitude),
+                    (pos) => _maybeSendDriverLocation(driver, pos),
                     () => { /* diamkan — gagal ambil GPS tidak boleh mengganggu proses lain */ },
-                    { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
+                    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
                 );
             };
-            sendOnce(); // kirim titik pertama segera setelah Start
-            _driverLocationTimers[driver] = setInterval(sendOnce, 20000); // tiap 20 detik
+
+            pollOnce(); // kirim titik pertama segera setelah Start
+            // Polling tiap 5 detik — persis batas rate-limit, jadi selalu ada
+            // kesempatan kirim titik terbaru begitu driver bergerak.
+            _driverLocationTimers[driver] = setInterval(pollOnce, GPS_MIN_INTERVAL_MS);
+
+            // watchPosition sebagai pelengkap: begitu OS/browser melaporkan
+            // perubahan posisi (biasanya lebih cepat & lebih hemat baterai
+            // daripada polling terus-menerus), langsung dicoba kirim juga —
+            // filter yang sama tetap berlaku sehingga tidak akan melanggar
+            // rate-limit walau watchPosition menembak lebih sering dari polling.
+            if (navigator.geolocation && navigator.geolocation.watchPosition) {
+                _driverLocationWatchIds[driver] = navigator.geolocation.watchPosition(
+                    (pos) => _maybeSendDriverLocation(driver, pos),
+                    () => { /* diamkan */ },
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+                );
+            }
         }
 
         function _stopDriverLocationTracking(driverName) {
@@ -5835,16 +5936,25 @@
                 clearInterval(_driverLocationTimers[driver]);
                 delete _driverLocationTimers[driver];
             }
+            if (_driverLocationWatchIds[driver] !== undefined && navigator.geolocation) {
+                navigator.geolocation.clearWatch(_driverLocationWatchIds[driver]);
+                delete _driverLocationWatchIds[driver];
+            }
+            delete _driverLocationLastSent[driver];
+            _releaseDriverWakeLock(driver);
             _clearDriverLocation(driver);
         }
 
-        async function _sendDriverLocation(driver, lat, lng) {
+        async function _sendDriverLocation(driver, lat, lng, accuracy) {
             try {
                 await fetch(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: 'updateDriverLocation', token: sessionToken, driver, lat, lng })
+                    body: JSON.stringify({
+                        action: 'updateDriverLocation', token: sessionToken,
+                        driver, lat, lng, accuracy: (typeof accuracy === 'number' ? Math.round(accuracy) : '')
+                    })
                 });
             } catch (e) { /* fire-and-forget — jangan ganggu UI Route */ }
         }
@@ -7816,16 +7926,57 @@
             if (_poolDriverMap) { _poolDriverMap.remove(); _poolDriverMap = null; }
             _poolDriverMarkers = {};
             _poolDriverMap = L.map('pool-driver-map').setView([-6.1901, 106.9002], 12);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; OpenStreetMap contributors'
+            // CartoDB "Voyager" — gratis, tanpa API key, lebih ringan & lebih jelas
+            // untuk marker berwarna di atasnya dibanding tile OSM standar.
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 20,
+                subdomains: 'abcd',
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
             }).addTo(_poolDriverMap);
 
             await _refreshPoolDriverMarkers(false);
 
-            // Auto-refresh posisi tiap 15 detik selama halaman ini terbuka
+            // Auto-refresh posisi tiap 3 detik selama halaman ini terbuka —
+            // digabung dengan animasi slide di _slideMarkerTo() supaya
+            // pergerakan marker terasa mulus (bukan "loncat") walau update
+            // datang secara diskrit tiap 3 detik.
             stopPoolDriverPolling();
-            _poolDriverPollTimer = setInterval(() => _refreshPoolDriverMarkers(false), 15000);
+            _poolDriverPollTimer = setInterval(() => _refreshPoolDriverMarkers(false), 3000);
+        }
+
+        const _poolDriverSlideAnims = {}; // driver -> requestAnimationFrame id (biar tidak numpuk animasi)
+        const POOL_DRIVER_STALE_MS = 30000; // >30 detik tanpa update dianggap "diam/offline"
+
+        /**
+         * Geser marker secara halus dari posisi lama ke posisi baru selama
+         * `duration` ms (requestAnimationFrame), bukan "loncat" instan via
+         * setLatLng — supaya pergerakan driver di peta Admin terasa hidup
+         * walau data baru hanya datang tiap beberapa detik sekali (polling).
+         */
+        function _slideMarkerTo(driver, marker, toLat, toLng, duration) {
+            const from = marker.getLatLng();
+            if (Math.abs(from.lat - toLat) < 1e-9 && Math.abs(from.lng - toLng) < 1e-9) return;
+
+            if (_poolDriverSlideAnims[driver]) cancelAnimationFrame(_poolDriverSlideAnims[driver]);
+
+            const startTime = performance.now();
+            const fromLat = from.lat, fromLng = from.lng;
+
+            function step(now) {
+                const t = Math.min(1, (now - startTime) / duration);
+                // easeOutQuad — mulai cepat, melambat mendekati titik tujuan
+                const eased = 1 - (1 - t) * (1 - t);
+                marker.setLatLng([
+                    fromLat + (toLat - fromLat) * eased,
+                    fromLng + (toLng - fromLng) * eased
+                ]);
+                if (t < 1) {
+                    _poolDriverSlideAnims[driver] = requestAnimationFrame(step);
+                } else {
+                    delete _poolDriverSlideAnims[driver];
+                }
+            }
+            _poolDriverSlideAnims[driver] = requestAnimationFrame(step);
         }
 
         /**
@@ -7839,20 +7990,32 @@
                 const rows = Array.isArray(raw) ? raw : (raw.data || []);
                 if (raw && raw.error) throw new Error(raw.error);
 
-                // Baris: [driver, lat, lng, lastUpdateISOString]
+                // Baris: [driver, lat, lng, accuracy, lastUpdateISOString]
+                // (kompatibel mundur dengan format lama 4-kolom tanpa accuracy)
                 const seenDrivers = new Set();
                 rows.forEach(r => {
                     const driver = String(r[0] || '').trim();
                     const lat    = parseFloat(r[1]);
                     const lng    = parseFloat(r[2]);
-                    const lastUpdate = r[3] || '';
+                    const hasAccuracyCol = r.length >= 5;
+                    const accuracy   = hasAccuracyCol ? r[3] : '';
+                    const lastUpdate = hasAccuracyCol ? (r[4] || '') : (r[3] || '');
                     if (!driver || isNaN(lat) || isNaN(lng) || _isJntCargoDriver(driver)) return;
                     seenDrivers.add(driver);
 
-                    const popupHtml = `<b>${escapeHtml(driver)}</b><br>Update: ${escapeHtml(_formatDriverLastUpdate(lastUpdate))}`;
+                    const t = new Date(lastUpdate).getTime();
+                    const isStale = !isNaN(t) && (Date.now() - t) > POOL_DRIVER_STALE_MS;
+                    const accTxt = accuracy !== '' && !isNaN(accuracy) ? ` (±${Math.round(accuracy)}m)` : '';
+                    const popupHtml = `<b>${escapeHtml(driver)}</b><br>Update: ${escapeHtml(_formatDriverLastUpdate(lastUpdate))}${accTxt}` +
+                        (isStale ? `<br><span style="color:#b45309;">⚠ Sinyal terakhir >30 detik lalu</span>` : '');
+
                     if (_poolDriverMarkers[driver]) {
-                        _poolDriverMarkers[driver].setLatLng([lat, lng]);
+                        // Geser mulus ke posisi baru (bukan loncat) selama ~2.8 detik
+                        // (sedikit lebih pendek dari interval polling 3 detik).
+                        _slideMarkerTo(driver, _poolDriverMarkers[driver], lat, lng, 2800);
                         _poolDriverMarkers[driver].setPopupContent(popupHtml);
+                        const el = _poolDriverMarkers[driver].getElement();
+                        if (el) el.style.opacity = isStale ? '0.45' : '1';
                     } else {
                         _poolDriverMarkers[driver] = L.marker([lat, lng], { icon: _carMarkerIcon() }).addTo(_poolDriverMap)
                             .bindPopup(popupHtml);
