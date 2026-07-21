@@ -197,18 +197,30 @@
                             🔄 Ambil Ulang
                         </button>
                     </div>
-                    <button type="button" id="tt-done-photo-btn"
-                        class="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:border-green-300 hover:text-green-600 transition">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                        <span id="tt-done-photo-label">Ambil Foto Bukti</span>
-                    </button>
+                    <div id="tt-done-photo-btn-row" class="grid grid-cols-2 gap-2">
+                        <button type="button" id="tt-done-photo-btn"
+                            class="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:border-green-300 hover:text-green-600 transition">
+                            <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            <span id="tt-done-photo-label">Kamera</span>
+                        </button>
+                        <button type="button" id="tt-done-gallery-btn"
+                            class="w-full flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-xl px-3 py-3 text-xs font-semibold text-gray-500 hover:bg-gray-50 hover:border-green-300 hover:text-green-600 transition">
+                            <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <span>Galeri</span>
+                        </button>
+                    </div>
                     <!-- capture="environment" memaksa kamera belakang langsung terbuka di HP -->
                     <input type="file" id="tt-done-photo-input"
                         accept="image/*" capture="environment" class="hidden">
+                    <!-- Tanpa atribut capture agar user bisa memilih foto dari galeri/album HP -->
+                    <input type="file" id="tt-done-gallery-input"
+                        accept="image/*" class="hidden">
                     <p id="tt-done-photo-status" class="text-[11px] text-gray-400 mt-1 italic hidden"></p>
                 </div>
             </div>
@@ -1775,13 +1787,15 @@
         function resetTtDonePhoto() {
             ttDonePhotoBase64 = null;
             const preview = document.getElementById('tt-done-photo-preview');
-            const btn = document.getElementById('tt-done-photo-btn');
+            const btnRow = document.getElementById('tt-done-photo-btn-row');
             const status = document.getElementById('tt-done-photo-status');
             const input = document.getElementById('tt-done-photo-input');
+            const galleryInputEl = document.getElementById('tt-done-gallery-input');
             if (preview) preview.classList.add('hidden');
-            if (btn) btn.classList.remove('hidden');
+            if (btnRow) btnRow.classList.remove('hidden');
             if (status) { status.classList.add('hidden'); status.textContent = ''; }
             if (input) input.value = '';
+            if (galleryInputEl) galleryInputEl.value = '';
         }
 
         /** Terapkan hasil foto (dataURL) ke state + tampilan preview popup Done Repair */
@@ -1789,11 +1803,11 @@
             ttDonePhotoBase64 = dataUrl;
             const preview = document.getElementById('tt-done-photo-preview');
             const img = document.getElementById('tt-done-photo-img');
-            const btn = document.getElementById('tt-done-photo-btn');
+            const btnRow = document.getElementById('tt-done-photo-btn-row');
             const status = document.getElementById('tt-done-photo-status');
             if (img) img.src = dataUrl;
             if (preview) preview.classList.remove('hidden');
-            if (btn) btn.classList.add('hidden');
+            if (btnRow) btnRow.classList.add('hidden');
             if (status) {
                 status.classList.remove('hidden');
                 status.textContent = `✅ Foto siap (${(dataUrl.length / 1024).toFixed(0)} KB)`;
@@ -1940,6 +1954,8 @@
             const photoBtn = document.getElementById('tt-done-photo-btn');
             const photoInput = document.getElementById('tt-done-photo-input');
             const photoRetake = document.getElementById('tt-done-photo-retake');
+            const galleryBtn = document.getElementById('tt-done-gallery-btn');
+            const galleryInput = document.getElementById('tt-done-gallery-input');
             if (photoBtn) photoBtn.addEventListener('click', () => openTtDoneCamera());
             if (photoRetake) {
                 photoRetake.addEventListener('click', () => {
@@ -1952,6 +1968,16 @@
                 photoInput.addEventListener('change', () => {
                     const file = photoInput.files && photoInput.files[0];
                     handleTtDonePhotoFile(file);
+                    photoInput.value = '';
+                });
+            }
+            // ── Tombol Galeri: pilih foto Done Repair langsung dari galeri/album HP ──
+            if (galleryBtn && galleryInput) {
+                galleryBtn.addEventListener('click', () => galleryInput.click());
+                galleryInput.addEventListener('change', () => {
+                    const file = galleryInput.files && galleryInput.files[0];
+                    handleTtDonePhotoFile(file);
+                    galleryInput.value = '';
                 });
             }
         })();
@@ -2709,7 +2735,18 @@
                     ⟳ Refresh
                 </button>
             </div>
-            <p class="text-sm text-gray-500 mb-6">Status mesin "On Going" / "Pending" &amp; "Solved" (7 hari terakhir) dari sheet "Repair".</p>
+            <p class="text-sm text-gray-500 mb-4">Status mesin "On Going" / "Pending" &amp; "Solved" (7 hari terakhir) dari sheet "Repair".</p>
+
+            <div class="relative mb-6">
+                <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/>
+                </svg>
+                <input type="text" id="rsr-search-input" oninput="onRsrSearchInput()"
+                    placeholder="Cari Serial Number, Type Machine, Ex Location/Customer, Teknisi, dll..."
+                    class="w-full pl-9 pr-9 py-2.5 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none">
+                <button type="button" id="rsr-search-clear" onclick="clearRsrSearch()"
+                    class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none px-1">&times;</button>
+            </div>
 
             <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <h2 class="text-base font-bold text-gray-700">On Going &amp; Pending</h2>
@@ -2768,6 +2805,9 @@
                     </table>
                 </div>
             </div>`;
+
+            // Reset kata kunci Search setiap kali halaman ini dibuka ulang (DOM dibuat baru)
+            rsrSearchTerm = '';
 
             await loadReportStatusRepair();
         }
@@ -2857,6 +2897,69 @@
         let rsrOngoingCurrentPage = 1;
         const RSR_ONGOING_PAGE_SIZE = 10;
 
+        // ── State untuk fitur "Search" Report Status Repair ──
+        // rsrOngoingRowsRaw / rsrSolvedRowsRaw = data asli (belum difilter) hasil terakhir dari backend.
+        // rsrOngoingAllRows / rsrSolvedAllRows di atas selalu berisi hasil SETELAH difilter oleh kata kunci pencarian.
+        let rsrOngoingRowsRaw = [];
+        let rsrSolvedRowsRaw = [];
+        let rsrSolvedAllRows = [];
+        let rsrSearchTerm = '';
+
+        /** Cek apakah 1 baris data Repair cocok dengan kata kunci pencarian (case-insensitive, cari di semua kolom yang relevan) */
+        function rsrRowMatchesSearch(row, term) {
+            if (!term) return true;
+            const haystack = [
+                row.serialNumber, row.typeMachine, row.status, row.exLocation,
+                row.remarkPending, row.pic
+            ].map(v => (v || '').toString().toLowerCase()).join(' | ');
+            return haystack.includes(term);
+        }
+
+        /** Terapkan filter pencarian ke data mentah, lalu render ulang tabel On Going & Pending + Solved */
+        function applyRsrSearchFilter() {
+            const term = rsrSearchTerm.trim().toLowerCase();
+            const ongoingCountEl = document.getElementById('rsr-ongoing-count');
+            const solvedCountEl = document.getElementById('rsr-solved-count');
+            const solvedTbody = document.getElementById('rsr-solved-tbody');
+
+            rsrOngoingAllRows = term
+                ? rsrOngoingRowsRaw.filter(row => rsrRowMatchesSearch(row, term))
+                : rsrOngoingRowsRaw.slice();
+            rsrSolvedAllRows = term
+                ? rsrSolvedRowsRaw.filter(row => rsrRowMatchesSearch(row, term))
+                : rsrSolvedRowsRaw.slice();
+
+            if (ongoingCountEl) ongoingCountEl.textContent = `${rsrOngoingAllRows.length} mesin`;
+            if (solvedCountEl) solvedCountEl.textContent = `${rsrSolvedAllRows.length} mesin`;
+
+            renderRsrOngoingPage(1);
+
+            if (solvedTbody) {
+                solvedTbody.innerHTML = rsrSolvedAllRows.length === 0
+                    ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                    : rsrSolvedAllRows.map(row => renderReportStatusRepairRow(row, false)).join('');
+            }
+        }
+
+        /** Dipanggil setiap kali user mengetik di kolom Search Report Status Repair */
+        function onRsrSearchInput() {
+            const input = document.getElementById('rsr-search-input');
+            const clearBtn = document.getElementById('rsr-search-clear');
+            rsrSearchTerm = input ? input.value : '';
+            if (clearBtn) clearBtn.classList.toggle('hidden', !rsrSearchTerm);
+            applyRsrSearchFilter();
+        }
+
+        /** Kosongkan kolom Search & tampilkan kembali semua data Report Status Repair */
+        function clearRsrSearch() {
+            const input = document.getElementById('rsr-search-input');
+            const clearBtn = document.getElementById('rsr-search-clear');
+            if (input) input.value = '';
+            rsrSearchTerm = '';
+            if (clearBtn) clearBtn.classList.add('hidden');
+            applyRsrSearchFilter();
+        }
+
         /** Render isi tbody & kontrol pagination tabel On Going & Pending sesuai halaman aktif */
         function renderRsrOngoingPage(page) {
             const ongoingTbody = document.getElementById('rsr-ongoing-tbody');
@@ -2937,15 +3040,10 @@
                     return computeSlaRemainingDays(a.inboundDate) - computeSlaRemainingDays(b.inboundDate);
                 });
 
-                if (ongoingCountEl) ongoingCountEl.textContent = `${onGoingRows.length} mesin`;
-                if (solvedCountEl) solvedCountEl.textContent = `${solvedRows.length} mesin`;
-
-                rsrOngoingAllRows = onGoingRows;
-                renderRsrOngoingPage(1);
-
-                solvedTbody.innerHTML = solvedRows.length === 0
-                    ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
-                    : solvedRows.map(row => renderReportStatusRepairRow(row, false)).join('');
+                // Simpan data mentah (belum difilter), lalu terapkan kata kunci Search yang sedang aktif (jika ada)
+                rsrOngoingRowsRaw = onGoingRows;
+                rsrSolvedRowsRaw = solvedRows;
+                applyRsrSearchFilter();
             } catch (err) {
                 ongoingTbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
                 solvedTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
