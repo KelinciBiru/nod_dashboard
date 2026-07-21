@@ -5881,6 +5881,66 @@
             delete _driverLocationWakeLock[driver];
         }
 
+        // =====================================================================
+        // [Pool Driver] BACKGROUND KEEP-ALIVE — best-effort agar tab HP driver
+        // TIDAK di-throttle/suspend habis-habisan oleh Android/Chrome saat
+        // driver berpindah ke aplikasi Google Maps (atau app lain) tanpa
+        // menutup NOD Dashboard.
+        //
+        // TEKNIK: Chrome/Android (dan browser Chromium turunannya) memberi
+        // prioritas latar-belakang JAUH lebih tinggi pada tab yang sedang
+        // memutar audio ("active media session") dibanding tab biasa yang
+        // di-background-kan (yang timer-nya dibatasi sampai ~1x/menit).
+        // Dengan memutar audio hening + mengisi Media Session metadata, kita
+        // "meminjam" prioritas itu supaya setInterval & watchPosition GPS
+        // tetap sempat jalan lebih sering selama driver membuka Maps.
+        //
+        // BATASAN JUJUR (harus dipahami tim, bukan solusi 100% pasti):
+        //   - iOS Safari jauh lebih ketat dari Android Chrome; browser bisa
+        //     tetap membekukan tab setelah beberapa saat walau trik ini aktif.
+        //   - Kalau OS benar-benar menutup proses browser (RAM habis / battery
+        //     saver ekstrem), tidak ada trik JS yang bisa mencegahnya.
+        //   - Solusi PASTI & permanen untuk tracking latar-belakang penuh
+        //     (spt aplikasi ojek online) adalah membungkus app ini jadi APK
+        //     native (Capacitor) + izin lokasi "Allow all the time" + foreground
+        //     service notification — di luar cakupan file HTML ini.
+        // Audio dimulai HANYA saat tracking Route benar-benar aktif (setelah
+        // interaksi user menekan "Start"), supaya tidak diblok autoplay policy.
+        // =====================================================================
+        let _keepAliveAudioEl = null;
+        function _startBackgroundKeepAlive() {
+            try {
+                if (_keepAliveAudioEl) return; // sudah jalan, tidak perlu 2 instance
+                // WAV hening (silent), diputar loop terus-menerus.
+                const silentWav = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+                const el = new Audio(silentWav);
+                el.loop = true;
+                el.volume = 0.01; // nyaris tak terdengar, tapi tidak 0% (agar tidak dianggap "muted")
+                el.setAttribute('playsinline', '');
+                el.play().catch(() => { /* autoplay diblok — diamkan, tracking tetap jalan seadanya */ });
+                if ('mediaSession' in navigator) {
+                    try {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: 'NOD Dashboard — Route Aktif',
+                            artist: 'Tracking lokasi driver sedang berjalan'
+                        });
+                        navigator.mediaSession.playbackState = 'playing';
+                    } catch (e) { /* noop */ }
+                }
+                _keepAliveAudioEl = el;
+            } catch (e) { /* keep-alive best-effort — jangan sampai ganggu tracking utama */ }
+        }
+        function _stopBackgroundKeepAlive() {
+            try {
+                if (_keepAliveAudioEl) {
+                    _keepAliveAudioEl.pause();
+                    _keepAliveAudioEl.src = '';
+                    _keepAliveAudioEl = null;
+                }
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
+            } catch (e) { /* noop */ }
+        }
+
         // Saat tab kembali terlihat (driver membuka lagi HP-nya), re-acquire wake
         // lock & langsung kirim 1 titik segar untuk semua driver yang masih ditrack
         // — supaya marker di Admin langsung "hidup" lagi tanpa menunggu interval.
@@ -5888,6 +5948,7 @@
             if (document.visibilityState !== 'visible') return;
             Object.keys(_driverLocationTimers).forEach(driver => {
                 _acquireDriverWakeLock(driver);
+                _startBackgroundKeepAlive();
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
                         (pos) => _maybeSendDriverLocation(driver, pos),
@@ -5905,6 +5966,7 @@
             if (_driverLocationTimers[driver]) return; // sudah jalan, cukup naikkan counter di atas
 
             _acquireDriverWakeLock(driver);
+            _startBackgroundKeepAlive(); // supaya tab tetap "bernapas" saat driver buka Google Maps
 
             const pollOnce = () => {
                 if (!navigator.geolocation) return;
@@ -5950,6 +6012,13 @@
             delete _driverLocationLastSent[driver];
             _releaseDriverWakeLock(driver);
             _clearDriverLocation(driver);
+
+            // Audio keep-alive bersifat global (1 instance untuk semua driver di
+            // HP ini) — matikan HANYA kalau sudah tidak ada driver lain yang
+            // masih ditrack, supaya tidak mati prematur saat masih ada task aktif.
+            if (Object.keys(_driverLocationTimers).length === 0) {
+                _stopBackgroundKeepAlive();
+            }
         }
 
         async function _sendDriverLocation(driver, lat, lng, accuracy) {
