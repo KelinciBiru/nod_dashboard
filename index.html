@@ -3070,6 +3070,10 @@
         let ttSerialInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer, kendala } }
         let ttRepairInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer } } fallback dari sheet "Repair" (kolom C/D/H) kalau tidak ketemu di "Penukaran Mesin NOD"
         let ttCustomerTypeKendalaMap = {}; // { "customer|type" -> kendala } fallback dari "Penukaran Mesin NOD" kalau serial tidak cocok
+        let ttServiceMesinNodBySerial = {};   // { noMesinLowerCase -> { kendala, tags, namaCustomer } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom G/B/H/I)
+        let ttServiceMesinNodByCustomer = {}; // { namaCustomerLowerCase -> { kendala, tags, noMesin } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom B/G/H/I)
+        let ttHistoricalKendalaBySerial = {};   // { serialSebelumnyaLowerCase -> alasanDitukar } fallback dari "Historycal Penukaran Customer" (kolom D/G)
+        let ttHistoricalKendalaByCustomer = {}; // { namaCustomerLowerCase -> alasanDitukar } fallback dari "Historycal Penukaran Customer" (kolom B/G)
         let ttSparepartMap = {};    // { namaSparepart -> idSparepart }
         let ttSparepartList = [];   // [{ name, id }] daftar sparepart dari backend, untuk pencarian multi-pilih
         let ttSelectedSpareparts = []; // [{ name, id }] sparepart yang sudah dipilih user (bisa lebih dari 1)
@@ -3202,6 +3206,10 @@
                 ttSerialInfoMap = result.serialInfoMap || {};
                 ttRepairInfoMap = result.repairInfoMap || {};
                 ttCustomerTypeKendalaMap = result.customerTypeKendalaMap || {};
+                ttServiceMesinNodBySerial = result.serviceMesinNodBySerial || {};
+                ttServiceMesinNodByCustomer = result.serviceMesinNodByCustomer || {};
+                ttHistoricalKendalaBySerial = result.historicalKendalaBySerial || {};
+                ttHistoricalKendalaByCustomer = result.historicalKendalaByCustomer || {};
                 ttTeknisiList = result.teknisiList || [];
 
                 ttOngoingSerials = result.ongoingSerials || [];
@@ -3273,18 +3281,44 @@
                 return;
             }
 
-            const info = ttSerialInfoMap[serial.toLowerCase()];
+            // Fallback TERAKHIR: cari "Kendala" lewat 2 sumber tambahan,
+            // dicoba berurutan:
+            //   1. "Historycal Penukaran Customer" (Alasan Ditukar) — lebih
+            //      relevan karena satu keluarga dengan "Penukaran Mesin NOD".
+            //   2. "Service Mesin NOD".
+            // Masing-masing dicoba lewat Serial Number dulu, baru Nama Customer.
+            function findServiceMesinNodKendala(serialLower, customerName) {
+                const histBySerial = ttHistoricalKendalaBySerial[serialLower];
+                if (histBySerial) return histBySerial;
+                if (customerName) {
+                    const histByCustomer = ttHistoricalKendalaByCustomer[customerName.toLowerCase()];
+                    if (histByCustomer) return histByCustomer;
+                }
+
+                const bySerial = ttServiceMesinNodBySerial[serialLower];
+                if (bySerial && bySerial.kendala) return bySerial.kendala;
+                if (customerName) {
+                    const byCustomer = ttServiceMesinNodByCustomer[customerName.toLowerCase()];
+                    if (byCustomer && byCustomer.kendala) return byCustomer.kendala;
+                }
+                return '';
+            }
+
+            const serialLower = serial.toLowerCase();
+            const info = ttSerialInfoMap[serialLower];
             if (info) {
                 if (typeEl) typeEl.value = info.typeMachine || '';
                 if (customerEl) customerEl.value = info.namaCustomer || 'Unknown';
-                if (kendalaEl) kendalaEl.value = info.kendala || '';
+                let kendalaValue = info.kendala || '';
+                if (!kendalaValue) kendalaValue = findServiceMesinNodKendala(serialLower, info.namaCustomer);
+                if (kendalaEl) kendalaEl.value = kendalaValue;
                 return;
             }
 
             // Fallback: Nama Customer tidak ketemu di "Penukaran Mesin NOD" ->
             // cari otomatis di sheet "Repair" (kolom C=Serial Number,
             // kolom D=Type Machine, kolom H=Ex Location/Customer).
-            const repairInfo = ttRepairInfoMap[serial.toLowerCase()];
+            const repairInfo = ttRepairInfoMap[serialLower];
             if (repairInfo) {
                 if (typeEl) typeEl.value = repairInfo.typeMachine || '';
                 if (customerEl) customerEl.value = repairInfo.namaCustomer || 'Unknown';
@@ -3296,11 +3330,12 @@
                     const ctKey = (repairInfo.namaCustomer.toLowerCase() + '|' + (repairInfo.typeMachine || '').toLowerCase());
                     fallbackKendala = ttCustomerTypeKendalaMap[ctKey] || '';
                 }
+                if (!fallbackKendala) fallbackKendala = findServiceMesinNodKendala(serialLower, repairInfo.namaCustomer);
                 if (kendalaEl) kendalaEl.value = fallbackKendala;
             } else {
                 if (typeEl) typeEl.value = '';
                 if (customerEl) customerEl.value = 'Unknown';
-                if (kendalaEl) kendalaEl.value = '';
+                if (kendalaEl) kendalaEl.value = findServiceMesinNodKendala(serialLower, '');
             }
         }
 
