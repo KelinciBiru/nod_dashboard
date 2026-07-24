@@ -234,9 +234,11 @@
                         </button>
                     </div>
                     <!-- capture="environment" memaksa kamera belakang langsung terbuka di HP -->
-                    <input type="file" id="tt-done-photo-input" accept="image/*" capture="environment" class="hidden">
+                    <input type="file" id="tt-done-photo-input" accept="image/*" capture="environment" class="hidden"
+                        style="position:absolute;left:-9999px;top:-9999px;opacity:0;">
                     <!-- Tanpa atribut capture agar user bisa memilih foto dari galeri/album HP -->
-                    <input type="file" id="tt-done-gallery-input" accept="image/*" class="hidden">
+                    <input type="file" id="tt-done-gallery-input" accept="image/*" class="hidden"
+                        style="position:absolute;left:-9999px;top:-9999px;opacity:0;">
                     <p id="tt-done-photo-status" class="text-[11px] text-gray-400 mt-1 italic hidden"></p>
                 </div>
             </div>
