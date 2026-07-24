@@ -1548,6 +1548,16 @@
             if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User') {
                 cachedFetch(API_URLS.serviceCenter + '?action=getPICList', 'getPICList').catch(() => { });
             }
+            // Prefetch untuk role yang akses Report Status Repair & Task Technician
+            // (Teknisi cuma bisa akses 2 menu ini, jadi selalu prefetch untuknya).
+            // Ini yang paling penting: kedua endpoint ini baca banyak sheet sekaligus
+            // di GAS sehingga lambat (>10 detik) kalau ditunggu saat menu baru dibuka;
+            // dengan prefetch di background sesaat setelah login, begitu user membuka
+            // menunya data biasanya sudah siap dari cache (instan).
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') {
+                cachedFetch(API_URLS.serviceCenter + '?action=getReportStatusRepair', 'getReportStatusRepair', 25000).catch(() => { });
+                cachedFetch(API_URLS.serviceCenter + '?action=getTaskTechnicianInit', 'getTaskTechnicianInit', 25000).catch(() => { });
+            }
         }
 
         /**
@@ -3158,11 +3168,15 @@
                 return;
             }
 
+            const forceRefresh = document.activeElement === btn;
             if (btn) { btn.disabled = true; btn.textContent = '⏳ Memuat...'; }
             try {
                 const url = SERVICE_CENTER_GAS_URL + '?action=getReportStatusRepair';
-                const res = await fetchWithTimeout(url, {}, 20000);
-                const result = await res.json();
+                // Pakai cachedFetch (cache 5 menit) supaya navigasi bolak-balik ke menu ini
+                // instan, bukan menunggu GAS baca ulang sheet dari awal tiap kali.
+                // Klik tombol "⟳ Refresh" tetap memaksa ambil data terbaru (bypass cache).
+                if (forceRefresh) clearCache('getReportStatusRepair');
+                const result = await cachedFetch(url, 'getReportStatusRepair', 20000);
                 if (!result.success) throw new Error(result.message || 'Gagal mengambil data.');
 
                 // Fallback untuk backend lama yang cuma mengirim field "data" gabungan
@@ -3470,12 +3484,15 @@
         }
 
         /** Muat daftar Serial Number On Going, peta info mesin, daftar sparepart, & daftar teknisi dari backend */
-        async function loadTtInit() {
+        async function loadTtInit(forceRefresh = false) {
             if (!SERVICE_CENTER_GAS_URL || SERVICE_CENTER_GAS_URL.startsWith('GANTI_DENGAN')) return;
             try {
                 const url = SERVICE_CENTER_GAS_URL + '?action=getTaskTechnicianInit';
-                const res = await fetchWithTimeout(url, {}, 20000);
-                const result = await res.json();
+                // Pakai cachedFetch (cache 5 menit) — data referensi ini juga di-prefetch
+                // di background sesaat setelah login (lihat _prefetchCommonData), jadi
+                // begitu menu ini dibuka biasanya sudah langsung tersedia dari cache.
+                if (forceRefresh) clearCache('getTaskTechnicianInit');
+                const result = await cachedFetch(url, 'getTaskTechnicianInit', 20000);
                 if (!result.success) {
                     showAlert('error', 'Gagal Memuat Data', result.message || 'Gagal memuat data referensi Task Technician.');
                     return;
@@ -3769,7 +3786,12 @@
                 ttSelectedSpareparts = [];
                 renderTtSparepartChips();
                 resetTtDonePhoto();
-                loadTtInit();
+                // Data yang baru disimpan mengubah status di sheet Repair/Teknisi_Log, yang
+                // dipakai baik oleh Task Technician maupun Report Status Repair — bersihkan
+                // cache keduanya supaya kunjungan berikutnya ke menu manapun sudah data terbaru.
+                clearCache('getTaskTechnicianInit');
+                clearCache('getReportStatusRepair');
+                loadTtInit(true);
             } catch (err) {
                 showAlert('error', 'Gagal Menyimpan', err.message || 'Gagal menyimpan data Task Technician.');
             } finally {
