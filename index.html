@@ -8702,9 +8702,40 @@
         async function _refreshPoolDriverMarkers(manual) {
             if (!_poolDriverMap) return;
             try {
-                const raw = await fetch(DELIVERY_GAS_URL + '?action=getDriverLocations', { redirect: 'follow' }).then(r => r.json());
+                // [Pool Driver FIX] Sheet "Driver_Location" hanya dibersihkan lewat
+                // _clearDriverLocation, yang dipanggil dari device driver saat dia
+                // sendiri menekan tombol Done/Cancel. Kalau tab driver keburu
+                // ditutup/crash/kehabisan baterai, atau order-nya diselesaikan dari
+                // device LAIN (mis. Admin), baris lama di "Driver_Location" tidak
+                // pernah terhapus — akibatnya marker driver itu masih nongol di
+                // peta walau sudah tidak ada satupun PO/RO miliknya yang
+                // On-Delivery. Untuk itu kita silangkan dengan status ASLI di sheet
+                // "Plan Driver" (sumber kebenaran) lewat getPlanDriver, dan hanya
+                // tampilkan marker untuk driver yang benar-benar masih punya
+                // task berstatus On-Delivery/On Delivery saat ini.
+                const [raw, planRaw] = await Promise.all([
+                    fetch(DELIVERY_GAS_URL + '?action=getDriverLocations', { redirect: 'follow' }).then(r => r.json()),
+                    fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' }).then(r => r.json()).catch(() => null)
+                ]);
                 const rows = Array.isArray(raw) ? raw : (raw.data || []);
                 if (raw && raw.error) throw new Error(raw.error);
+
+                // Bangun set nama driver yang BENAR-BENAR sedang On-Delivery,
+                // berdasarkan sheet "Plan Driver" (kolom [5]=Status, [9]=Driver/PIC).
+                let activeDriverNames = null; // null = data Plan Driver gagal diambil → jangan filter (fail-open, jangan sampai peta kosong keliru)
+                if (planRaw) {
+                    const planRows = Array.isArray(planRaw) ? planRaw : (planRaw.data || []);
+                    if (!(planRaw && planRaw.error)) {
+                        activeDriverNames = new Set();
+                        planRows.slice(1).forEach(r => {
+                            const st = String(r[5] || '').trim();
+                            const isActive = st === 'On-Delivery' || st === 'On Delivery';
+                            if (!isActive) return;
+                            const driverName = String(r[9] || '').trim().toLowerCase();
+                            if (driverName) activeDriverNames.add(driverName);
+                        });
+                    }
+                }
 
                 // Baris: [driver, lat, lng, accuracy, lastUpdateISOString]
                 // (kompatibel mundur dengan format lama 4-kolom tanpa accuracy)
@@ -8717,6 +8748,7 @@
                     const accuracy = hasAccuracyCol ? r[3] : '';
                     const lastUpdate = hasAccuracyCol ? (r[4] || '') : (r[3] || '');
                     if (!driver || isNaN(lat) || isNaN(lng) || _isJntCargoDriver(driver)) return;
+                    if (activeDriverNames && !activeDriverNames.has(driver.toLowerCase())) return; // sudah tidak On-Delivery lagi → jangan tampilkan
                     seenDrivers.add(driver);
 
                     const t = new Date(lastUpdate).getTime();
