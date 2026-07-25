@@ -60,6 +60,8 @@
     <!-- Leaflet (peta Pool Driver — Live Location) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <!-- Supabase JS (relay Realtime posisi driver — supaya marker Pool Driver benar-benar bergerak live) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 
 <body class="font-sans text-gray-800 bg-gray-50">
@@ -6468,6 +6470,48 @@
         const DELIVERY_GAS_URL = PO_GAS_URL; // Gunakan GAS yang sama (akan handle action deliveryDone)
 
         // =========================================================================
+        // [Pool Driver — SUPABASE REALTIME] Relay posisi driver.
+        //
+        // GAS/Google Sheets ("Driver_Location") TETAP dipakai seperti sebelumnya
+        // (histori, daftar Driver Online, jejak riwayat via getDriverLocationHistory)
+        // — TIDAK diubah/dihapus. Supabase ditambahkan DI SAMPING GAS, khusus
+        // untuk merelay posisi driver secara Realtime (WebSocket push), supaya
+        // marker di peta menu "Pool Driver" benar-benar BERGERAK live begitu
+        // driver mengirim titik GPS — bukan menunggu polling GAS tiap beberapa
+        // detik seperti sebelumnya.
+        //
+        // Setup 1x (SQL Editor Supabase, project "ebrquvhajjthcztzrohj"):
+        //   create table if not exists driver_locations (
+        //     driver text primary key,
+        //     lat double precision not null,
+        //     lng double precision not null,
+        //     accuracy double precision,
+        //     updated_at timestamptz not null default now()
+        //   );
+        //   alter publication supabase_realtime add table driver_locations;
+        //   alter table driver_locations enable row level security;
+        //   create policy "public read"   on driver_locations for select using (true);
+        //   create policy "public upsert" on driver_locations for insert with check (true);
+        //   create policy "public update" on driver_locations for update using (true);
+        //   create policy "public delete" on driver_locations for delete using (true);
+        //
+        // CATATAN KEAMANAN: policy di atas terbuka (public) karena app ini
+        // memakai auth token sendiri (bukan Supabase Auth) — key yang dipakai
+        // di frontend adalah publishable key (aman ditaruh di client), tapi
+        // tabel ini sebaiknya HANYA berisi data non-sensitif (nama driver &
+        // koordinat GPS saat ini), persis seperti isi sheet Driver_Location.
+        // =========================================================================
+        const SUPABASE_URL = 'https://ebrquvhajjthcztzrohj.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_pvtI8BWryuyXsQUPObA3ZQ_Y3-0bHdP';
+        const SUPABASE_DRIVER_LOC_TABLE = 'driver_locations';
+        const supabaseClient = (window.supabase && typeof window.supabase.createClient === 'function')
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+            : null;
+        if (!supabaseClient) {
+            console.warn('Supabase JS gagal dimuat — marker Pool Driver akan fallback ke polling GAS biasa (tidak realtime).');
+        }
+
+        // =========================================================================
         // [Pool Driver] LIVE LOCATION TRACKING — dikirim otomatis oleh HP Driver
         // selama minimal 1 PO/RO miliknya berstatus "On-Delivery"/"On Delivery".
         // Dikecualikan: driver "JNT Cargo" (kurir eksternal, tidak pernah di-track).
@@ -6716,28 +6760,45 @@
         }
 
         async function _sendDriverLocation(driver, lat, lng, accuracy) {
-            try {
-                await fetch(DELIVERY_GAS_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({
-                        action: 'updateDriverLocation', token: sessionToken,
-                        driver, lat, lng, accuracy: (typeof accuracy === 'number' ? Math.round(accuracy) : '')
-                    })
-                });
-            } catch (e) { /* fire-and-forget — jangan ganggu UI Route */ }
+            const roundedAccuracy = (typeof accuracy === 'number' ? Math.round(accuracy) : '');
+
+            const gasPromise = fetch(DELIVERY_GAS_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'updateDriverLocation', token: sessionToken,
+                    driver, lat, lng, accuracy: roundedAccuracy
+                })
+            }).catch(() => { /* fire-and-forget — jangan ganggu UI Route */ });
+
+            // [Pool Driver — SUPABASE REALTIME] Upsert SEKALIGUS ke Supabase —
+            // inilah yang membuat marker di peta Admin bergerak REALTIME (push
+            // via WebSocket), bukan cuma tersimpan menunggu polling GAS.
+            const supabasePromise = supabaseClient
+                ? supabaseClient.from(SUPABASE_DRIVER_LOC_TABLE).upsert({
+                    driver, lat, lng,
+                    accuracy: roundedAccuracy === '' ? null : roundedAccuracy,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'driver' }).then(() => { }).catch(() => { })
+                : Promise.resolve();
+
+            await Promise.allSettled([gasPromise, supabasePromise]);
         }
 
         async function _clearDriverLocation(driver) {
-            try {
-                await fetch(DELIVERY_GAS_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: 'clearDriverLocation', token: sessionToken, driver })
-                });
-            } catch (e) { /* fire-and-forget */ }
+            const gasPromise = fetch(DELIVERY_GAS_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'clearDriverLocation', token: sessionToken, driver })
+            }).catch(() => { /* fire-and-forget */ });
+
+            const supabasePromise = supabaseClient
+                ? supabaseClient.from(SUPABASE_DRIVER_LOC_TABLE).delete().eq('driver', driver).then(() => { }).catch(() => { })
+                : Promise.resolve();
+
+            await Promise.allSettled([gasPromise, supabasePromise]);
         }
 
         /**
@@ -8757,12 +8818,122 @@
         let _poolDriverHistoryLayer = null;     // L.polyline jejak riwayat driver yang dipilih
         let _poolDriverHistoryMarkers = [];     // [markerAwal, markerAkhir] riwayat
         let _poolDriverSelectedHistoryDriver = null;
+        // [Pool Driver — SUPABASE REALTIME]
+        let _poolDriverRealtimeChannel = null;  // channel Supabase Realtime aktif untuk halaman Pool Driver ini
+        // Set nama driver (lowercase) yang BENAR-BENAR sedang On-Delivery menurut
+        // "Plan Driver" — dihitung ulang tiap _refreshPoolDriverMarkers(), dipakai
+        // ulang oleh _handlePoolDriverRealtimeEvent() supaya event Supabase yang
+        // masuk DI ANTARA 2 polling tetap ikut difilter dengan aturan yang sama
+        // (driver yang order-nya sudah Delivered/Cancel tidak ikut muncul).
+        // null = filter belum diketahui → fail-open (tampilkan apa adanya).
+        let _poolDriverActiveDriverNames = null;
 
         /** Hentikan polling peta Pool Driver (dipanggil setiap kali pindah halaman) */
         function stopPoolDriverPolling() {
             if (_poolDriverPollTimer) {
                 clearInterval(_poolDriverPollTimer);
                 _poolDriverPollTimer = null;
+            }
+            _stopPoolDriverRealtime();
+        }
+
+        /** [Pool Driver — SUPABASE REALTIME] Mulai dengarkan perubahan tabel
+         *  "driver_locations" (INSERT/UPDATE/DELETE) supaya marker bergerak
+         *  seketika begitu driver mengirim titik GPS baru — tanpa menunggu
+         *  polling GAS berikutnya. */
+        function _startPoolDriverRealtime() {
+            if (!supabaseClient || _poolDriverRealtimeChannel) return;
+            _poolDriverRealtimeChannel = supabaseClient
+                .channel('pool-driver-locations-' + Date.now())
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: SUPABASE_DRIVER_LOC_TABLE },
+                    (payload) => _handlePoolDriverRealtimeEvent(payload)
+                )
+                .subscribe();
+        }
+
+        function _stopPoolDriverRealtime() {
+            if (_poolDriverRealtimeChannel && supabaseClient) {
+                supabaseClient.removeChannel(_poolDriverRealtimeChannel);
+            }
+            _poolDriverRealtimeChannel = null;
+        }
+
+        /** [Pool Driver — SUPABASE REALTIME] Dipanggil setiap ada event push dari
+         *  Supabase Realtime pada tabel driver_locations. Menggeser/menciptakan/
+         *  menghapus marker SECEPATNYA (tanpa menunggu siklus polling), memakai
+         *  filter driver aktif (_poolDriverActiveDriverNames) yang sama dengan
+         *  yang dipakai _refreshPoolDriverMarkers supaya konsisten. */
+        function _handlePoolDriverRealtimeEvent(payload) {
+            if (!_poolDriverMap) return;
+            const eventType = payload.eventType || payload.type;
+            const row = (payload.new && Object.keys(payload.new).length) ? payload.new : payload.old;
+            if (!row) return;
+
+            const driver = String(row.driver || '').trim();
+            if (!driver || _isJntCargoDriver(driver)) return;
+
+            if (eventType === 'DELETE') {
+                if (_poolDriverMarkers[driver]) {
+                    _poolDriverMap.removeLayer(_poolDriverMarkers[driver]);
+                    delete _poolDriverMarkers[driver];
+                    document.getElementById('pool-driver-empty')?.classList.toggle('hidden', Object.keys(_poolDriverMarkers).length > 0);
+                }
+                return;
+            }
+
+            // Filter sama seperti _refreshPoolDriverMarkers: driver yang sudah
+            // tidak On-Delivery (menurut Plan Driver) tidak ikut ditampilkan,
+            // walau baris Supabase-nya belum sempat dihapus.
+            if (_poolDriverActiveDriverNames && !_poolDriverActiveDriverNames.has(driver.toLowerCase())) return;
+
+            const lat = parseFloat(row.lat);
+            const lng = parseFloat(row.lng);
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            const accuracy = (row.accuracy === null || row.accuracy === undefined) ? '' : row.accuracy;
+            const lastUpdate = row.updated_at || new Date().toISOString();
+            const accTxt = (accuracy !== '' && !isNaN(accuracy)) ? ` (±${Math.round(accuracy)}m)` : '';
+            const popupHtml = `<b>${escapeHtml(driver)}</b><br>Update: ${escapeHtml(_formatDriverLastUpdate(lastUpdate))}${accTxt}`;
+
+            if (_poolDriverMarkers[driver]) {
+                // Push realtime datang hampir seketika saat driver bergerak —
+                // geser lebih cepat (~1.2 detik) drpd animasi hasil polling GAS
+                // (2.8 detik) supaya marker terasa benar-benar mengikuti mobil.
+                _slideMarkerTo(driver, _poolDriverMarkers[driver], lat, lng, 1200);
+                _poolDriverMarkers[driver].setPopupContent(popupHtml);
+                const el = _poolDriverMarkers[driver].getElement();
+                if (el) el.style.opacity = '1';
+            } else {
+                _poolDriverMarkers[driver] = L.marker([lat, lng], { icon: _carMarkerIcon() }).addTo(_poolDriverMap)
+                    .bindPopup(popupHtml);
+            }
+            document.getElementById('pool-driver-empty')?.classList.add('hidden');
+        }
+
+        /** [Pool Driver — SUPABASE REALTIME] Ambil SEMUA baris posisi driver
+         *  terkini. Utamakan Supabase (lebih cepat & inilah sumber yang dipush
+         *  Realtime); fallback ke GAS/Google Sheets "Driver_Location" kalau
+         *  Supabase gagal/tidak terkonfigurasi, supaya peta tidak pernah kosong
+         *  hanya gara-gara Supabase down. Return format SAMA seperti sebelumnya:
+         *  [[driver, lat, lng, accuracy, lastUpdateISOString], ...]
+         */
+        async function _fetchAllDriverLocations() {
+            if (supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient.from(SUPABASE_DRIVER_LOC_TABLE).select('*');
+                    if (error) throw error;
+                    return (data || []).map(r => [r.driver, r.lat, r.lng, r.accuracy, r.updated_at]);
+                } catch (e) {
+                    // lanjut ke fallback GAS di bawah
+                }
+            }
+            try {
+                const raw = await fetch(DELIVERY_GAS_URL + '?action=getDriverLocations', { redirect: 'follow' }).then(r => r.json());
+                if (raw && raw.error) throw new Error(raw.error);
+                return Array.isArray(raw) ? raw : (raw.data || []);
+            } catch (e) {
+                return [];
             }
         }
 
@@ -8872,12 +9043,19 @@
 
             await _poolDriverTick(false);
 
-            // Auto-refresh posisi & daftar driver online tiap 3 detik selama
-            // halaman ini terbuka — digabung dengan animasi slide di
-            // _slideMarkerTo() supaya pergerakan marker terasa mulus (bukan
-            // "loncat") walau update datang secara diskrit tiap 3 detik.
+            // [Pool Driver — SUPABASE REALTIME] Mulai dengarkan perubahan posisi
+            // secara live (WebSocket) — ini yang membuat marker benar-benar
+            // bergerak mengikuti driver, bukan menunggu polling.
             stopPoolDriverPolling();
-            _poolDriverPollTimer = setInterval(() => _poolDriverTick(false), 3000);
+            _startPoolDriverRealtime();
+
+            // Polling GAS tetap dipertahankan sebagai JARING PENGAMAN (safety
+            // net) — menghitung ulang filter driver aktif dari "Plan Driver",
+            // membersihkan marker yang basi/sudah Delivered, & me-refresh daftar
+            // sidebar "Driver Online". Interval sedikit diperlonggar (5 detik,
+            // sebelumnya 3 detik) karena pergerakan marker itu sendiri SEKARANG
+            // sudah didorong real-time oleh Supabase, bukan lagi oleh polling ini.
+            _poolDriverPollTimer = setInterval(() => _poolDriverTick(false), 5000);
         }
 
         /** [ADDON — DRIVER ONLINE LIST & HISTORY] Refresh marker peta & daftar
@@ -8923,29 +9101,31 @@
         }
 
         /**
-         * Ambil data terbaru dari sheet "Driver_Location" via GAS (action getDriverLocations)
-         * dan perbarui marker di peta tanpa mereset zoom/posisi peta.
+         * Ambil data posisi terbaru (Supabase — lihat _fetchAllDriverLocations,
+         * fallback GAS/Sheet "Driver_Location") dan perbarui marker di peta
+         * tanpa mereset zoom/posisi peta. Panggilan ini sekarang berfungsi
+         * sebagai JARING PENGAMAN periodik (resync penuh + filter Plan Driver +
+         * bersihkan marker basi) — pergerakan marker sehari-hari didorong live
+         * oleh _handlePoolDriverRealtimeEvent() (Supabase Realtime).
          */
         async function _refreshPoolDriverMarkers(manual) {
             if (!_poolDriverMap) return;
             try {
-                // [Pool Driver FIX] Sheet "Driver_Location" hanya dibersihkan lewat
+                // [Pool Driver FIX] Baris posisi driver hanya dibersihkan lewat
                 // _clearDriverLocation, yang dipanggil dari device driver saat dia
                 // sendiri menekan tombol Done/Cancel. Kalau tab driver keburu
                 // ditutup/crash/kehabisan baterai, atau order-nya diselesaikan dari
-                // device LAIN (mis. Admin), baris lama di "Driver_Location" tidak
-                // pernah terhapus — akibatnya marker driver itu masih nongol di
-                // peta walau sudah tidak ada satupun PO/RO miliknya yang
-                // On-Delivery. Untuk itu kita silangkan dengan status ASLI di sheet
-                // "Plan Driver" (sumber kebenaran) lewat getPlanDriver, dan hanya
-                // tampilkan marker untuk driver yang benar-benar masih punya
-                // task berstatus On-Delivery/On Delivery saat ini.
-                const [raw, planRaw] = await Promise.all([
-                    fetch(DELIVERY_GAS_URL + '?action=getDriverLocations', { redirect: 'follow' }).then(r => r.json()),
+                // device LAIN (mis. Admin), baris lama tidak pernah terhapus —
+                // akibatnya marker driver itu masih nongol di peta walau sudah
+                // tidak ada satupun PO/RO miliknya yang On-Delivery. Untuk itu
+                // kita silangkan dengan status ASLI di sheet "Plan Driver"
+                // (sumber kebenaran) lewat getPlanDriver, dan hanya tampilkan
+                // marker untuk driver yang benar-benar masih punya task
+                // berstatus On-Delivery/On Delivery saat ini.
+                const [rows, planRaw] = await Promise.all([
+                    _fetchAllDriverLocations(),
                     fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' }).then(r => r.json()).catch(() => null)
                 ]);
-                const rows = Array.isArray(raw) ? raw : (raw.data || []);
-                if (raw && raw.error) throw new Error(raw.error);
                 _poolDriverLastRawLocations = rows; // [ADDON — DRIVER ONLINE LIST & HISTORY] dipakai ulang oleh _refreshPoolDriverList
 
                 // Bangun set nama driver yang BENAR-BENAR sedang On-Delivery,
@@ -8964,6 +9144,10 @@
                         });
                     }
                 }
+                // [Pool Driver — SUPABASE REALTIME] Simpan filter ini di scope
+                // modul supaya _handlePoolDriverRealtimeEvent() (dipicu event
+                // Supabase di ANTARA 2 polling ini) memakai aturan yang sama.
+                _poolDriverActiveDriverNames = activeDriverNames;
 
                 // Baris: [driver, lat, lng, accuracy, lastUpdateISOString]
                 // (kompatibel mundur dengan format lama 4-kolom tanpa accuracy)
