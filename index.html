@@ -728,7 +728,7 @@
         // (project GAS terpisah dari NOD Dashboard utama). Backend ini membaca sheet
         // "Drop Off Mandiri" (courier) dan "Drop Off Mandiri (Internal)" (Jumpstart Indonesia)
         // pada spreadsheet "Purchase Order nod." — dipakai oleh menu "List Paket" (action = 'getListPaket').
-        const DROPOFF_MANDIRI_GAS_URL = 'https://script.google.com/macros/s/AKfycbwMU1sPdl_juBZznbPZi2S8BsPItjEa-xwgwuc7LzH2v1r6F1x5-yawsdXTYQ3iQP5b/exec';
+        const DROPOFF_MANDIRI_GAS_URL = 'https://script.google.com/macros/s/AKfycbznv4oF0l-PSV_TD8x0l1RAmeWD9OFGS9jMudPTx2igllI4taAUuA3jKCQts0Kbk3mp/exec';
 
         // GANTI DENGAN URL WEB APP DARI GOOGLE APPS SCRIPT ANDA
         const GAS_GPS_INTERNAL_URL = 'https://script.google.com/macros/s/AKfycbwGzHspxNRsG4whI9P9p-WmJL-oaoLcQiiJb0IV14D-h-7AcwU9PHTSctSNfIZvYC-b/exec';
@@ -4059,10 +4059,11 @@
                                 <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Lokasi Penerimaan</th>
                                 <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Penerima</th>
                                 <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Foto</th>
+                                <th class="px-4 py-3 text-center font-semibold whitespace-nowrap">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="list-paket-courier-tbody">
-                            <tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                            <tr><td colspan="7" class="px-4 py-10 text-center text-gray-400">
                                 <div class="flex items-center justify-center gap-3">
                                     <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
                                     Memuat data...
@@ -4091,10 +4092,11 @@
                                 <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Penerima</th>
                                 <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Diterima Oleh</th>
                                 <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Foto</th>
+                                <th class="px-4 py-3 text-center font-semibold whitespace-nowrap">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="list-paket-internal-tbody">
-                            <tr><td colspan="9" class="px-4 py-10 text-center text-gray-400">
+                            <tr><td colspan="10" class="px-4 py-10 text-center text-gray-400">
                                 <div class="flex items-center justify-center gap-3">
                                     <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
                                     Memuat data...
@@ -4125,20 +4127,28 @@
         }
 
         function _renderListPaketCourierRow(row) {
+            const rowNum = row._row;
             return `
-            <tr class="border-t border-gray-100 hover:bg-gray-50">
+            <tr id="list-paket-courier-row-${rowNum}" class="border-t border-gray-100 hover:bg-gray-50">
                 <td class="px-4 py-3 text-gray-600 whitespace-nowrap">${escapeHtml(row.timestamp || '-')}</td>
                 <td class="px-4 py-3 text-gray-700 font-semibold whitespace-nowrap">${escapeHtml(row.courier || '-')}</td>
                 <td class="px-4 py-3 text-gray-600 whitespace-nowrap">${escapeHtml(row.noResi || '-')}</td>
                 <td class="px-4 py-3 text-gray-600">${escapeHtml(row.lokasiPenerimaan || '-')}</td>
                 <td class="px-4 py-3 text-gray-600">${escapeHtml(row.penerima || '-')}</td>
                 <td class="px-4 py-3">${_renderListPaketFotoCell(row.foto)}</td>
+                <td class="px-4 py-3 text-center">
+                    <button id="btn-diterima-courier-${rowNum}" onclick="markPaketDiterima('courier', ${rowNum})"
+                        class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold shadow-sm transition whitespace-nowrap">
+                        Sudah Diterima
+                    </button>
+                </td>
             </tr>`;
         }
 
         function _renderListPaketInternalRow(row) {
+            const rowNum = row._row;
             return `
-            <tr class="border-t border-gray-100 hover:bg-gray-50">
+            <tr id="list-paket-internal-row-${rowNum}" class="border-t border-gray-100 hover:bg-gray-50">
                 <td class="px-4 py-3 text-gray-600 whitespace-nowrap">${escapeHtml(row.timestamp || '-')}</td>
                 <td class="px-4 py-3 text-gray-600">${escapeHtml(row.lokasiPenerimaan || '-')}</td>
                 <td class="px-4 py-3 text-gray-700 font-semibold">${escapeHtml(row.nama || '-')}</td>
@@ -4148,6 +4158,12 @@
                 <td class="px-4 py-3 text-gray-600">${escapeHtml(row.penerima || '-')}</td>
                 <td class="px-4 py-3 text-gray-600">${escapeHtml(row.diterimaOleh || '-')}</td>
                 <td class="px-4 py-3">${_renderListPaketFotoCell(row.foto)}</td>
+                <td class="px-4 py-3 text-center">
+                    <button id="btn-diterima-internal-${rowNum}" onclick="markPaketDiterima('internal', ${rowNum})"
+                        class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold shadow-sm transition whitespace-nowrap">
+                        Sudah Diterima
+                    </button>
+                </td>
             </tr>`;
         }
 
@@ -4196,6 +4212,54 @@
                 internalTbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
+            }
+        }
+
+        /** Tandai 1 baris List Paket sebagai "Sudah Diterima": kirim ke backend
+         *  DROPOFF_MANDIRI_GAS_URL (action=markReceived), lalu hilangkan baris
+         *  tersebut dari tabel (tidak akan tampil lagi di refresh berikutnya
+         *  karena backend menandai kolom "Status Diterima" di sheet). */
+        async function markPaketDiterima(sheetType, rowNum) {
+            const ok = await showConfirm(
+                'Tandai Sudah Diterima?',
+                'Baris ini akan hilang dari daftar List Paket dan tidak akan ditampilkan lagi.'
+            );
+            if (!ok) return;
+
+            const btn = document.getElementById(`btn-diterima-${sheetType}-${rowNum}`);
+            const rowEl = document.getElementById(`list-paket-${sheetType}-row-${rowNum}`);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>';
+            }
+
+            try {
+                const res = await fetchWithTimeout(DROPOFF_MANDIRI_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'markReceived', sheetType, row: rowNum })
+                }, 20000);
+                const result = await res.json();
+                if (!result.success) throw new Error(result.message || 'Gagal menandai paket diterima.');
+
+                if (rowEl) rowEl.remove();
+
+                const countEl = document.getElementById(`list-paket-${sheetType}-count`);
+                const tbody = document.getElementById(`list-paket-${sheetType}-tbody`);
+                if (countEl && tbody) {
+                    const remaining = tbody.querySelectorAll('tr[id^="list-paket-' + sheetType + '-row-"]').length;
+                    countEl.textContent = `${remaining} paket`;
+                    if (remaining === 0) {
+                        const colspan = sheetType === 'courier' ? 7 : 10;
+                        tbody.innerHTML = `<tr><td colspan="${colspan}" class="px-4 py-8 text-center text-gray-400 italic text-sm">Belum ada data.</td></tr>`;
+                    }
+                }
+            } catch (err) {
+                showAlert('error', 'Gagal Menandai Diterima', err.message);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Sudah Diterima';
+                }
             }
         }
 
