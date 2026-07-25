@@ -6458,6 +6458,10 @@
         // _driverLocationOrderCount tanpa ada Stop yang seimbang).
         const _resumedLocationTrackingKeys = new Set();
 
+        // Penghitung retry untuk guard "kartu Route tiba-tiba kosong" — lihat
+        // pemakaiannya di showTeamDeliveryRoute().
+        let _routeEmptyRetryCount = 0;
+
         /** Jarak antar 2 titik GPS dalam meter (haversine). */
         function _gpsDistanceMeters(lat1, lng1, lat2, lng2) {
             const R = 6371000;
@@ -7417,12 +7421,51 @@
             }
         }
 
-        async function showTeamDeliveryRoute(_preFetchedRaw) {
+        /**
+         * Ambil data "Plan Driver" (dipakai halaman Route) dengan retry + backoff.
+         * Dibuat khusus untuk kasus: tab baru saja resume dari background (habis
+         * driver pindah tab/keluar browser lalu balik lagi) di mana percobaan
+         * fetch PERTAMA sangat rentan gagal (koneksi baru reconnect, GAS baru
+         * cold-start). Tanpa retry ini, satu kegagalan sesaat akan langsung
+         * dianggap error permanen dan menghapus seluruh kartu Route yang sedang
+         * tampil di layar driver.
+         */
+        async function _fetchPlanDriverWithRetry(maxAttempts = 3) {
+            let lastErr = null;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    const r = await fetchWithTimeout(DELIVERY_GAS_URL + '?action=getPlanDriver', {}, 20000);
+                    return await r.json();
+                } catch (e) {
+                    lastErr = e;
+                    if (attempt < maxAttempts) {
+                        // Jeda naik bertahap: 1.5s, lalu 3.5s, sebelum mencoba lagi.
+                        await new Promise(res => setTimeout(res, attempt * 2000 - 500));
+                    }
+                }
+            }
+            throw lastErr;
+        }
+
+        async function showTeamDeliveryRoute(_preFetchedRaw, _forceSilent) {
             const contentArea = document.getElementById('content-area');
             // Saat auto-update senyap (LiveSync) dan area kartu sudah ada di layar,
             // jangan reset seluruh halaman ke skeleton — cukup ganti isi kartunya saja
             // supaya tidak ada kedipan/flash pada judul & tombol di atasnya.
-            const isSilentUpdate = window.__liveSyncSilent && document.getElementById('route-card-area');
+            // [FIX — kartu RO hilang + browser hang setelah pindah tab] _forceSilent
+            // dipakai oleh retry internal (setTimeout di bawah) yang dijadwalkan dari
+            // dalam pemanggilan senyap (LiveSync/auto-recovery). Retry itu BARU benar-
+            // benar dieksekusi beberapa detik kemudian, dan pada saat itu
+            // window.__liveSyncSilent SUDAH direset ke false oleh pemanggil aslinya
+            // (LiveSync._tick's finally). Tanpa _forceSilent, retry tsb dianggap
+            // render manual biasa → #route-card-area ditimpa skeleton loading dulu
+            // (kartu yang sedang tampil hilang seketika), lalu fetch-ulang (retry+
+            // backoff, bisa beberapa detik) membuat halaman terlihat macet/"hang",
+            // dan kalau hasilnya kosong lagi, guard "hadCardsBefore" di bawah sudah
+            // tidak mendeteksi kartu apa pun (karena sudah ditimpa skeleton duluan)
+            // sehingga pesan "Tidak ada pengiriman aktif" langsung tampil — kartu
+            // RO/PO seolah hilang permanen.
+            const isSilentUpdate = (window.__liveSyncSilent || _forceSilent) && document.getElementById('route-card-area');
 
             if (!isSilentUpdate) {
                 // ── Skeleton loading ──
@@ -7459,7 +7502,7 @@
             // Daftarkan halaman ini ke LiveSync (aman dipanggil berkali-kali; hanya menyimpan referensi terbaru)
             LiveSync.register('Route', {
                 check: async () => {
-                    const r = await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' });
+                    const r = await fetchWithTimeout(DELIVERY_GAS_URL + '?action=getPlanDriver', {}, 20000);
                     return await r.json();
                 },
                 onChange: async (freshRaw) => { await showTeamDeliveryRoute(freshRaw); }
@@ -7469,7 +7512,19 @@
             // Backend sudah mengelompokkan & mengurutkan rute per Driver
             // (Gold = rute pertama, lalu Zona_Area terdekat / nearest-neighbor).
             try {
-                const raw = _preFetchedRaw || await fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' }).then(r => r.json());
+                // [FIX — kartu Route hilang setelah pindah tab/keluar browser]
+                // Skenario aslinya: driver klik Start, lalu pindah ke app Maps atau
+                // mengunci HP. Android/Chrome sering men-discard tab NOD Dashboard di
+                // background — begitu tab dibuka lagi, seluruh script dijalankan ULANG
+                // dari nol (restoreSessionOnLoad → showTeamDeliveryRoute). Tepat di
+                // momen itu koneksi HP baru saja reconnect / GAS baru cold-start,
+                // jadi fetch PERTAMA rentan gagal/timeout. Sebelumnya, kegagalan ini
+                // langsung menimpa #route-card-area dengan kotak pesan error — kartu
+                // PO/RO (dan tombol Delivered di dalamnya) jadi hilang total, padahal
+                // rute driver masih aktif di server, sehingga rute tidak bisa
+                // diselesaikan. Sekarang: coba beberapa kali dulu (dengan jeda) sebelum
+                // benar-benar dianggap gagal.
+                const raw = _preFetchedRaw || await _fetchPlanDriverWithRetry();
 
                 // raw = array of rows (dengan header di index 0)
                 // Kolom yang dikembalikan GAS dari sheet "Plan Driver":
@@ -7526,6 +7581,25 @@
                 const cardArea = document.getElementById('route-card-area');
 
                 if (visibleRows.length === 0) {
+                    // [FIX] Jika sebelumnya kartu PO/RO sudah tampil di layar dan tiba-tiba
+                    // hasil fetch ini kosong saat auto-refresh senyap (LiveSync, termasuk
+                    // yang dipicu langsung begitu tab kembali terlihat setelah driver
+                    // pindah tab/keluar browser), JANGAN langsung percaya — ini bisa jadi
+                    // respons sesaat yang belum konsisten (mis. Google Sheets belum
+                    // selesai sinkron). Verifikasi ulang sekali dulu sebelum benar-benar
+                    // mengosongkan tampilan, supaya rute yang sedang berjalan tidak
+                    // hilang begitu saja dari layar driver.
+                    const hadCardsBefore = cardArea && cardArea.querySelector('[id^="route-card-"]');
+                    if (isSilentUpdate && hadCardsBefore && _routeEmptyRetryCount < 2) {
+                        _routeEmptyRetryCount++;
+                        // _forceSilent=true — jaga supaya panggilan retry ini tetap
+                        // dianggap "silent" walau window.__liveSyncSilent sudah balik
+                        // ke false saat setTimeout ini benar-benar jalan.
+                        setTimeout(() => { showTeamDeliveryRoute(undefined, true); }, 2500);
+                        return;
+                    }
+                    _routeEmptyRetryCount = 0;
+
                     const emptyMsg = (currentUserRole === 'DRIVER' && currentDriverName)
                         ? `Tidak ada rute aktif untuk <b>${escapeHtml(currentDriverName)}</b>.`
                         : 'Semua PO sudah selesai atau belum ada yang siap dikirim.';
@@ -7542,6 +7616,7 @@
                     </div>`);
                     return;
                 }
+                _routeEmptyRetryCount = 0; // reset begitu ada data valid
 
                 // ── Kelompokkan baris per Driver (kolom [9]) sambil menjaga urutan
                 //    rute yang sudah dihitung backend (RouteOrder di kolom [13]). ──
@@ -7609,12 +7684,30 @@
                 smoothSwapContent(cardArea, `<div id="route-cards-grid">${html}</div>`);
 
             } catch (err) {
-                document.getElementById('route-card-area').innerHTML = `
-                <div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
-                    <p class="text-red-600 font-semibold mb-1">❌ Gagal memuat data Route</p>
-                    <p class="text-xs text-red-400">${err.message}</p>
-                    <p class="text-xs text-gray-500 mt-2">Pastikan GAS sudah mendukung <code>action=getPlanDriver</code> dan sheet "Plan Driver" tersedia.</p>
-                </div>`;
+                const areaEl = document.getElementById('route-card-area');
+                const alreadyHasCards = areaEl && areaEl.querySelector('[id^="route-card-"]');
+                if (alreadyHasCards) {
+                    // [FIX] Jangan hapus kartu PO/RO yang sedang tampil (driver mungkin
+                    // sedang di tengah rute) hanya karena satu kali fetch gagal — cukup
+                    // beri tahu secara halus lewat toast dan coba lagi otomatis sebentar
+                    // lagi. Ini mencegah kartu "tiba-tiba menghilang" saat tab baru
+                    // resume dari background dan koneksi/GAS belum sepenuhnya siap.
+                    console.warn('[Route] gagal refresh data, kartu lama tetap ditampilkan:', err);
+                    // _forceSilent=true — sama seperti retry di atas, supaya retry ini
+                    // tidak menimpa kartu yang sedang tampil dengan skeleton loading.
+                    setTimeout(() => { showTeamDeliveryRoute(undefined, true); }, 5000);
+                } else {
+                    areaEl.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+                        <p class="text-red-600 font-semibold mb-1">❌ Gagal memuat data Route</p>
+                        <p class="text-xs text-red-400">${err.message}</p>
+                        <p class="text-xs text-gray-500 mt-2">Koneksi mungkin baru saja putus-nyambung (mis. habis pindah tab/keluar browser).</p>
+                        <button onclick="showTeamDeliveryRoute()"
+                            class="mt-3 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg transition">
+                            🔄 Coba Lagi
+                        </button>
+                    </div>`;
+                }
             }
         }
 
@@ -11120,13 +11213,13 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">File PDF</label>
-                        <input type="file" id="pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
-                        <div id="pdfFile-status"
+                        <input type="file" id="po-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
+                        <div id="po-pdfFile-status"
                             class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2">
                             <svg class="h-4 w-4 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
-                            <span id="pdfFile-label">Klik "Download PDF" untuk membuat & melampirkan file</span>
+                            <span id="po-pdfFile-label">Klik "Download PDF" untuk membuat & melampirkan file</span>
                         </div>
                         <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
                             <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -11639,7 +11732,7 @@
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
-            const fileInput = document.getElementById('pdfFile');
+            const fileInput = document.getElementById('po-pdfFile');
             const btn = document.getElementById('submitBtn');
             const btnLabel = document.getElementById('submitBtnLabel');
 
@@ -11708,7 +11801,7 @@
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
-            const fileInput = document.getElementById('pdfFile');
+            const fileInput = document.getElementById('po-pdfFile');
             const btn = document.getElementById('submitBtn');
             const btnLabel = document.getElementById('submitBtnLabel');
 
@@ -11814,7 +11907,7 @@
             const alamatEl = document.getElementById('po-alamat');
             const phoneEl = document.getElementById('po-phone');
             const shippingDateEl = document.getElementById('po-shipping-date');
-            const fileInput = document.getElementById('pdfFile');
+            const fileInput = document.getElementById('po-pdfFile');
             const tbody = document.getElementById('po-item-table-body');
             const noteKhususEl = document.getElementById('po-note-khusus');
 
@@ -11830,8 +11923,8 @@
             if (noteKhususEl) noteKhususEl.value = '';
 
             // Reset status indicator file PDF
-            const statusEl = document.getElementById('pdfFile-status');
-            const labelEl = document.getElementById('pdfFile-label');
+            const statusEl = document.getElementById('po-pdfFile-status');
+            const labelEl = document.getElementById('po-pdfFile-label');
             if (statusEl) statusEl.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2';
             if (labelEl) labelEl.textContent = 'Klik "Download PDF" untuk membuat & melampirkan file';
 
@@ -13355,12 +13448,12 @@
                 const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(pdfFile);
-                const fileInput = document.getElementById('pdfFile');
+                const fileInput = document.getElementById('po-pdfFile');
                 if (fileInput) {
                     fileInput.files = dataTransfer.files;
                     // Perbarui status indicator
-                    const statusEl = document.getElementById('pdfFile-status');
-                    const labelEl = document.getElementById('pdfFile-label');
+                    const statusEl = document.getElementById('po-pdfFile-status');
+                    const labelEl = document.getElementById('po-pdfFile-label');
                     if (statusEl) statusEl.className = 'w-full p-3 border border-green-300 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2';
                     if (labelEl) labelEl.textContent = '✓ ' + fileName;
                     // Trigger change event in case any listener depends on it
@@ -13504,7 +13597,7 @@
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">IMPORT FILE PO (PDF)</label>
                 <div class="flex flex-col gap-2">
-                    <input type="file" id="pdfFile" accept="application/pdf" class="w-full text-sm border border-gray-300 rounded p-1.5">
+                    <input type="file" id="process-pdfFile" accept="application/pdf" class="w-full text-sm border border-gray-300 rounded p-1.5">
                     <button id="btn-import" onclick="handlePDFImport()" 
                         class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition">
                         <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -14322,7 +14415,7 @@
          * Handler utama Import PDF
          */
         async function handlePDFImport(fileOverride) {
-            const fileInput = document.getElementById('pdfFile');
+            const fileInput = document.getElementById('process-pdfFile');
             const statusEl = document.getElementById('import-status');
             const btnImport = document.getElementById('btn-import');
             const file = fileOverride || fileInput.files[0];
@@ -17745,7 +17838,7 @@
                         document.getElementById('proc-kategori').value = '';
                         document.getElementById('proc-tgl-proses').value = new Date().toISOString().split('T')[0];
                         document.getElementById('import-status').textContent = '';
-                        const pdfInput = document.getElementById('pdfFile');
+                        const pdfInput = document.getElementById('process-pdfFile');
                         if (pdfInput) pdfInput.value = '';
                         const crewEl = document.getElementById('proc-crew-packing');
                         if (crewEl) crewEl.value = '';
