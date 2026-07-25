@@ -699,7 +699,7 @@
         // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
-        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxA_sgfQATb85A5rUtmqWKlsmxV6O2CUl2DXcUBNmm_qxcEpbYUKWTsCoWOI8Rf2Oeq/exec';
+        const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbxyzaoiy7-cZAuFTosP9i7JlSVJ87mupXgTUEhDf0DTyFA9_M90glTPDRdOR4lDNtGT/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App khusus Dashboard Log (deployment terpisah, lihat DashboardLog.gs)
         const DASHBOARD_LOG_GAS_URL = 'https://script.google.com/macros/s/AKfycbxGTv8c9x0cv-qb5Dy_NokDKI3BrYcF_8AURc21o0lvSION-g83FuMaMHqTaPopEZJhMQ/exec';
@@ -7655,8 +7655,15 @@
                 // Kolom yang dikembalikan GAS dari sheet "Plan Driver":
                 // [0]=No.PO  [1]=Ship To  [2]=Alamat  [3]=Zona  [4]=SLA_Status  [5]=Status
                 // [6]=OrderedBy  [7]=Phone  [8]=ShippingDate  [9]=Driver/PIC  [10]=Maps URL
-                // [11]=Zona_Area  [12]=Skor_Prioritas  [13]=RouteOrder (urutan rute dalam driver itu)
+                // [11]=Zona_Area  [12]=Skor_Prioritas  [13]=RouteOrder (urutan rute dalam driver itu —
+                //      sekarang dihitung backend dari titik START real-time (posisi GPS
+                //      terkini driver di sheet Driver_Location) begitu driver sudah mulai
+                //      jalan, bukan lagi selalu dari titik warehouse — lihat catatan
+                //      _sortRouteByZonaPrioritas/_getDriverLocationMap di Code.gs)
                 // [14]=From Location (khusus card RO — No. PO berprefix "Retur-")
+                // [15]=Lat  [16]=Lng (koordinat tujuan hasil geocode — BARU, dipakai
+                //      peta navigasi in-app di card Route supaya driver tidak perlu
+                //      buka Google Maps terpisah)
                 const rows = Array.isArray(raw) ? raw : (raw.data || []);
                 if (raw && raw.error) throw new Error(raw.error);
                 const header = rows[0] || [];
@@ -7963,6 +7970,13 @@
             const mapsUrl = String(r[10] || '').trim();
             const skorPrioritas = String(r[12] || '').trim();
             const routeOrder = Number(r[13]) || 0;
+            // [Navigasi In-App — BARU] Koordinat tujuan (dari geocode real-time
+            // backend, kolom ke-16 & 17 hasil getPlanDriver — lihat catatan di
+            // atas showTeamDeliveryRoute). Dipakai untuk peta navigasi in-app
+            // saat tombol "Start"/ikon Maps diklik, supaya driver tidak perlu
+            // membuka aplikasi Google Maps terpisah.
+            const destLat = r[15] !== undefined && r[15] !== '' ? Number(r[15]) : null;
+            const destLng = r[16] !== undefined && r[16] !== '' ? Number(r[16]) : null;
 
             // KEAMANAN: versi ter-escape khusus untuk ditampilkan sebagai teks/HTML.
             // customer & alamat diisi manusia lewat Form PO, jadi rawan disusupi
@@ -8015,7 +8029,11 @@
                 data-alamat="${alamat.replace(/"/g, '&quot;')}"
                 data-phone="${phone}"
                 data-shipping-date="${shippingDate}"
-                data-driver="${driver.replace(/"/g, '&quot;')}"`;
+                data-driver="${driver.replace(/"/g, '&quot;')}"
+                data-dest-lat="${destLat !== null && !isNaN(destLat) ? destLat : ''}"
+                data-dest-lng="${destLng !== null && !isNaN(destLng) ? destLng : ''}"
+                data-customer="${customerSafe.replace(/"/g, '&quot;')}"
+                data-maps-fallback="${(mapsUrl || (alamat ? 'https://maps.google.com/?q=' + encodeURIComponent(alamat) : '')).replace(/"/g, '&quot;')}"`;
 
             // [Multi-start kurir eksternal] Driver berupa jasa kurir pihak ketiga
             // (JNT Cargo, Poslog, JNE, 21Express, Paxel, MJT) boleh Start lebih dari
@@ -8032,16 +8050,24 @@
             const startBtnLocked = driverHasActive;
 
             // Tombol Cancel
-            // Tombol Google Maps — ikon kotak kecil di pojok kanan bawah
-            const mapsBtnHtml = (mapsUrl || alamat)
-                ? `<a href="${mapsUrl || 'https://maps.google.com/?q=' + encodeURIComponent(alamat)}" target="_blank" rel="noopener"
-                        class="flex-shrink-0 flex items-center justify-center w-10 h-10 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-600 rounded-xl border border-blue-200 transition" title="Buka Google Maps">
+            // [Navigasi In-App — BARU] Ikon kotak kecil di pojok kanan bawah
+            // sekarang membuka peta navigasi IN-APP (_openRouteNavigation) —
+            // menampilkan posisi driver (GPS live) + titik tujuan + garis rute
+            // langsung di dalam dashboard, supaya driver tidak perlu pindah ke
+            // aplikasi Google Maps terpisah. Link "Buka Google Maps" (untuk
+            // navigasi turn-by-turn penuh) tetap tersedia sebagai tombol
+            // sekunder DI DALAM modal peta itu sendiri.
+            const mapsFallbackUrl = mapsUrl || (alamat ? 'https://maps.google.com/?q=' + encodeURIComponent(alamat) : '');
+            const mapsBtnHtml = (mapsFallbackUrl || (destLat !== null && destLng !== null))
+                ? `<button type="button"
+                        onclick="_openRouteNavigation(${idx})"
+                        class="flex-shrink-0 flex items-center justify-center w-10 h-10 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-600 rounded-xl border border-blue-200 transition" title="Navigasi ke Lokasi Tujuan">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
-                   </a>`
+                   </button>`
                 : '';
 
             // Baris tombol aksi: [Start/Delivered flex-1] [Cancel flex-1] [Maps 40px]
@@ -8191,6 +8217,170 @@
             </div>`;
         }
 
+        // =====================================================================
+        // [Navigasi In-App — BARU] Peta navigasi ke titik tujuan, ditampilkan
+        // langsung di dalam dashboard (modal full-screen) — dipakai saat driver
+        // klik "Start" (otomatis terbuka) ATAU klik ikon Maps pada card yang
+        // sudah "On-Delivery"/"On Delivery". Driver tidak perlu lagi membuka
+        // aplikasi Google Maps terpisah untuk melihat arah ke tujuan.
+        //
+        // Catatan teknis: peta ini memakai Leaflet (sudah dimuat untuk menu
+        // Pool Driver) + tile CartoDB gratis (tanpa API key) — BUKAN Google
+        // Maps Directions API (butuh billing terpisah), jadi rute yang
+        // digambar adalah GARIS LURUS (bukan rute jalan turn-by-turn) plus
+        // jarak & arah (bearing) ke tujuan. Posisi driver di-update live lewat
+        // watchPosition selama modal terbuka. Tombol "Buka Google Maps" tetap
+        // disediakan di dalam modal sebagai pelengkap kalau driver butuh
+        // navigasi suara/turn-by-turn penuh.
+        // =====================================================================
+        let _routeNavMap = null;
+        let _routeNavWatchId = null;
+        let _routeNavMeMarker = null;
+        let _routeNavDestMarker = null;
+        let _routeNavLine = null;
+
+        function _routeNavCloseModal() {
+            if (_routeNavWatchId !== null && navigator.geolocation) {
+                navigator.geolocation.clearWatch(_routeNavWatchId);
+                _routeNavWatchId = null;
+            }
+            if (_routeNavMap) { _routeNavMap.remove(); _routeNavMap = null; }
+            _routeNavMeMarker = null;
+            _routeNavDestMarker = null;
+            _routeNavLine = null;
+            const modal = document.getElementById('route-nav-modal');
+            if (modal) modal.remove();
+        }
+
+        /** Hitung jarak (meter) & arah mata angin sederhana dari 1 titik ke titik lain. */
+        function _routeNavDistanceBearing(lat1, lng1, lat2, lng2) {
+            const distKm = _clientHaversineKm(lat1, lng1, lat2, lng2);
+            const y = Math.sin((lng2 - lng1) * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180);
+            const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180)
+                - Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lng2 - lng1) * Math.PI / 180);
+            let bearing = Math.atan2(y, x) * 180 / Math.PI;
+            bearing = (bearing + 360) % 360;
+            const arah = ['Utara', 'Timur Laut', 'Timur', 'Tenggara', 'Selatan', 'Barat Daya', 'Barat', 'Barat Laut'];
+            const idxArah = Math.round(bearing / 45) % 8;
+            return { distKm, arah: arah[idxArah] };
+        }
+
+        function _clientHaversineKm(lat1, lng1, lat2, lng2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        /**
+         * Buka modal navigasi in-app untuk card Route ke-idx. Membaca titik
+         * tujuan dari data-dest-lat/data-dest-lng (kalau kosong, fallback
+         * geocode dari alamat lewat mapsFallbackUrl tidak memungkinkan lat/lng
+         * presisi — tampilkan pesan & tombol "Buka Google Maps" saja).
+         */
+        async function _openRouteNavigation(idx) {
+            const card = document.getElementById(`route-card-${idx}`);
+            if (!card) return;
+
+            const destLatStr = card.dataset.destLat || '';
+            const destLngStr = card.dataset.destLng || '';
+            const destLat = destLatStr !== '' ? Number(destLatStr) : null;
+            const destLng = destLngStr !== '' ? Number(destLngStr) : null;
+            const mapsFallback = card.dataset.mapsFallback || '';
+            const customer = card.dataset.customer || 'Tujuan';
+            const alamat = card.dataset.alamat || '';
+
+            // Bangun modal (overlay full-screen)
+            const modalHtml = `
+            <div id="route-nav-modal" class="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center">
+                <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height:92vh;">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold text-gray-700 truncate">🧭 Navigasi ke ${escapeHtml(customer)}</p>
+                            <p class="text-xs text-gray-400 truncate">${escapeHtml(alamat)}</p>
+                        </div>
+                        <button onclick="_routeNavCloseModal()" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div id="route-nav-map" class="w-full" style="height:320px;"></div>
+                    <div id="route-nav-info" class="px-4 py-3 text-sm text-gray-600 border-t border-gray-100">
+                        📍 Mengambil lokasi Anda...
+                    </div>
+                    <div class="px-4 pb-4 pt-1 flex gap-2">
+                        ${mapsFallback ? `<a href="${mapsFallback}" target="_blank" rel="noopener"
+                            class="flex-1 text-center h-10 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition">
+                            Buka Google Maps (Turn-by-turn)
+                        </a>` : ''}
+                        <button onclick="_routeNavCloseModal()" class="h-10 px-4 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-xl transition">Tutup</button>
+                    </div>
+                </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            if (destLat === null || destLng === null || isNaN(destLat) || isNaN(destLng)) {
+                document.getElementById('route-nav-info').innerHTML =
+                    `<span class="text-amber-600">⚠️ Koordinat tujuan belum tersedia — gunakan tombol "Buka Google Maps" di bawah.</span>`;
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                document.getElementById('route-nav-info').innerHTML =
+                    `<span class="text-red-500">⚠️ Perangkat tidak mendukung GPS. Gunakan tombol "Buka Google Maps".</span>`;
+                return;
+            }
+
+            _routeNavMap = L.map('route-nav-map').setView([destLat, destLng], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+            }).addTo(_routeNavMap);
+
+            const destIcon = L.divIcon({
+                html: '<div style="background:#dc2626;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>',
+                className: '', iconSize: [16, 16], iconAnchor: [8, 8]
+            });
+            _routeNavDestMarker = L.marker([destLat, destLng], { icon: destIcon }).addTo(_routeNavMap)
+                .bindPopup(`🎯 ${escapeHtml(customer)}`);
+
+            const updateInfo = (lat, lng) => {
+                const { distKm, arah } = _routeNavDistanceBearing(lat, lng, destLat, destLng);
+                const distLabel = distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm.toFixed(1)} km`;
+                document.getElementById('route-nav-info').innerHTML =
+                    `📏 Jarak lurus ke tujuan: <b>${distLabel}</b> &nbsp;•&nbsp; Arah: <b>${arah}</b>`;
+
+                const meIcon = L.divIcon({
+                    html: '<div style="background:#2563eb;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>',
+                    className: '', iconSize: [16, 16], iconAnchor: [8, 8]
+                });
+                if (!_routeNavMeMarker) {
+                    _routeNavMeMarker = L.marker([lat, lng], { icon: meIcon }).addTo(_routeNavMap).bindPopup('📍 Anda');
+                } else {
+                    _routeNavMeMarker.setLatLng([lat, lng]);
+                }
+
+                if (_routeNavLine) _routeNavMap.removeLayer(_routeNavLine);
+                _routeNavLine = L.polyline([[lat, lng], [destLat, destLng]], { color: '#2563eb', weight: 4, opacity: 0.7, dashArray: '8,6' }).addTo(_routeNavMap);
+
+                _routeNavMap.fitBounds(_routeNavLine.getBounds(), { padding: [40, 40] });
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => updateInfo(pos.coords.latitude, pos.coords.longitude),
+                () => {
+                    document.getElementById('route-nav-info').innerHTML =
+                        `<span class="text-amber-600">⚠️ Tidak bisa mengambil lokasi Anda — pastikan izin GPS aktif.</span>`;
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+
+            _routeNavWatchId = navigator.geolocation.watchPosition(
+                (pos) => updateInfo(pos.coords.latitude, pos.coords.longitude),
+                () => { /* diamkan error watch berikutnya, info awal sudah tampil */ },
+                { enableHighAccuracy: true, maximumAge: 5000 }
+            );
+        }
+
         /**
          * Klik tombol "Start" → ubah status ke "On-Delivery" + catat ke Delivery_Log dengan jam berangkat
          */
@@ -8275,6 +8465,11 @@
 
                     showAlert('success', '🚚 Pengiriman Dimulai!',
                         `PO ${noPO} → On-Delivery\nJam berangkat: ${jamBerangkat}\nData dicatat ke Delivery_Log.`);
+
+                    // [Navigasi In-App — BARU] Langsung tampilkan peta navigasi ke
+                    // titik tujuan begitu Start berhasil, supaya driver tidak perlu
+                    // buka Google Maps terpisah.
+                    _openRouteNavigation(idx);
                 } else {
                     btn.disabled = false;
                     btn.innerHTML = origHTML;
@@ -8404,8 +8599,15 @@
                                 </svg>
                                 <p class="text-lg font-semibold text-gray-400">Semua pengiriman selesai! 🎉</p>
                             </div>`;
+                        } else {
+                            // [Resort Real-Time — BARU] Muat ulang Route secara senyap supaya
+                            // urutan rute sisa (2, 3, dst) dihitung ulang backend berdasarkan
+                            // posisi GPS driver TERKINI (setelah menyelesaikan titik ini) —
+                            // bukan lagi selalu dari titik warehouse. Silent (_forceSilent=true)
+                            // supaya card yang masih tampil tidak ditimpa skeleton loading.
+                            showTeamDeliveryRoute(undefined, true);
                         }
-                    }, 500);
+                    }, 900);
                 } else {
                     if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan di server.');
@@ -8581,6 +8783,11 @@
 
                     showAlert('success', '🚚 Pickup Dimulai!',
                         `RO ${noRO} → On Delivery\nJam berangkat: ${jamBerangkat}\nData dicatat ke Delivery_Log.`);
+
+                    // [Navigasi In-App — BARU] Langsung tampilkan peta navigasi ke
+                    // titik tujuan begitu Start berhasil, supaya driver tidak perlu
+                    // buka Google Maps terpisah.
+                    _openRouteNavigation(idx);
                 } else {
                     btn.disabled = false;
                     btn.innerHTML = origHTML;
@@ -8717,8 +8924,13 @@
                                 </svg>
                                 <p class="text-lg font-semibold text-gray-400">Semua pengiriman selesai! 🎉</p>
                             </div>`;
+                        } else {
+                            // [Resort Real-Time — BARU] Sama seperti PO — muat ulang Route
+                            // secara senyap supaya urutan rute RO/PO sisanya ikut dihitung
+                            // ulang dari posisi GPS driver terkini.
+                            showTeamDeliveryRoute(undefined, true);
                         }
-                    }, 500);
+                    }, 900);
                 } else {
                     if (btn) { btn.disabled = false; btn.innerHTML = origHTML; }
                     if (cancelBtn) cancelBtn.disabled = false;
