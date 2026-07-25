@@ -8218,51 +8218,37 @@
         }
 
         // =====================================================================
-        // [Navigasi In-App — BARU] Peta navigasi ke titik tujuan, ditampilkan
-        // langsung di dalam dashboard (modal full-screen) — dipakai saat driver
-        // klik "Start" (otomatis terbuka) ATAU klik ikon Maps pada card yang
-        // sudah "On-Delivery"/"On Delivery". Driver tidak perlu lagi membuka
-        // aplikasi Google Maps terpisah untuk melihat arah ke tujuan.
+        // [Navigasi In-App — DIPERBARUI] Navigasi ke titik tujuan sekarang
+        // pakai EMBED GOOGLE MAPS ASLI (rute jalan beneran, bukan garis lurus)
+        // lewat iframe `https://www.google.com/maps?saddr=...&daddr=...&output=embed`
+        // — ini format embed lama Google Maps yang TIDAK butuh API key/billing,
+        // dan menampilkan rute jalan + panel arah persis seperti buka Google
+        // Maps langsung. Ditampilkan dalam modal in-app supaya driver tidak
+        // perlu pindah tab/aplikasi.
         //
-        // Catatan teknis: peta ini memakai Leaflet (sudah dimuat untuk menu
-        // Pool Driver) + tile CartoDB gratis (tanpa API key) — BUKAN Google
-        // Maps Directions API (butuh billing terpisah), jadi rute yang
-        // digambar adalah GARIS LURUS (bukan rute jalan turn-by-turn) plus
-        // jarak & arah (bearing) ke tujuan. Posisi driver di-update live lewat
-        // watchPosition selama modal terbuka. Tombol "Buka Google Maps" tetap
-        // disediakan di dalam modal sebagai pelengkap kalau driver butuh
-        // navigasi suara/turn-by-turn penuh.
+        // Rute di-refresh otomatis (reload iframe) tiap kali posisi driver
+        // (via watchPosition) berubah signifikan (>60m) atau sudah lewat
+        // 15 detik sejak refresh terakhir — supaya iframe tidak reload
+        // terus-menerus tiap detik. Tombol "Buka Aplikasi Google Maps" tetap
+        // ada sebagai pelengkap kalau driver butuh navigasi suara.
         // =====================================================================
-        let _routeNavMap = null;
         let _routeNavWatchId = null;
-        let _routeNavMeMarker = null;
-        let _routeNavDestMarker = null;
-        let _routeNavLine = null;
+        let _routeNavLastLat = null;
+        let _routeNavLastLng = null;
+        let _routeNavLastRefreshAt = 0;
+        const ROUTE_NAV_REFRESH_MIN_INTERVAL_MS = 15000;
+        const ROUTE_NAV_REFRESH_MIN_DISTANCE_M = 60;
 
         function _routeNavCloseModal() {
             if (_routeNavWatchId !== null && navigator.geolocation) {
                 navigator.geolocation.clearWatch(_routeNavWatchId);
                 _routeNavWatchId = null;
             }
-            if (_routeNavMap) { _routeNavMap.remove(); _routeNavMap = null; }
-            _routeNavMeMarker = null;
-            _routeNavDestMarker = null;
-            _routeNavLine = null;
+            _routeNavLastLat = null;
+            _routeNavLastLng = null;
+            _routeNavLastRefreshAt = 0;
             const modal = document.getElementById('route-nav-modal');
             if (modal) modal.remove();
-        }
-
-        /** Hitung jarak (meter) & arah mata angin sederhana dari 1 titik ke titik lain. */
-        function _routeNavDistanceBearing(lat1, lng1, lat2, lng2) {
-            const distKm = _clientHaversineKm(lat1, lng1, lat2, lng2);
-            const y = Math.sin((lng2 - lng1) * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180);
-            const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180)
-                - Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos((lng2 - lng1) * Math.PI / 180);
-            let bearing = Math.atan2(y, x) * 180 / Math.PI;
-            bearing = (bearing + 360) % 360;
-            const arah = ['Utara', 'Timur Laut', 'Timur', 'Tenggara', 'Selatan', 'Barat Daya', 'Barat', 'Barat Laut'];
-            const idxArah = Math.round(bearing / 45) % 8;
-            return { distKm, arah: arah[idxArah] };
         }
 
         function _clientHaversineKm(lat1, lng1, lat2, lng2) {
@@ -8273,11 +8259,37 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
+        function _routeNavBuildEmbedUrl(curLat, curLng, destLat, destLng) {
+            return `https://www.google.com/maps?saddr=${curLat},${curLng}&daddr=${destLat},${destLng}&output=embed`;
+        }
+
+        function _routeNavLoadRoute(curLat, curLng, destLat, destLng) {
+            const iframe = document.getElementById('route-nav-iframe');
+            if (!iframe) return;
+            iframe.src = _routeNavBuildEmbedUrl(curLat, curLng, destLat, destLng);
+            _routeNavLastLat = curLat;
+            _routeNavLastLng = curLng;
+            _routeNavLastRefreshAt = Date.now();
+            const info = document.getElementById('route-nav-info');
+            if (info) info.innerHTML = `🧭 Rute diperbarui — mengikuti posisi Anda secara otomatis.`;
+        }
+
+        /** Tombol "Perbarui Rute" — paksa refresh manual dari posisi terkini. */
+        function _routeNavManualRefresh(destLat, destLng) {
+            if (!navigator.geolocation) return;
+            const info = document.getElementById('route-nav-info');
+            if (info) info.innerHTML = `📍 Memperbarui lokasi...`;
+            navigator.geolocation.getCurrentPosition(
+                (pos) => _routeNavLoadRoute(pos.coords.latitude, pos.coords.longitude, destLat, destLng),
+                () => { if (info) info.innerHTML = `<span class="text-amber-600">⚠️ Tidak bisa mengambil lokasi Anda.</span>`; },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+
         /**
-         * Buka modal navigasi in-app untuk card Route ke-idx. Membaca titik
-         * tujuan dari data-dest-lat/data-dest-lng (kalau kosong, fallback
-         * geocode dari alamat lewat mapsFallbackUrl tidak memungkinkan lat/lng
-         * presisi — tampilkan pesan & tombol "Buka Google Maps" saja).
+         * Buka modal navigasi in-app untuk card Route ke-idx — menampilkan
+         * rute jalan Google Maps ASLI (embed) dari posisi driver ke titik
+         * tujuan, langsung di dalam dashboard.
          */
         async function _openRouteNavigation(idx) {
             const card = document.getElementById(`route-card-${idx}`);
@@ -8291,7 +8303,6 @@
             const customer = card.dataset.customer || 'Tujuan';
             const alamat = card.dataset.alamat || '';
 
-            // Bangun modal (overlay full-screen)
             const modalHtml = `
             <div id="route-nav-modal" class="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center">
                 <div class="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height:92vh;">
@@ -8304,14 +8315,21 @@
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>
-                    <div id="route-nav-map" class="w-full" style="height:320px;"></div>
-                    <div id="route-nav-info" class="px-4 py-3 text-sm text-gray-600 border-t border-gray-100">
+                    <div class="w-full relative bg-gray-100" style="height:400px;">
+                        <iframe id="route-nav-iframe" class="w-full h-full border-0" loading="lazy" allowfullscreen
+                            referrerpolicy="no-referrer-when-downgrade"></iframe>
+                    </div>
+                    <div id="route-nav-info" class="px-4 py-2.5 text-xs text-gray-500 border-t border-gray-100">
                         📍 Mengambil lokasi Anda...
                     </div>
                     <div class="px-4 pb-4 pt-1 flex gap-2">
+                        <button onclick="_routeNavManualRefresh(${destLat}, ${destLng})"
+                            class="h-10 px-3 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-xl transition" title="Perbarui Rute">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        </button>
                         ${mapsFallback ? `<a href="${mapsFallback}" target="_blank" rel="noopener"
                             class="flex-1 text-center h-10 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition">
-                            Buka Google Maps (Turn-by-turn)
+                            Buka Aplikasi Google Maps
                         </a>` : ''}
                         <button onclick="_routeNavCloseModal()" class="h-10 px-4 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold rounded-xl transition">Tutup</button>
                     </div>
@@ -8321,62 +8339,39 @@
 
             if (destLat === null || destLng === null || isNaN(destLat) || isNaN(destLng)) {
                 document.getElementById('route-nav-info').innerHTML =
-                    `<span class="text-amber-600">⚠️ Koordinat tujuan belum tersedia — gunakan tombol "Buka Google Maps" di bawah.</span>`;
+                    `<span class="text-amber-600">⚠️ Koordinat tujuan belum tersedia — gunakan tombol "Buka Aplikasi Google Maps" di bawah.</span>`;
                 return;
             }
 
             if (!navigator.geolocation) {
                 document.getElementById('route-nav-info').innerHTML =
-                    `<span class="text-red-500">⚠️ Perangkat tidak mendukung GPS. Gunakan tombol "Buka Google Maps".</span>`;
+                    `<span class="text-red-500">⚠️ Perangkat tidak mendukung GPS. Gunakan tombol "Buka Aplikasi Google Maps".</span>`;
                 return;
             }
 
-            _routeNavMap = L.map('route-nav-map').setView([destLat, destLng], 13);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                maxZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
-            }).addTo(_routeNavMap);
-
-            const destIcon = L.divIcon({
-                html: '<div style="background:#dc2626;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>',
-                className: '', iconSize: [16, 16], iconAnchor: [8, 8]
-            });
-            _routeNavDestMarker = L.marker([destLat, destLng], { icon: destIcon }).addTo(_routeNavMap)
-                .bindPopup(`🎯 ${escapeHtml(customer)}`);
-
-            const updateInfo = (lat, lng) => {
-                const { distKm, arah } = _routeNavDistanceBearing(lat, lng, destLat, destLng);
-                const distLabel = distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm.toFixed(1)} km`;
-                document.getElementById('route-nav-info').innerHTML =
-                    `📏 Jarak lurus ke tujuan: <b>${distLabel}</b> &nbsp;•&nbsp; Arah: <b>${arah}</b>`;
-
-                const meIcon = L.divIcon({
-                    html: '<div style="background:#2563eb;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>',
-                    className: '', iconSize: [16, 16], iconAnchor: [8, 8]
-                });
-                if (!_routeNavMeMarker) {
-                    _routeNavMeMarker = L.marker([lat, lng], { icon: meIcon }).addTo(_routeNavMap).bindPopup('📍 Anda');
-                } else {
-                    _routeNavMeMarker.setLatLng([lat, lng]);
-                }
-
-                if (_routeNavLine) _routeNavMap.removeLayer(_routeNavLine);
-                _routeNavLine = L.polyline([[lat, lng], [destLat, destLng]], { color: '#2563eb', weight: 4, opacity: 0.7, dashArray: '8,6' }).addTo(_routeNavMap);
-
-                _routeNavMap.fitBounds(_routeNavLine.getBounds(), { padding: [40, 40] });
-            };
-
             navigator.geolocation.getCurrentPosition(
-                (pos) => updateInfo(pos.coords.latitude, pos.coords.longitude),
+                (pos) => _routeNavLoadRoute(pos.coords.latitude, pos.coords.longitude, destLat, destLng),
                 () => {
                     document.getElementById('route-nav-info').innerHTML =
-                        `<span class="text-amber-600">⚠️ Tidak bisa mengambil lokasi Anda — pastikan izin GPS aktif.</span>`;
+                        `<span class="text-amber-600">⚠️ Tidak bisa mengambil lokasi Anda — pastikan izin GPS aktif, atau gunakan tombol "Buka Aplikasi Google Maps".</span>`;
                 },
                 { enableHighAccuracy: true, timeout: 10000 }
             );
 
+            // Update rute otomatis selama driver bergerak & modal masih terbuka —
+            // dibatasi jarak & waktu supaya iframe tidak reload berlebihan.
             _routeNavWatchId = navigator.geolocation.watchPosition(
-                (pos) => updateInfo(pos.coords.latitude, pos.coords.longitude),
-                () => { /* diamkan error watch berikutnya, info awal sudah tampil */ },
+                (pos) => {
+                    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                    const now = Date.now();
+                    const movedM = (_routeNavLastLat !== null)
+                        ? _clientHaversineKm(_routeNavLastLat, _routeNavLastLng, lat, lng) * 1000
+                        : Infinity;
+                    if (now - _routeNavLastRefreshAt >= ROUTE_NAV_REFRESH_MIN_INTERVAL_MS && movedM >= ROUTE_NAV_REFRESH_MIN_DISTANCE_M) {
+                        _routeNavLoadRoute(lat, lng, destLat, destLng);
+                    }
+                },
+                () => { /* diamkan error watch berikutnya, rute awal sudah tampil */ },
                 { enableHighAccuracy: true, maximumAge: 5000 }
             );
         }
