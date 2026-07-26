@@ -2933,15 +2933,22 @@
                 : `<td class="px-4 py-3 text-gray-600">${escapeHtml(row.pic || '-')}</td>`;
             // Pada tabel "Solved" (showSla=false), Serial Number bisa diklik untuk membuka
             // popup detail yang datanya diambil langsung dari sheet "Teknisi_Log"
-            // (lihat showTeknisiLogDetail()).
-            const serialCell = (!showSla && row.serialNumber)
+            // (lihat showTeknisiLogDetail()). Pada tabel "On Going & Pending" (showSla=true,
+            // BARU), Serial Number bisa diklik untuk membuka popup "Service" / "Status
+            // Warranty" / "Kelengkapan Mesin" (lihat showServiceReturPopup()).
+            const serialNumberEsc = escapeHtml(row.serialNumber || '').replace(/'/g, "\\'");
+            const exLocationEsc = escapeHtml(row.exLocation || '').replace(/'/g, "\\'");
+            const serialClickHandler = showSla
+                ? `showServiceReturPopup('${serialNumberEsc}','${exLocationEsc}')`
+                : `showTeknisiLogDetail('${serialNumberEsc}')`;
+            const serialCell = row.serialNumber
                 ? `<td class="px-4 py-3 font-semibold whitespace-nowrap">
-                        <button type="button" onclick="showTeknisiLogDetail('${escapeHtml(row.serialNumber).replace(/'/g, "\\'")}')"
+                        <button type="button" onclick="${serialClickHandler}"
                             class="text-amber-700 hover:text-amber-900 underline decoration-dotted underline-offset-2 text-left">
                             ${escapeHtml(row.serialNumber || '-')}
                         </button>
                    </td>`
-                : `<td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">${escapeHtml(row.serialNumber || '-')}</td>`;
+                : `<td class="px-4 py-3 font-semibold text-gray-700 whitespace-nowrap">-</td>`;
             return `
             <tr class="border-t border-gray-100 hover:bg-gray-50">
                 ${serialCell}
@@ -3260,6 +3267,97 @@
             }
         }
 
+        /**
+         * ============================================================================
+         * POPUP "Service" / "Status Warranty" / "Kelengkapan Mesin" (BARU)
+         * ============================================================================
+         * Dipanggil saat Serial Number pada tabel "On Going & Pending" (Report
+         * Status Repair) diklik. Datanya diambil dari backend (action
+         * "getServiceReturInfo"):
+         *   Service           <- sheet "Retur_Data" kolom G (Kategori), dicocokkan
+         *                        lewat kolom L "From Location" terhadap Ex
+         *                        Location/Customer (parameter "customer").
+         *   Status Warranty   <- sheet "Retur_Data" kolom N.
+         *   Kelengkapan Mesin <- sheet "Inbound_Log" kolom J (Remark), dicocokkan
+         *                        lewat kolom I "Serial Number" (parameter "serial").
+         */
+        async function showServiceReturPopup(serial, customer) {
+            const old = document.getElementById('service-retur-popup-modal');
+            if (old) old.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'service-retur-popup-modal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4';
+            modal.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 max-h-[85vh] flex flex-col">
+                <div class="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
+                    <div>
+                        <p class="font-bold text-gray-800 text-base">Service &amp; Kelengkapan Mesin</p>
+                        <p class="text-xs text-gray-400 font-mono">${escapeHtml(serial)}</p>
+                    </div>
+                    <button onclick="document.getElementById('service-retur-popup-modal').remove()"
+                        class="text-gray-400 hover:text-gray-600 transition flex-shrink-0">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="service-retur-popup-body" class="overflow-y-auto p-4">
+                    <div class="flex items-center justify-center py-10 text-gray-400 text-sm gap-2">
+                        <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        Memuat data...
+                    </div>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+
+            const bodyEl = document.getElementById('service-retur-popup-body');
+
+            if (!SERVICE_CENTER_GAS_URL || SERVICE_CENTER_GAS_URL.startsWith('GANTI_DENGAN')) {
+                bodyEl.innerHTML = `<p class="text-center text-sm text-red-500 py-10">URL backend Service Center (SERVICE_CENTER_GAS_URL) belum dikonfigurasi.</p>`;
+                return;
+            }
+
+            try {
+                const url = SERVICE_CENTER_GAS_URL + '?action=getServiceReturInfo'
+                    + '&serial=' + encodeURIComponent(serial)
+                    + '&customer=' + encodeURIComponent(customer || '');
+                const res = await fetchWithTimeout(url, {}, 20000);
+                const result = await res.json();
+
+                if (!result || result.success === false) {
+                    bodyEl.innerHTML = `<p class="text-center text-sm text-gray-400 italic py-10">${escapeHtml((result && result.message) || 'Data tidak ditemukan.')}</p>`;
+                    return;
+                }
+
+                const d = result.data || {};
+                const service = d.service || '-';
+                const statusWarranty = d.statusWarranty || '-';
+                const kelengkapanMesin = d.kelengkapanMesin || '-';
+
+                bodyEl.innerHTML = `
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between gap-3">
+                            <span class="text-gray-500">Kategori</span>
+                            <span class="font-semibold text-gray-800 text-right">${escapeHtml(service)}</span>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <span class="text-gray-500">Status Warranty</span>
+                            <span class="font-semibold text-gray-800 text-right">${escapeHtml(statusWarranty)}</span>
+                        </div>
+                        <div class="pt-2 border-t border-gray-100">
+                            <span class="text-gray-500 block mb-1">Kelengkapan Mesin</span>
+                            <p class="font-semibold text-gray-800">${escapeHtml(kelengkapanMesin)}</p>
+                        </div>
+                    </div>`;
+            } catch (err) {
+                bodyEl.innerHTML = `<p class="text-center text-sm text-red-500 py-10">Gagal memuat data: ${escapeHtml(err.message)}</p>`;
+            }
+        }
+
         // =========================================================================
         // HALAMAN: SERVICE CENTER - TASK TECHNICIAN
         // Akses: ADMIN, CS_User, Teknisi
@@ -3279,6 +3377,8 @@
         let ttCustomerTypeKendalaMap = {}; // { "customer|type" -> kendala } fallback dari "Penukaran Mesin NOD" kalau serial tidak cocok
         let ttServiceMesinNodBySerial = {};   // { noMesinLowerCase -> { kendala, tags, namaCustomer } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom G/B/H/I)
         let ttServiceMesinNodByCustomer = {}; // { namaCustomerLowerCase -> { kendala, tags, noMesin } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom B/G/H/I)
+        let ttReturDataByFromLocation = {};   // { namaCustomerLowerCase -> { service, statusWarranty } } dari sheet "Retur_Data" (BARU)
+        let ttInboundLogRemarkBySerial = {};  // { serialLowerCase -> remark } dari sheet "Inbound_Log" kolom Remark (BARU)
         let ttHistoricalKendalaBySerial = {};   // { serialSebelumnyaLowerCase -> alasanDitukar } fallback dari "Historycal Penukaran Customer" (kolom D/G)
         let ttHistoricalKendalaByCustomer = {}; // { namaCustomerLowerCase -> alasanDitukar } fallback dari "Historycal Penukaran Customer" (kolom B/G)
         let ttSparepartMap = {};    // { namaSparepart -> idSparepart }
@@ -3346,6 +3446,32 @@
                     <label for="tt-kendala" class="block text-sm font-semibold text-gray-700 mb-1">Kendala</label>
                     <textarea id="tt-kendala" rows="2" placeholder="Otomatis dari Serial Number..."
                         class="w-full px-4 py-2.5 rounded-xl text-sm bg-white text-gray-700 border border-gray-200 shadow-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none resize-none"></textarea>
+                </div>
+
+                <!-- Checkbox "Service" & "Status Warranty" (BARU) — otomatis tercentang dari
+                     data sheet "Retur_Data" begitu Serial Number/Nama Customer terisi, TIDAK
+                     bisa dicentang/dicek manual oleh user (lihat onTtSerialChange()). -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600 cursor-not-allowed"
+                        title="Otomatis dari data Retur_Data — tidak bisa diisi manual">
+                        <input type="checkbox" id="tt-service-checkbox" disabled
+                            class="h-4 w-4 rounded border-gray-300 text-amber-600 cursor-not-allowed">
+                        Service
+                    </label>
+                    <label class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600 cursor-not-allowed"
+                        title="Otomatis dari data Retur_Data — tidak bisa diisi manual">
+                        <input type="checkbox" id="tt-warranty-checkbox" disabled
+                            class="h-4 w-4 rounded border-gray-300 text-amber-600 cursor-not-allowed">
+                        Status Warranty
+                    </label>
+                </div>
+
+                <!-- Kolom "Kelengkapan Mesin" (BARU) — otomatis terisi dari sheet
+                     "Inbound_Log" kolom Remark begitu Serial Number terisi, read-only. -->
+                <div>
+                    <label for="tt-kelengkapan-mesin" class="block text-sm font-semibold text-gray-700 mb-1">Kelengkapan Mesin</label>
+                    <textarea id="tt-kelengkapan-mesin" rows="2" readonly placeholder="Otomatis dari Serial Number..."
+                        class="w-full px-4 py-2.5 rounded-xl text-sm bg-gray-100 text-gray-500 border border-gray-200 shadow-sm cursor-not-allowed resize-none"></textarea>
                 </div>
 
                 <div>
@@ -3420,6 +3546,8 @@
                 ttServiceMesinNodByCustomer = result.serviceMesinNodByCustomer || {};
                 ttHistoricalKendalaBySerial = result.historicalKendalaBySerial || {};
                 ttHistoricalKendalaByCustomer = result.historicalKendalaByCustomer || {};
+                ttReturDataByFromLocation = result.returDataByFromLocation || {};
+                ttInboundLogRemarkBySerial = result.inboundLogRemarkBySerial || {};
                 ttTeknisiList = result.teknisiList || [];
 
                 ttOngoingSerials = result.ongoingSerials || [];
@@ -3475,19 +3603,37 @@
             }
         }
 
-        /** Saat Serial Number diketik/dipilih, auto-fill Type Machine, Nama Customer, & Kendala */
+        /** Saat Serial Number diketik/dipilih, auto-fill Type Machine, Nama Customer, Kendala,
+         *  checkbox "Service"/"Status Warranty", & kolom "Kelengkapan Mesin" (BARU). */
         function onTtSerialChange() {
             const serialEl = document.getElementById('tt-serial');
             const typeEl = document.getElementById('tt-type-machine');
             const customerEl = document.getElementById('tt-customer');
             const kendalaEl = document.getElementById('tt-kendala');
+            const serviceCb = document.getElementById('tt-service-checkbox');
+            const warrantyCb = document.getElementById('tt-warranty-checkbox');
+            const kelengkapanEl = document.getElementById('tt-kelengkapan-mesin');
             if (!serialEl) return;
+
+            // Isi checkbox "Service"/"Status Warranty" (dari sheet "Retur_Data", dicocokkan
+            // lewat Nama Customer) & kolom "Kelengkapan Mesin" (dari sheet "Inbound_Log",
+            // dicocokkan lewat Serial Number). Dipanggil di setiap cabang di bawah begitu
+            // Nama Customer & Serial Number diketahui.
+            function applyServiceReturInfo(serialLowerArg, customerName) {
+                const returInfo = customerName ? ttReturDataByFromLocation[customerName.toLowerCase()] : null;
+                if (serviceCb) serviceCb.checked = !!(returInfo && returInfo.service);
+                if (warrantyCb) warrantyCb.checked = !!(returInfo && returInfo.statusWarranty);
+                if (kelengkapanEl) kelengkapanEl.value = ttInboundLogRemarkBySerial[serialLowerArg] || '';
+            }
 
             const serial = serialEl.value.trim();
             if (!serial) {
                 if (typeEl) typeEl.value = '';
                 if (customerEl) customerEl.value = '';
                 if (kendalaEl) kendalaEl.value = '';
+                if (serviceCb) serviceCb.checked = false;
+                if (warrantyCb) warrantyCb.checked = false;
+                if (kelengkapanEl) kelengkapanEl.value = '';
                 return;
             }
 
@@ -3522,6 +3668,7 @@
                 let kendalaValue = info.kendala || '';
                 if (!kendalaValue) kendalaValue = findServiceMesinNodKendala(serialLower, info.namaCustomer);
                 if (kendalaEl) kendalaEl.value = kendalaValue;
+                applyServiceReturInfo(serialLower, info.namaCustomer);
                 return;
             }
 
@@ -3542,10 +3689,12 @@
                 }
                 if (!fallbackKendala) fallbackKendala = findServiceMesinNodKendala(serialLower, repairInfo.namaCustomer);
                 if (kendalaEl) kendalaEl.value = fallbackKendala;
+                applyServiceReturInfo(serialLower, repairInfo.namaCustomer);
             } else {
                 if (typeEl) typeEl.value = '';
                 if (customerEl) customerEl.value = 'Unknown';
                 if (kendalaEl) kendalaEl.value = findServiceMesinNodKendala(serialLower, '');
+                applyServiceReturInfo(serialLower, '');
             }
         }
 
@@ -3622,7 +3771,12 @@
                 actionRepair: document.getElementById('tt-action-repair')?.value.trim() || '',
                 sparepart: ttSelectedSpareparts.map(sp => sp.name).join(', '),
                 sparepartId: ttSelectedSpareparts.map(sp => sp.id).filter(Boolean).join(', '),
-                sparepartList: ttSelectedSpareparts.map(sp => ({ name: sp.name, id: sp.id }))
+                sparepartList: ttSelectedSpareparts.map(sp => ({ name: sp.name, id: sp.id })),
+                // Checkbox "Service"/"Status Warranty" (BARU) — otomatis terisi (tidak bisa
+                // diedit manual), disimpan sebagai "Ya"/"Tidak" ke Teknisi_Log.
+                service: document.getElementById('tt-service-checkbox')?.checked ? 'Ya' : 'Tidak',
+                statusWarranty: document.getElementById('tt-warranty-checkbox')?.checked ? 'Ya' : 'Tidak',
+                kelengkapanMesin: document.getElementById('tt-kelengkapan-mesin')?.value.trim() || ''
             };
         }
 
@@ -3701,6 +3855,12 @@
                 ttSelectedSpareparts = [];
                 renderTtSparepartChips();
                 resetTtDonePhoto();
+                const serviceCbReset = document.getElementById('tt-service-checkbox');
+                const warrantyCbReset = document.getElementById('tt-warranty-checkbox');
+                const kelengkapanElReset = document.getElementById('tt-kelengkapan-mesin');
+                if (serviceCbReset) serviceCbReset.checked = false;
+                if (warrantyCbReset) warrantyCbReset.checked = false;
+                if (kelengkapanElReset) kelengkapanElReset.value = '';
                 // Data yang baru disimpan mengubah status di sheet Repair/Teknisi_Log, yang
                 // dipakai baik oleh Task Technician maupun Report Status Repair — bersihkan
                 // cache keduanya supaya kunjungan berikutnya ke menu manapun sudah data terbaru.
