@@ -8997,7 +8997,7 @@
                 if (_poolDriverMarkers[driver]) {
                     _poolDriverMap.removeLayer(_poolDriverMarkers[driver]);
                     delete _poolDriverMarkers[driver];
-                    document.getElementById('pool-driver-empty')?.classList.toggle('hidden', Object.keys(_poolDriverMarkers).length > 0);
+                    if (Object.keys(_poolDriverMarkers).length === 0) _showPoolDriverEmptyToast();
                 }
                 return;
             }
@@ -9028,7 +9028,7 @@
                 _poolDriverMarkers[driver] = L.marker([lat, lng], { icon: _carMarkerIcon() }).addTo(_poolDriverMap)
                     .bindPopup(popupHtml);
             }
-            document.getElementById('pool-driver-empty')?.classList.add('hidden');
+            _hidePoolDriverEmptyToast();
         }
 
         /** [Pool Driver — SUPABASE REALTIME] Ambil SEMUA baris posisi driver
@@ -9085,6 +9085,25 @@
             return `${diffJam} jam lalu`;
         }
 
+        let _poolDriverEmptyToastTimer = null;
+
+        /** [Pool Driver] Tampilkan notifikasi kecil "belum ada driver On-Delivery"
+         *  di pojok kanan atas peta selama beberapa detik, lalu hilang otomatis. */
+        function _showPoolDriverEmptyToast() {
+            const el = document.getElementById('pool-driver-empty');
+            if (!el) return;
+            el.classList.remove('hidden');
+            clearTimeout(_poolDriverEmptyToastTimer);
+            _poolDriverEmptyToastTimer = setTimeout(() => el.classList.add('hidden'), 4000);
+        }
+
+        /** [Pool Driver] Sembunyikan notifikasi kecil (dipanggil begitu ada
+         *  minimal 1 driver On-Delivery yang muncul di peta). */
+        function _hidePoolDriverEmptyToast() {
+            clearTimeout(_poolDriverEmptyToastTimer);
+            document.getElementById('pool-driver-empty')?.classList.add('hidden');
+        }
+
         async function showPoolDriver() {
             trackActivity('Membuka menu: Pool Driver');
             const contentArea = document.getElementById('content-area');
@@ -9133,13 +9152,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="lg:col-span-3">
-                    <div id="pool-driver-empty" class="hidden flex flex-col items-center justify-center py-20 text-center bg-white rounded-2xl border border-gray-100 shadow-sm">
-                        <svg class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div class="lg:col-span-3 relative">
+                    <div id="pool-driver-empty" class="hidden absolute top-4 right-4 z-[1000] flex items-center gap-2 bg-white/95 backdrop-blur px-4 py-2.5 rounded-xl shadow-lg border border-gray-200 transition-opacity duration-300">
+                        <svg class="h-5 w-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
-                        <p class="text-lg font-semibold text-gray-400">Belum ada driver yang sedang On-Delivery</p>
+                        <p class="text-xs font-semibold text-gray-500 whitespace-nowrap">Belum ada driver yang sedang On-Delivery</p>
                     </div>
                     <div id="pool-driver-map" class="rounded-2xl shadow-sm border border-gray-100 overflow-hidden" style="height:70vh; min-height:420px;"></div>
                 </div>
@@ -9310,7 +9329,7 @@
                     }
                 });
 
-                document.getElementById('pool-driver-empty')?.classList.toggle('hidden', seenDrivers.size > 0);
+                if (seenDrivers.size === 0) _showPoolDriverEmptyToast(); else _hidePoolDriverEmptyToast();
                 const lastRefreshEl = document.getElementById('pool-driver-last-refresh');
                 if (lastRefreshEl) lastRefreshEl.textContent = 'Update terakhir: ' + getJamWIB() + ' WIB';
 
