@@ -4108,6 +4108,11 @@
         // bisa diklik untuk lightbox), bukan sebagai link URL — reuse
         // toDriveDirectImageUrl() & showPhotoLightbox() yang sudah ada di file ini.
         // =========================================================================
+        // Cache data mentah (hasil fetch terakhir) untuk keperluan fitur Search
+        // client-side tanpa perlu re-fetch ke backend setiap kali user mengetik.
+        let _listPaketCourierData = [];
+        let _listPaketInternalData = [];
+
         async function showListPaket() {
             document.getElementById('content-area').innerHTML = `
             <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
@@ -4117,7 +4122,18 @@
                     ⟳ Refresh
                 </button>
             </div>
-            <p class="text-sm text-gray-500 mb-6">Rekap Drop Off Paket Mandiri dari sheet "Drop Off Mandiri" (Courier) &amp; "Drop Off Mandiri (Internal)".</p>
+            <p class="text-sm text-gray-500 mb-4">Rekap Drop Off Paket Mandiri dari sheet "Drop Off Mandiri" (Courier) &amp; "Drop Off Mandiri (Internal)".</p>
+
+            <div class="relative mb-6">
+                <svg class="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" id="list-paket-search" oninput="filterListPaket()"
+                    placeholder="Cari No. Resi, Nama, Courier, Lokasi, Penerima, dll..."
+                    class="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition">
+                <button id="list-paket-search-clear" onclick="document.getElementById('list-paket-search').value=''; filterListPaket();"
+                    class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+            </div>
 
             <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <h2 class="text-base font-bold text-gray-700">Drop Off Mandiri by Courier</h2>
@@ -4273,21 +4289,53 @@
                 courierRows.sort(byTimestampDesc);
                 internalRows.sort(byTimestampDesc);
 
-                courierTbody.innerHTML = courierRows.length
-                    ? courierRows.map(_renderListPaketCourierRow).join('')
-                    : `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400 italic text-sm">Belum ada data.</td></tr>`;
-                internalTbody.innerHTML = internalRows.length
-                    ? internalRows.map(_renderListPaketInternalRow).join('')
-                    : `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-400 italic text-sm">Belum ada data.</td></tr>`;
+                // Simpan ke cache supaya fitur Search bisa filter tanpa fetch ulang
+                _listPaketCourierData = courierRows;
+                _listPaketInternalData = internalRows;
 
-                if (courierCountEl) courierCountEl.textContent = `${courierRows.length} paket`;
-                if (internalCountEl) internalCountEl.textContent = `${internalRows.length} paket`;
+                // Terapkan kata kunci pencarian yang sedang aktif (jika ada) ke data baru
+                filterListPaket();
             } catch (err) {
                 courierTbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
                 internalTbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
             }
+        }
+
+        /** Filter tabel "List Paket" (Courier & Internal) berdasarkan kata kunci pada
+         *  input #list-paket-search. Pencarian dilakukan di semua kolom teks yang
+         *  relevan pada masing-masing baris (case-insensitive, substring match),
+         *  memakai data yang sudah di-cache dari loadListPaket() (tanpa fetch ulang). */
+        function filterListPaket() {
+            const courierTbody = document.getElementById('list-paket-courier-tbody');
+            const internalTbody = document.getElementById('list-paket-internal-tbody');
+            const courierCountEl = document.getElementById('list-paket-courier-count');
+            const internalCountEl = document.getElementById('list-paket-internal-count');
+            const searchInput = document.getElementById('list-paket-search');
+            const clearBtn = document.getElementById('list-paket-search-clear');
+            if (!courierTbody || !internalTbody) return;
+
+            const keyword = (searchInput ? searchInput.value : '').trim().toLowerCase();
+            if (clearBtn) clearBtn.classList.toggle('hidden', !keyword);
+
+            const matches = (row, fields) => !keyword || fields.some(f => String(row[f] || '').toLowerCase().includes(keyword));
+
+            const courierFields = ['timestamp', 'courier', 'noResi', 'lokasiPenerimaan', 'penerima'];
+            const internalFields = ['timestamp', 'lokasiPenerimaan', 'nama', 'orderedBy', 'barangDibawa', 'qty', 'penerima', 'diterimaOleh'];
+
+            const filteredCourier = _listPaketCourierData.filter(row => matches(row, courierFields));
+            const filteredInternal = _listPaketInternalData.filter(row => matches(row, internalFields));
+
+            courierTbody.innerHTML = filteredCourier.length
+                ? filteredCourier.map(_renderListPaketCourierRow).join('')
+                : `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400 italic text-sm">${keyword ? 'Tidak ada paket yang cocok dengan pencarian.' : 'Belum ada data.'}</td></tr>`;
+            internalTbody.innerHTML = filteredInternal.length
+                ? filteredInternal.map(_renderListPaketInternalRow).join('')
+                : `<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400 italic text-sm">${keyword ? 'Tidak ada paket yang cocok dengan pencarian.' : 'Belum ada data.'}</td></tr>`;
+
+            if (courierCountEl) courierCountEl.textContent = `${filteredCourier.length} paket`;
+            if (internalCountEl) internalCountEl.textContent = `${filteredInternal.length} paket`;
         }
 
         /** Tandai 1 baris List Paket sebagai "Sudah Diterima": kirim ke backend
