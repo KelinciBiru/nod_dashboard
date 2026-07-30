@@ -13764,15 +13764,8 @@
                     <svg class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                     Tambah Baris
                 </button>
-                <button id="btn-generate-do" onclick="generateDeliveryOrderPDF()"
-                    class="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto sm:ml-auto">
-                    <svg id="btn-generate-do-icon" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                    <span id="btn-generate-do-label">Delivery Order</span>
-                </button>
                 <button onclick="simpanOutboundFinal()" 
-                    class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto">
+                    class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition shadow-md w-full sm:w-auto sm:ml-auto">
                     <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
@@ -14795,9 +14788,13 @@
         }
 
         // =========================================================================
-        // DELIVERY ORDER → GENERATE PDF (client-side, jsPDF + autotable)
+        // PROCESS PO → BUILD PDF (client-side, jsPDF + autotable)
+        // Dipanggil secara internal oleh tombol "Proses" (simpanOutboundFinal) untuk
+        // menghasilkan PDF berisi seluruh data hasil Process PO. Tidak lagi otomatis
+        // mengunduh/upload di sini — proses upload ke Google Drive & preview PDF
+        // (dengan opsi Simpan/Share WhatsApp) diorkestrasi oleh pemanggilnya.
         // =========================================================================
-        async function generateDeliveryOrderPDF() {
+        async function _buildProcessPOPDF() {
             const tglProses = document.getElementById('proc-tgl-proses')?.value || '';
             const noPOFromSelect = document.getElementById('proc-no-po-select')?.value || '';
             const orderedByEl = document.getElementById('proc-ordered-by');
@@ -14843,11 +14840,12 @@
             });
 
             if (items.length === 0) {
-                showAlert('warning', 'Tabel Kosong', 'Tidak ada item untuk dimasukkan ke Delivery Order.');
+                showAlert('warning', 'Tabel Kosong', 'Tidak ada item untuk dimasukkan ke PDF Process PO.');
                 return;
             }
 
-            // ── Spinner loading ──
+            // ── Spinner loading (tombol lama sudah dihapus dari tampilan Process PO,
+            // blok ini dibiarkan sebagai no-op yang aman jika elemen tidak ditemukan) ──
             const doBtn = document.getElementById('btn-generate-do');
             const doIcon = document.getElementById('btn-generate-do-icon');
             const doLabel = document.getElementById('btn-generate-do-label');
@@ -15094,14 +15092,13 @@
 
             const safeShipToDO = (shipTo || '').replace(/[\\/:*?"<>|]/g, '').trim();
             const fileName = `Delivery_Order_${noPO || 'PO'}${safeShipToDO ? '_' + safeShipToDO : ''}.pdf`;
-            doc.save(fileName);
-
-            // ── Upload otomatis salinan PDF ke folder Google Drive ──
-            // Supaya nanti nya pada menu "Receive PO" file ini bisa ditarik/dipilih
-            // langsung dari Google Drive tanpa harus disimpan manual dulu di device.
-            await uploadDeliveryOrderPDFToDrive({ noPO, fileName, doc });
 
             resetDoBtn();
+
+            // Tidak lagi auto-download/auto-upload di sini. PDF (doc) & fileName
+            // dikembalikan ke pemanggil (simpanOutboundFinal) yang akan mengatur
+            // urutan: upload ke Google Drive → simpan ke sheet → tampilkan Preview PDF.
+            return { doc, fileName, noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items };
         }
 
         /**
@@ -17799,7 +17796,7 @@
 
             const ok = await showConfirm(
                 'Simpan & Proses PO?',
-                `${items.length} item akan disimpan ke Outbound_Log${noPO ? ' dan status PO ' + noPO + ' akan diubah menjadi "Ready To Ship"' : ''}.`
+                `${items.length} item akan disimpan ke Outbound_Log${noPO ? ' dan status PO ' + noPO + ' akan diubah menjadi "Ready To Ship"' : ''}. PDF Delivery Order juga akan otomatis dibuat & disimpan ke Google Drive.`
             );
             if (!ok) return;
 
@@ -17808,7 +17805,7 @@
             const originalBtnHTML = saveBtn ? saveBtn.innerHTML : '';
             if (saveBtn) {
                 saveBtn.disabled = true;
-                saveBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Menyimpan...`;
+                saveBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Memproses...`;
             }
 
             const payload = {
@@ -17827,6 +17824,19 @@
             };
 
             try {
+                // ── 1) Bangun PDF berisi seluruh data Process PO (menggantikan tombol
+                //      "Delivery Order" yang sudah dihapus dari tampilan) ──
+                const pdfBuild = await _buildProcessPOPDF();
+                if (!pdfBuild) {
+                    // Validasi field PDF (Tanggal/No. PO/Crew Packing) gagal — alert sudah
+                    // ditampilkan di dalam _buildProcessPOPDF, hentikan proses di sini.
+                    return;
+                }
+
+                // ── 2) Simpan salinan PDF ke folder Google Drive yang sudah ada ──
+                await uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc });
+
+                // ── 3) Catat data outbound ke sheet (Outbound_Log), seperti sebelumnya ──
                 const response = await fetch(WEB_APP_URL, {
                     method: 'POST',
                     redirect: 'follow',
@@ -17856,37 +17866,41 @@
                         if (optEl) optEl.remove();
                     }
 
-                    // Pesan sukses
+                    // ── Reset form setelah berhasil (langsung, karena hasil sudah
+                    //      ditampilkan lewat Popup Preview PDF di bawah) ──
+                    document.getElementById('proc-ordered-by').value = '';
+                    document.getElementById('proc-ordered-by').dataset.nopo = '';
+                    document.getElementById('proc-ship').value = '';
+                    document.getElementById('proc-shipping-date').value = '';
+                    document.getElementById('proc-phone').value = '';
+                    document.getElementById('proc-alamat').value = '';
+                    document.getElementById('proc-kategori').value = '';
+                    document.getElementById('proc-tgl-proses').value = new Date().toISOString().split('T')[0];
+                    document.getElementById('import-status').textContent = '';
+                    const pdfInput = document.getElementById('process-pdfFile');
+                    if (pdfInput) pdfInput.value = '';
+                    const crewEl = document.getElementById('proc-crew-packing');
+                    if (crewEl) crewEl.value = '';
+                    const poSelect = document.getElementById('proc-no-po-select');
+                    if (poSelect) poSelect.value = '';
+                    document.getElementById('proc-table-body').innerHTML =
+                        '<tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
+                    _clearDraft(DRAFT_KEYS.processPO);
+
+                    // ── 4) Tampilkan Popup Preview PDF, dengan opsi Simpan ke
+                    //      device/komputer lokal maupun Share WhatsApp (fitur yang
+                    //      sama seperti pada menu "Plan Task") ──
                     const statusMsg = noPO
                         ? (statusUpdated
-                            ? `\nStatus PO ${noPO} → ✅ Ready To Ship`
-                            : `\n⚠️ Status PO ${noPO} tidak ditemukan di PO_Data.`)
-                        : '';
-                    showAlert('success', '✅ Berhasil Diproses!',
-                        `Data outbound (${items.length} item) tersimpan ke Outbound_Log.${statusMsg}`
+                            ? `No. PO: ${noPO} · Status → Ready To Ship`
+                            : `No. PO: ${noPO} · ⚠️ status tidak ditemukan di PO_Data`)
+                        : `${items.length} item tersimpan ke Outbound_Log`;
+                    showPdfPreviewModal(
+                        pdfBuild.doc.output('bloburl'),
+                        '✅ Berhasil Diproses!',
+                        statusMsg,
+                        { blob: pdfBuild.doc.output('blob'), fileName: pdfBuild.fileName }
                     );
-
-                    // ── Reset form setelah berhasil ──
-                    setTimeout(() => {
-                        document.getElementById('proc-ordered-by').value = '';
-                        document.getElementById('proc-ordered-by').dataset.nopo = '';
-                        document.getElementById('proc-ship').value = '';
-                        document.getElementById('proc-shipping-date').value = '';
-                        document.getElementById('proc-phone').value = '';
-                        document.getElementById('proc-alamat').value = '';
-                        document.getElementById('proc-kategori').value = '';
-                        document.getElementById('proc-tgl-proses').value = new Date().toISOString().split('T')[0];
-                        document.getElementById('import-status').textContent = '';
-                        const pdfInput = document.getElementById('process-pdfFile');
-                        if (pdfInput) pdfInput.value = '';
-                        const crewEl = document.getElementById('proc-crew-packing');
-                        if (crewEl) crewEl.value = '';
-                        const poSelect = document.getElementById('proc-no-po-select');
-                        if (poSelect) poSelect.value = '';
-                        document.getElementById('proc-table-body').innerHTML =
-                            '<tr><td colspan="9" class="p-6 text-center text-gray-400 italic">Pilih file PDF lalu klik tombol "Import" untuk mengisi data secara otomatis</td></tr>';
-                        _clearDraft(DRAFT_KEYS.processPO);
-                    }, 1500);
 
                 } else {
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
