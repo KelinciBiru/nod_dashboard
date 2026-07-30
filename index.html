@@ -96,7 +96,24 @@
                     class="text-gray-400 hover:text-gray-600 text-2xl leading-none px-2">&times;</button>
             </div>
             <iframe id="pdf-preview-iframe" class="flex-1 w-full" style="border:0;"></iframe>
-            <div class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2 flex-shrink-0">
+            <div class="px-5 py-3 border-t border-gray-200 flex flex-wrap justify-end gap-2 flex-shrink-0">
+                <button id="pdf-preview-save-btn" onclick="savePdfPreviewToDevice()"
+                    class="hidden px-5 py-2 rounded-xl font-bold text-white bg-gray-600 hover:bg-gray-700 transition items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Simpan
+                </button>
+                <button id="pdf-preview-share-btn" onclick="sharePdfPreviewToWhatsApp()"
+                    class="hidden px-5 py-2 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                        <path d="M12 2C6.477 2 2 6.477 2 12c0 1.85.505 3.58 1.38 5.065L2 22l5.065-1.36A9.94 9.94 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18.2c-1.65 0-3.192-.47-4.5-1.28l-.322-.196-3.157.847.85-3.086-.21-.32A8.18 8.18 0 013.8 12c0-4.52 3.68-8.2 8.2-8.2s8.2 3.68 8.2 8.2-3.68 8.2-8.2 8.2z"/>
+                    </svg>
+                    Share WhatsApp
+                </button>
                 <button id="pdf-preview-print-btn" onclick="printPdfPreviewModal()"
                     class="px-5 py-2 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition flex items-center gap-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
@@ -1764,12 +1781,27 @@
         // MODAL PREVIEW PDF (dipakai setelah Receive PO berhasil disimpan)
         // =========================================================================
         let _pdfPreviewBlobUrl = null; // dilacak supaya bisa di-revoke saat modal ditutup (hindari memory leak)
-        function showPdfPreviewModal(blobUrl, title, subtitle) {
+        // shareFile (opsional): { blob: Blob, fileName: string } — jika diisi, tombol
+        // "Simpan" dan "Share WhatsApp" akan ditampilkan di modal preview ini.
+        let _pdfPreviewShareBlob = null;
+        let _pdfPreviewShareFileName = 'Document.pdf';
+        function showPdfPreviewModal(blobUrl, title, subtitle, shareFile) {
             document.getElementById('pdf-preview-title').textContent = title || 'Preview PDF';
             document.getElementById('pdf-preview-subtitle').textContent = subtitle || '';
             document.getElementById('pdf-preview-iframe').src = blobUrl;
             document.getElementById('pdf-preview-overlay').classList.remove('hidden');
             _pdfPreviewBlobUrl = (typeof blobUrl === 'string' && blobUrl.startsWith('blob:')) ? blobUrl : null;
+
+            _pdfPreviewShareBlob = (shareFile && shareFile.blob) ? shareFile.blob : null;
+            _pdfPreviewShareFileName = (shareFile && shareFile.fileName) ? shareFile.fileName : 'Document.pdf';
+            const saveBtn = document.getElementById('pdf-preview-save-btn');
+            const shareBtn = document.getElementById('pdf-preview-share-btn');
+            const showActions = !!_pdfPreviewShareBlob;
+            [saveBtn, shareBtn].forEach(btn => {
+                if (!btn) return;
+                btn.classList.toggle('hidden', !showActions);
+                btn.classList.toggle('flex', showActions);
+            });
         }
         function closePdfPreviewModal() {
             document.getElementById('pdf-preview-overlay').classList.add('hidden');
@@ -1778,6 +1810,47 @@
             if (_pdfPreviewBlobUrl) {
                 try { URL.revokeObjectURL(_pdfPreviewBlobUrl); } catch (_) { }
                 _pdfPreviewBlobUrl = null;
+            }
+            _pdfPreviewShareBlob = null;
+            _pdfPreviewShareFileName = 'Document.pdf';
+        }
+        /** Tombol "Simpan" di modal preview PDF — simpan file ke perangkat/komputer lokal */
+        function savePdfPreviewToDevice() {
+            if (!_pdfPreviewShareBlob) return;
+            const url = URL.createObjectURL(_pdfPreviewShareBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = _pdfPreviewShareFileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) { } }, 5000);
+        }
+        /** Tombol "Share WhatsApp" di modal preview PDF — share file PDF via Web Share API
+         *  (sama seperti fitur Share WhatsApp di menu Plan Task), fallback ke unduh + buka WhatsApp. */
+        async function sharePdfPreviewToWhatsApp() {
+            if (!_pdfPreviewShareBlob) return;
+            const shareBtn = document.getElementById('pdf-preview-share-btn');
+            const originalHTML = shareBtn ? shareBtn.innerHTML : '';
+            try {
+                if (shareBtn) {
+                    shareBtn.disabled = true;
+                    shareBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Memproses...`;
+                }
+                const file = new File([_pdfPreviewShareBlob], _pdfPreviewShareFileName, { type: 'application/pdf' });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file] });
+                } else {
+                    savePdfPreviewToDevice();
+                    window.open('https://wa.me/', '_blank');
+                    showAlert('warning', 'Bagikan Manual', 'Perangkat/browser ini tidak mendukung share file langsung. PDF telah diunduh — silakan lampirkan manual di WhatsApp.');
+                }
+            } catch (err) {
+                if (err && err.name !== 'AbortError') {
+                    showAlert('error', 'Gagal Membagikan', err.message || 'Tidak dapat membagikan file ke WhatsApp.');
+                }
+            } finally {
+                if (shareBtn) { shareBtn.disabled = false; shareBtn.innerHTML = originalHTML; }
             }
         }
         // Tombol "Print" di modal preview PDF — memanggil dialog print browser
@@ -4012,23 +4085,7 @@
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                             placeholder="Masukkan Ship To">
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">File PDF</label>
-                        <input type="file" id="fs-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
-                        <div id="fs-pdfFile-status"
-                            class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2">
-                            <svg class="h-4 w-4 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <span id="fs-pdfFile-label">Klik "Download PDF" untuk membuat &amp; melampirkan file</span>
-                        </div>
-                        <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                            <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            File PDF <span class="font-semibold text-amber-600">Service Order</span> otomatis terlampir setelah klik Download PDF
-                        </p>
-                    </div>
+                    <input type="file" id="fs-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
                     <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                         <label class="block text-sm font-semibold text-indigo-700 mb-1">Revisi Form Service (opsional)</label>
                         <select id="revisi-fs-select" onchange="handleRevisiFormServiceSelect(this.value)"
@@ -4074,13 +4131,6 @@
             <!-- Tombol Aksi -->
             <div class="max-w-4xl mx-auto mt-4 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <button id="fs-downloadBtn" onclick="downloadServiceOrderPDF()"
-                        class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-lg font-bold text-sm transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed text-center leading-tight">
-                        <svg id="fs-downloadIcon" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        <span id="fs-downloadLabel" class="whitespace-nowrap">Download PDF</span>
-                    </button>
                     <button id="fs-submitBtn" onclick="submitFormService()"
                         class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
                         <span id="fs-submitBtnLabel" class="whitespace-nowrap">Kirim Form Service</span>
@@ -4889,38 +4939,12 @@
         // =========================================================================
         // FORM SERVICE: DOWNLOAD SERVICE ORDER PDF (mirip Download Request Order PDF di Form PO)
         // =========================================================================
-        async function downloadServiceOrderPDF() {
-            const dlBtn = document.getElementById('fs-downloadBtn');
-            const dlIcon = document.getElementById('fs-downloadIcon');
-            const dlLabel = document.getElementById('fs-downloadLabel');
-            const setDlLoading = (loading) => {
-                if (!dlBtn) return;
-                dlBtn.disabled = loading;
-                if (dlIcon) dlIcon.classList.toggle('hidden', loading);
-                if (dlLabel) dlLabel.textContent = loading ? 'Memproses...' : 'Download PDF';
-                let spinner = dlBtn.querySelector('.dl-spinner');
-                if (loading) {
-                    if (!spinner) {
-                        spinner = document.createElement('svg');
-                        spinner.className = 'dl-spinner animate-spin h-4 w-4 flex-shrink-0';
-                        spinner.setAttribute('viewBox', '0 0 24 24');
-                        spinner.setAttribute('fill', 'none');
-                        spinner.innerHTML = '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
-                        dlBtn.insertBefore(spinner, dlLabel);
-                    }
-                } else if (spinner) {
-                    spinner.remove();
-                }
-            };
-            setDlLoading(true);
-            try {
-                await downloadServiceOrderPDFInner();
-            } finally {
-                setDlLoading(false);
-            }
-        }
-
-        async function downloadServiceOrderPDFInner() {
+        // =========================================================================
+        // FORM SERVICE: BUILD PDF (dipanggil langsung dari submitFormService/
+        // _doSubmitRevisiFormService — tombol "Download PDF" terpisah sudah dihapus;
+        // PDF sekarang dibuat otomatis saat tombol "Kirim Form Service" diklik)
+        // =========================================================================
+        async function buildServiceOrderPDF() {
             const namaEl = document.getElementById('fs-nama');
             const preview = document.getElementById('fs-preview');
 
@@ -5137,28 +5161,8 @@
             const filePrefix = window._fsType === 'return' ? 'Pengembalian_Unit' : 'Service_Order';
             const fileName = `${filePrefix}_${ticketLabel}${safeCustomer ? '_' + safeCustomer : ''}.pdf`;
 
-            doc.save(fileName);
-
-            try {
-                const pdfBlob = doc.output('blob');
-                const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(pdfFile);
-                const fileInput = document.getElementById('fs-pdfFile');
-                if (fileInput) {
-                    fileInput.files = dataTransfer.files;
-                    const statusEl = document.getElementById('fs-pdfFile-status');
-                    const labelEl = document.getElementById('fs-pdfFile-label');
-                    if (statusEl) statusEl.className = 'w-full p-3 border border-green-300 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2';
-                    if (labelEl) labelEl.textContent = '✓ ' + fileName;
-                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                window._fsResolvedTicket = ticketLabel;
-                const pdfLabel = window._fsType === 'return' ? 'Pengembalian Unit' : 'Service Order';
-                showAlert('success', 'PDF Siap', pdfLabel + ' berhasil dibuat dan otomatis dilampirkan.');
-            } catch (err) {
-                showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan coba klik Download PDF sekali lagi.');
-            }
+            window._fsResolvedTicket = ticketLabel;
+            return { doc, fileName };
         }
 
         // =========================================================================
@@ -5167,7 +5171,6 @@
         async function submitFormService() {
             if (window._revisiFormServiceActive) { return _doSubmitRevisiFormService(); }
             const namaEl = document.getElementById('fs-nama');
-            const fileInput = document.getElementById('fs-pdfFile');
             const btn = document.getElementById('fs-submitBtn');
             const btnLabel = document.getElementById('fs-submitBtnLabel');
 
@@ -5192,8 +5195,6 @@
             if (!shippingDate) { showAlert('warning', 'Belum Lengkap', 'Pilih "Shipping Date" terlebih dahulu.'); return; }
             const shipTo = window._fsType === 'pickup' ? (document.getElementById('fs-shipto')?.value?.trim() || '') : '';
             if (window._fsType === 'pickup' && !shipTo) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
-            const file = fileInput.files[0];
-            if (!file) { showAlert('warning', 'Belum Lengkap', 'Klik "Download PDF" untuk membuat & melampirkan file PDF terlebih dahulu.'); return; }
 
             const rows = document.querySelectorAll('#fs-item-table-body tr:not([data-placeholder])');
             const items = [];
@@ -5231,9 +5232,14 @@
             };
 
             setSubmitLoading(true);
+            try {
+                // ── Generate PDF Form Service dari isi form (menggantikan tombol Download PDF terpisah) ──
+                const pdfResult = await buildServiceOrderPDF();
+                if (!pdfResult) { setSubmitLoading(false); return; }
+                const { doc, fileName } = pdfResult;
+                const pdfBlob = doc.output('blob');
+                const fileData = doc.output('datauristring').split(',')[1];
 
-            const reader = new FileReader();
-            reader.onload = async function (e) {
                 const payload = {
                     action: 'submitFormService',
                     token: sessionToken,
@@ -5249,31 +5255,34 @@
                     shipTo,
                     tanggal: formatDateForPO(new Date()),
                     items,
-                    fileData: e.target.result.split(',')[1],
-                    fileName: file.name,
-                    fileType: file.type,
+                    fileData,
+                    fileName,
+                    fileType: 'application/pdf',
                 };
-                try {
-                    // [FIX 12] submitFormService sekarang dicatat ke PO_Data / Retur_Data,
-                    // sheet yang dikelola oleh backend PO_GAS (Code.gs) yang sama dengan
-                    // Form PO/Form RO — bukan lagi backend Service Center terpisah.
-                    const response = await fetch(API_URLS.purchaseOrder, {
-                        method: 'POST',
-                        redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    if (!result.success) { throw new Error(result.message || 'Gagal mengirim Form Service.'); }
-                    showAlert('success', 'Form Service Berhasil Dikirim!', 'No. Tiket: ' + (result.noTiket || result.ticket || payload.noTiket));
-                    resetFormService();
-                } catch (err) {
-                    showAlert('error', 'Gagal Mengirim Form Service', err.message);
-                } finally {
-                    setSubmitLoading(false);
-                }
-            };
-            reader.readAsDataURL(file);
+                // [FIX 12] submitFormService sekarang dicatat ke PO_Data / Retur_Data,
+                // sheet yang dikelola oleh backend PO_GAS (Code.gs) yang sama dengan
+                // Form PO/Form RO — bukan lagi backend Service Center terpisah.
+                const response = await fetch(API_URLS.purchaseOrder, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!result.success) { throw new Error(result.message || 'Gagal mengirim Form Service.'); }
+                const noTiketFinal = result.noTiket || result.ticket || payload.noTiket;
+                resetFormService();
+                showPdfPreviewModal(
+                    doc.output('bloburl'),
+                    '✅ Form Service Berhasil Dikirim!',
+                    'No. Tiket: ' + noTiketFinal,
+                    { blob: pdfBlob, fileName }
+                );
+            } catch (err) {
+                showAlert('error', 'Gagal Mengirim Form Service', err.message);
+            } finally {
+                setSubmitLoading(false);
+            }
         }
 
         /** Reset semua kotak pengisian di Form Service agar siap digunakan kembali */
@@ -5310,11 +5319,6 @@
             if (shipToEl) shipToEl.value = '';
             if (shipToContainer) shipToContainer.classList.add('hidden');
             if (fileInput) fileInput.value = '';
-
-            const statusEl = document.getElementById('fs-pdfFile-status');
-            const labelEl = document.getElementById('fs-pdfFile-label');
-            if (statusEl) statusEl.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2';
-            if (labelEl) labelEl.textContent = 'Klik "Download PDF" untuk membuat & melampirkan file';
 
             if (tbody) {
                 tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
@@ -5442,7 +5446,6 @@
         /** Submit khusus mode Revisi Form Service — menimpa baris data yang sama (No. Tiket tetap) */
         async function _doSubmitRevisiFormService() {
             const namaEl = document.getElementById('fs-nama');
-            const fileInput = document.getElementById('fs-pdfFile');
             const btn = document.getElementById('fs-submitBtn');
             const btnLabel = document.getElementById('fs-submitBtnLabel');
             const noTiket = window._revisiFormServiceActive;
@@ -5482,7 +5485,14 @@
             };
             setSubmitLoading(true);
 
-            const finishSubmit = async (fileData, fileName, fileType) => {
+            try {
+                // ── Generate ulang PDF Form Service dari isi form yang sudah direvisi ──
+                const pdfResult = await buildServiceOrderPDF();
+                if (!pdfResult) { setSubmitLoading(false); return; }
+                const { doc, fileName } = pdfResult;
+                const pdfBlob = doc.output('blob');
+                const fileData = doc.output('datauristring').split(',')[1];
+
                 const payload = {
                     action: 'revisiFormService',
                     token: sessionToken,
@@ -5492,34 +5502,29 @@
                     type: window._fsType === 'pickup' ? 'Pick Up' : 'Return',
                     customer, alamat, phone, shippingDate, shipTo,
                     items,
+                    fileData, fileName, fileType: 'application/pdf',
                 };
-                if (fileData) { payload.fileData = fileData; payload.fileName = fileName; payload.fileType = fileType; }
-                try {
-                    const response = await fetch(API_URLS.serviceCenter, {
-                        method: 'POST',
-                        redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    showAlert('success', 'Revisi Tersimpan!', 'No. Tiket ' + noTiket + ' berhasil diperbarui.');
-                    resetFormService();
-                    _exitRevisiFormServiceMode();
-                    _loadRevisiFormServiceDropdown();
-                } catch (err) {
-                    showAlert('error', 'Gagal Menyimpan Revisi', err.message);
-                } finally {
-                    setSubmitLoading(false);
-                }
-            };
-
-            const file = fileInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => finishSubmit(e.target.result.split(',')[1], file.name, file.type);
-                reader.readAsDataURL(file);
-            } else {
-                await finishSubmit(null, null, null);
+                const response = await fetch(API_URLS.serviceCenter, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result && result.success === false) throw new Error(result.message || 'Gagal menyimpan revisi.');
+                resetFormService();
+                _exitRevisiFormServiceMode();
+                _loadRevisiFormServiceDropdown();
+                showPdfPreviewModal(
+                    doc.output('bloburl'),
+                    '✅ Revisi Tersimpan!',
+                    'No. Tiket: ' + noTiket,
+                    { blob: pdfBlob, fileName }
+                );
+            } catch (err) {
+                showAlert('error', 'Gagal Menyimpan Revisi', err.message);
+            } finally {
+                setSubmitLoading(false);
             }
         }
 
@@ -11380,23 +11385,7 @@
                         <input type="date" id="po-shipping-date"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">File PDF</label>
-                        <input type="file" id="po-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
-                        <div id="po-pdfFile-status"
-                            class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2">
-                            <svg class="h-4 w-4 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <span id="po-pdfFile-label">Klik "Download PDF" untuk membuat & melampirkan file</span>
-                        </div>
-                        <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                            <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            File PDF <span class="font-semibold text-amber-600">Request Order</span> otomatis terlampir setelah klik Download PDF
-                        </p>
-                    </div>
+                    <input type="file" id="po-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
                     <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                         <label class="block text-sm font-semibold text-indigo-700 mb-1">Revisi PO (opsional)</label>
                         <select id="revisi-po-select" onchange="handleRevisiPOSelect(this.value)"
@@ -11446,13 +11435,6 @@
                     class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm resize-y"
                     placeholder="Tuliskan catatan khusus untuk permintaan order ini..."></textarea>
                 <div class="flex flex-col sm:flex-row gap-3 mt-4">
-                    <button id="downloadRequestOrderBtn" onclick="downloadRequestOrderPDF()"
-                        class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-lg font-bold text-sm transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed text-center leading-tight">
-                        <svg id="downloadRequestOrderIcon" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        <span id="downloadRequestOrderLabel" class="whitespace-nowrap">Download PDF</span>
-                    </button>
                     <button id="submitBtn" onclick="submitPO()"
                         class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
                         <span id="submitBtnLabel" class="whitespace-nowrap">Kirim PO</span>
@@ -11901,7 +11883,6 @@
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
-            const fileInput = document.getElementById('po-pdfFile');
             const btn = document.getElementById('submitBtn');
             const btnLabel = document.getElementById('submitBtnLabel');
 
@@ -11921,7 +11902,14 @@
             };
             setLoadingState(true);
 
-            const sendPayload = async (fileData, fileName, fileType) => {
+            try {
+                // ── Generate ulang PDF Request Order dari isi form yang sudah direvisi ──
+                const pdfResult = await buildRequestOrderPDF();
+                if (!pdfResult) { setLoadingState(false); return; }
+                const { doc, fileName } = pdfResult;
+                const pdfBlob = doc.output('blob');
+                const fileData = doc.output('datauristring').split(',')[1];
+
                 const payload = {
                     action: 'revisiPO',
                     token: sessionToken,
@@ -11933,35 +11921,29 @@
                     shippingDate: shippingDateVal,
                     noteKhusus: document.getElementById('po-note-khusus')?.value?.trim() || '',
                     category: categoryEl.value,
+                    fileData, fileName, fileType: 'application/pdf',
                 };
-                if (fileData) { payload.fileData = fileData; payload.fileName = fileName; payload.fileType = fileType; }
-                try {
-                    const response = await fetch(API_URLS.purchaseOrder, {
-                        method: 'POST', redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    if (!result.success) throw new Error(result.message || 'Gagal menyimpan revisi.');
-                    showAlert('success', 'Revisi Tersimpan!', 'No. PO ' + noPO + ' berhasil diperbarui.');
-                    resetFormPO();
-                    _exitRevisiPOMode();
-                    _loadRevisiPODropdown();
-                    _clearDraft(DRAFT_KEYS.formPO);
-                } catch (err) {
-                    showAlert('error', 'Gagal Menyimpan Revisi', err.message);
-                } finally {
-                    setLoadingState(false);
-                }
-            };
-
-            const file = fileInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => sendPayload(e.target.result.split(',')[1], file.name, file.type);
-                reader.readAsDataURL(file);
-            } else {
-                await sendPayload(null, null, null);
+                const response = await fetch(API_URLS.purchaseOrder, {
+                    method: 'POST', redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.message || 'Gagal menyimpan revisi.');
+                resetFormPO();
+                _exitRevisiPOMode();
+                _loadRevisiPODropdown();
+                _clearDraft(DRAFT_KEYS.formPO);
+                showPdfPreviewModal(
+                    doc.output('bloburl'),
+                    '✅ Revisi Tersimpan!',
+                    'No. PO: ' + noPO,
+                    { blob: pdfBlob, fileName }
+                );
+            } catch (err) {
+                showAlert('error', 'Gagal Menyimpan Revisi', err.message);
+            } finally {
+                setLoadingState(false);
             }
         }
 
@@ -11970,7 +11952,6 @@
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
-            const fileInput = document.getElementById('po-pdfFile');
             const btn = document.getElementById('submitBtn');
             const btnLabel = document.getElementById('submitBtnLabel');
 
@@ -11983,8 +11964,6 @@
             if (!allocatedToEl || !allocatedToEl.value.trim()) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
             const shippingDateVal = document.getElementById('po-shipping-date')?.value || '';
             if (!shippingDateVal) { showAlert('warning', 'Belum Lengkap', 'Isi Shipping Date terlebih dahulu.'); return; }
-            const file = fileInput.files[0];
-            if (!file) { showAlert('warning', 'Belum Lengkap', 'Pilih file PDF terlebih dahulu.'); return; }
 
             // [FIX 20] Checkbox "Pre-Order"
             const preOrderToggleEl = document.getElementById('po-preorder-toggle');
@@ -12022,9 +12001,14 @@
             };
 
             setSubmitLoading(true);
+            try {
+                // ── Generate PDF Request Order dari isi form (menggantikan tombol Download PDF terpisah) ──
+                const pdfResult = await buildRequestOrderPDF();
+                if (!pdfResult) { setSubmitLoading(false); return; }
+                const { doc, fileName } = pdfResult;
+                const pdfBlob = doc.output('blob');
+                const fileData = doc.output('datauristring').split(',')[1];
 
-            const reader = new FileReader();
-            reader.onload = async function (e) {
                 const payload = {
                     action: 'submitPO',
                     token: sessionToken,
@@ -12039,33 +12023,36 @@
                     tanggal: formatDateForPO(new Date()),
                     isPreOrder: isPreOrder,
                     needApproval: needApproval,
-                    fileData: e.target.result.split(',')[1],
-                    fileName: file.name,
-                    fileType: file.type,
+                    fileData,
+                    fileName,
+                    fileType: 'application/pdf',
                 };
-                try {
-                    const response = await fetch(API_URLS.purchaseOrder, {
-                        method: 'POST',
-                        redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    const statusNote = result.status === 'Pre-Order'
-                        ? ' (status: Pre-Order)'
-                        : result.status === 'Need Approval'
-                            ? ' (status: Need Approval — menunggu Release dari Finance)'
-                            : '';
-                    showAlert('success', 'PO Berhasil Dikirim!', 'No. PO: ' + result.po + statusNote);
-                    resetFormPO();
-                    _clearDraft(DRAFT_KEYS.formPO);
-                } catch (err) {
-                    showAlert('error', 'Gagal Mengirim PO', err.message);
-                } finally {
-                    setSubmitLoading(false);
-                }
-            };
-            reader.readAsDataURL(file);
+                const response = await fetch(API_URLS.purchaseOrder, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim PO.');
+                const statusNote = result.status === 'Pre-Order'
+                    ? ' (status: Pre-Order)'
+                    : result.status === 'Need Approval'
+                        ? ' (status: Need Approval — menunggu Release dari Finance)'
+                        : '';
+                resetFormPO();
+                _clearDraft(DRAFT_KEYS.formPO);
+                showPdfPreviewModal(
+                    doc.output('bloburl'),
+                    '✅ PO Berhasil Dikirim!',
+                    'No. PO: ' + result.po + statusNote,
+                    { blob: pdfBlob, fileName }
+                );
+            } catch (err) {
+                showAlert('error', 'Gagal Mengirim PO', err.message);
+            } finally {
+                setSubmitLoading(false);
+            }
         }
 
         /** Reset semua kotak pengisian di Form PO agar siap digunakan kembali */
@@ -12090,12 +12077,6 @@
             if (shippingDateEl) shippingDateEl.value = '';
             if (fileInput) fileInput.value = '';
             if (noteKhususEl) noteKhususEl.value = '';
-
-            // Reset status indicator file PDF
-            const statusEl = document.getElementById('po-pdfFile-status');
-            const labelEl = document.getElementById('po-pdfFile-label');
-            if (statusEl) statusEl.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2';
-            if (labelEl) labelEl.textContent = 'Klik "Download PDF" untuk membuat & melampirkan file';
 
             // Kosongkan tabel item, kembalikan placeholder
             if (tbody) {
@@ -12204,23 +12185,7 @@
                         <input type="date" id="retur-shipping-date"
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">File PDF</label>
-                        <input type="file" id="retur-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
-                        <div id="retur-pdfFile-status"
-                            class="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2">
-                            <svg class="h-4 w-4 flex-shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <span id="retur-pdfFile-label">Klik "Download PDF" untuk membuat & melampirkan file</span>
-                        </div>
-                        <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                            <svg class="h-3.5 w-3.5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            File PDF <span class="font-semibold text-amber-600">Return Order</span> otomatis terlampir setelah klik Download PDF
-                        </p>
-                    </div>
+                    <input type="file" id="retur-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
                 </div>
             </div>
 
@@ -12262,13 +12227,6 @@
                     class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm resize-y"
                     placeholder="Tuliskan catatan khusus untuk pengembalian barang ini..."></textarea>
                 <div class="flex flex-col sm:flex-row gap-3 mt-4">
-                    <button id="retur-downloadBtn" onclick="downloadReturPDF()"
-                        class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-3 rounded-lg font-bold text-sm transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed text-center leading-tight">
-                        <svg id="retur-downloadIcon" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        <span id="retur-downloadLabel" class="whitespace-nowrap">Download PDF</span>
-                    </button>
                     <button id="retur-submitBtn" onclick="submitRetur()"
                         class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
                         <span id="retur-submitBtnLabel" class="whitespace-nowrap">Kirim Retur</span>
@@ -12523,7 +12481,6 @@
             const namaEl = document.getElementById('retur-nama');
             const categoryEl = document.getElementById('retur-category');
             const allocatedToEl = document.getElementById('retur-allocated-to');
-            const fileInput = document.getElementById('retur-pdfFile');
             const btn = document.getElementById('retur-submitBtn');
             const btnLabel = document.getElementById('retur-submitBtnLabel');
 
@@ -12543,7 +12500,14 @@
             };
             setLoadingState(true);
 
-            const sendPayload = async (fileData, fileName, fileType) => {
+            try {
+                // ── Generate ulang PDF Return Order dari isi form yang sudah direvisi ──
+                const pdfResult = await buildReturPDF();
+                if (!pdfResult) { setLoadingState(false); return; }
+                const { doc, fileName } = pdfResult;
+                const pdfBlob = doc.output('blob');
+                const fileData = doc.output('datauristring').split(',')[1];
+
                 const payload = {
                     action: 'revisiRO',
                     token: sessionToken,
@@ -12556,35 +12520,29 @@
                     shippingDate: shippingDateVal,
                     noteKhusus: document.getElementById('retur-note-khusus')?.value?.trim() || '',
                     category: categoryEl.value,
+                    fileData, fileName, fileType: 'application/pdf',
                 };
-                if (fileData) { payload.fileData = fileData; payload.fileName = fileName; payload.fileType = fileType; }
-                try {
-                    const response = await fetch(API_URLS.purchaseOrder, {
-                        method: 'POST', redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    if (!result.success) throw new Error(result.message || 'Gagal menyimpan revisi.');
-                    showAlert('success', 'Revisi Tersimpan!', 'No. RO ' + noRO + ' berhasil diperbarui.');
-                    resetFormRetur();
-                    _exitRevisiROMode();
-                    _loadRevisiRODropdown();
-                    _clearDraft(DRAFT_KEYS.formRetur);
-                } catch (err) {
-                    showAlert('error', 'Gagal Menyimpan Revisi', err.message);
-                } finally {
-                    setLoadingState(false);
-                }
-            };
-
-            const file = fileInput.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => sendPayload(e.target.result.split(',')[1], file.name, file.type);
-                reader.readAsDataURL(file);
-            } else {
-                await sendPayload(null, null, null);
+                const response = await fetch(API_URLS.purchaseOrder, {
+                    method: 'POST', redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (!result.success) throw new Error(result.message || 'Gagal menyimpan revisi.');
+                resetFormRetur();
+                _exitRevisiROMode();
+                _loadRevisiRODropdown();
+                _clearDraft(DRAFT_KEYS.formRetur);
+                showPdfPreviewModal(
+                    doc.output('bloburl'),
+                    '✅ Revisi Tersimpan!',
+                    'No. RO: ' + noRO,
+                    { blob: pdfBlob, fileName }
+                );
+            } catch (err) {
+                showAlert('error', 'Gagal Menyimpan Revisi', err.message);
+            } finally {
+                setLoadingState(false);
             }
         }
 
@@ -12593,7 +12551,6 @@
             const namaEl = document.getElementById('retur-nama');
             const categoryEl = document.getElementById('retur-category');
             const allocatedToEl = document.getElementById('retur-allocated-to');
-            const fileInput = document.getElementById('retur-pdfFile');
             const btn = document.getElementById('retur-submitBtn');
             const btnLabel = document.getElementById('retur-submitBtnLabel');
 
@@ -12606,8 +12563,6 @@
             if (!allocatedToEl || !allocatedToEl.value.trim()) { showAlert('warning', 'Belum Lengkap', 'Isi field "Ship To" terlebih dahulu.'); return; }
             const shippingDateVal = document.getElementById('retur-shipping-date')?.value || '';
             if (!shippingDateVal) { showAlert('warning', 'Belum Lengkap', 'Isi Shipping Date terlebih dahulu.'); return; }
-            const file = fileInput.files[0];
-            if (!file) { showAlert('warning', 'Belum Lengkap', 'Pilih file PDF terlebih dahulu.'); return; }
 
             const setSubmitLoading = (loading) => {
                 btn.disabled = loading;
@@ -12629,9 +12584,14 @@
             };
 
             setSubmitLoading(true);
+            try {
+                // ── Generate PDF Return Order dari isi form (menggantikan tombol Download PDF terpisah) ──
+                const pdfResult = await buildReturPDF();
+                if (!pdfResult) { setSubmitLoading(false); return; }
+                const { doc, fileName } = pdfResult;
+                const pdfBlob = doc.output('blob');
+                const fileData = doc.output('datauristring').split(',')[1];
 
-            const reader = new FileReader();
-            reader.onload = async function (e) {
                 const payload = {
                     action: 'submitRetur',
                     token: sessionToken,
@@ -12645,30 +12605,33 @@
                     category: categoryEl.value,
                     categoryCode: CATEGORY_CODE[categoryEl.value],
                     tanggal: formatDateForPO(new Date()),
-                    fileData: e.target.result.split(',')[1],
-                    fileName: file.name,
-                    fileType: file.type,
+                    fileData,
+                    fileName,
+                    fileType: 'application/pdf',
                     targetSheet: 'Retur_Data',
                     poPrefix: 'Retur-',
                 };
-                try {
-                    const response = await fetch(API_URLS.purchaseOrder, {
-                        method: 'POST',
-                        redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    });
-                    const result = await response.json();
-                    showAlert('success', 'Retur Berhasil Dikirim!', 'No. RO: ' + result.po);
-                    resetFormRetur();
-                    _clearDraft(DRAFT_KEYS.formRetur);
-                } catch (err) {
-                    showAlert('error', 'Gagal Mengirim Retur', err.message);
-                } finally {
-                    setSubmitLoading(false);
-                }
-            };
-            reader.readAsDataURL(file);
+                const response = await fetch(API_URLS.purchaseOrder, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim Retur.');
+                resetFormRetur();
+                _clearDraft(DRAFT_KEYS.formRetur);
+                showPdfPreviewModal(
+                    doc.output('bloburl'),
+                    '✅ Retur Berhasil Dikirim!',
+                    'No. RO: ' + result.po,
+                    { blob: pdfBlob, fileName }
+                );
+            } catch (err) {
+                showAlert('error', 'Gagal Mengirim Retur', err.message);
+            } finally {
+                setSubmitLoading(false);
+            }
         }
 
         /** Reset semua kotak pengisian di Form Retur */
@@ -12693,12 +12656,6 @@
             if (shippingDateEl) shippingDateEl.value = '';
             if (fileInput) fileInput.value = '';
             if (noteKhususEl) noteKhususEl.value = '';
-
-            // Reset status indicator file PDF
-            const statusEl = document.getElementById('retur-pdfFile-status');
-            const labelEl = document.getElementById('retur-pdfFile-label');
-            if (statusEl) statusEl.className = 'w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-400 text-sm flex items-center gap-2';
-            if (labelEl) labelEl.textContent = 'Klik "Download PDF" untuk membuat & melampirkan file';
 
             if (tbody) {
                 tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
@@ -12885,38 +12842,12 @@
         // =========================================================================
         // FORM PENGEMBALIAN BARANG: DOWNLOAD PDF
         // =========================================================================
-        async function downloadReturPDF() {
-            const dlBtn = document.getElementById('retur-downloadBtn');
-            const dlIcon = document.getElementById('retur-downloadIcon');
-            const dlLabel = document.getElementById('retur-downloadLabel');
-            const setDlLoading = (loading) => {
-                if (!dlBtn) return;
-                dlBtn.disabled = loading;
-                if (dlIcon) dlIcon.classList.toggle('hidden', loading);
-                if (dlLabel) dlLabel.textContent = loading ? 'Memproses...' : 'Download PDF';
-                let spinner = dlBtn.querySelector('.dl-spinner');
-                if (loading) {
-                    if (!spinner) {
-                        spinner = document.createElement('svg');
-                        spinner.className = 'dl-spinner animate-spin h-4 w-4 flex-shrink-0';
-                        spinner.setAttribute('viewBox', '0 0 24 24');
-                        spinner.setAttribute('fill', 'none');
-                        spinner.innerHTML = '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
-                        dlBtn.insertBefore(spinner, dlLabel);
-                    }
-                } else if (spinner) {
-                    spinner.remove();
-                }
-            };
-            setDlLoading(true);
-            try {
-                await downloadReturPDFInner();
-            } finally {
-                setDlLoading(false);
-            }
-        }
-
-        async function downloadReturPDFInner() {
+        // =========================================================================
+        // FORM RETUR: BUILD PDF (dipanggil langsung dari submitRetur/_doSubmitRevisiRO —
+        // tombol "Download PDF" terpisah sudah dihapus; PDF sekarang dibuat otomatis
+        // saat tombol "Kirim Retur" diklik)
+        // =========================================================================
+        async function buildReturPDF() {
             const namaEl = document.getElementById('retur-nama');
             const categoryEl = document.getElementById('retur-category');
             const allocatedToEl = document.getElementById('retur-allocated-to');
@@ -13171,29 +13102,7 @@
             const safeFromLocationRO = (fromLocation || '').replace(/[\\/:*?"<>|]/g, '').trim();
             const fileName = `${poLabel !== '-' ? poLabel : 'Retur'}${safeFromLocationRO ? '_' + safeFromLocationRO : ''}.pdf`;
 
-            // ── Simpan PDF ke perangkat ──
-            doc.save(fileName);
-
-            // ── Otomatis lampirkan PDF ke kotak "Upload File PDF" ──
-            try {
-                const pdfBlob = doc.output('blob');
-                const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-                const dt = new DataTransfer();
-                dt.items.add(pdfFile);
-                const fileInput = document.getElementById('retur-pdfFile');
-                if (fileInput) {
-                    fileInput.files = dt.files;
-                    // Perbarui status indicator
-                    const statusEl = document.getElementById('retur-pdfFile-status');
-                    const labelEl = document.getElementById('retur-pdfFile-label');
-                    if (statusEl) statusEl.className = 'w-full p-3 border border-green-300 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2';
-                    if (labelEl) labelEl.textContent = '✓ ' + fileName;
-                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                showAlert('success', 'PDF Siap', 'Dokumen Return Order berhasil dibuat dan otomatis dilampirkan.');
-            } catch (err) {
-                showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan coba klik Download PDF sekali lagi.');
-            }
+            return { doc, fileName };
         }
 
         // =========================================================================
@@ -13299,38 +13208,12 @@
         // =========================================================================
         // FORM PO: DOWNLOAD REQUEST ORDER PDF
         // =========================================================================
-        async function downloadRequestOrderPDF() {
-            const dlBtn = document.getElementById('downloadRequestOrderBtn');
-            const dlIcon = document.getElementById('downloadRequestOrderIcon');
-            const dlLabel = document.getElementById('downloadRequestOrderLabel');
-            const setDlLoading = (loading) => {
-                if (!dlBtn) return;
-                dlBtn.disabled = loading;
-                if (dlIcon) dlIcon.classList.toggle('hidden', loading);
-                if (dlLabel) dlLabel.textContent = loading ? 'Memproses...' : 'Download PDF';
-                let spinner = dlBtn.querySelector('.dl-spinner');
-                if (loading) {
-                    if (!spinner) {
-                        spinner = document.createElement('svg');
-                        spinner.className = 'dl-spinner animate-spin h-4 w-4 flex-shrink-0';
-                        spinner.setAttribute('viewBox', '0 0 24 24');
-                        spinner.setAttribute('fill', 'none');
-                        spinner.innerHTML = '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>';
-                        dlBtn.insertBefore(spinner, dlLabel);
-                    }
-                } else if (spinner) {
-                    spinner.remove();
-                }
-            };
-            setDlLoading(true);
-            try {
-                await downloadRequestOrderPDFInner();
-            } finally {
-                setDlLoading(false);
-            }
-        }
-
-        async function downloadRequestOrderPDFInner() {
+        // =========================================================================
+        // FORM PO: BUILD PDF (dipanggil langsung dari submitPO/_doSubmitRevisiPO —
+        // tombol "Download PDF" terpisah sudah dihapus; PDF sekarang dibuat otomatis
+        // saat tombol "Kirim PO" diklik)
+        // =========================================================================
+        async function buildRequestOrderPDF() {
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
@@ -13608,30 +13491,7 @@
             const safeShipTo = (allocatedTo || '').replace(/[\\/:*?"<>|]/g, '').trim();
             const fileName = `Request_Order_${poLabel !== '-' ? poLabel : 'PO'}${safeShipTo ? '_' + safeShipTo : ''}.pdf`;
 
-            // ── Simpan PDF ke perangkat ──
-            doc.save(fileName);
-
-            // ── Otomatis lampirkan PDF ke kotak "Upload File PDF" ──
-            try {
-                const pdfBlob = doc.output('blob');
-                const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(pdfFile);
-                const fileInput = document.getElementById('po-pdfFile');
-                if (fileInput) {
-                    fileInput.files = dataTransfer.files;
-                    // Perbarui status indicator
-                    const statusEl = document.getElementById('po-pdfFile-status');
-                    const labelEl = document.getElementById('po-pdfFile-label');
-                    if (statusEl) statusEl.className = 'w-full p-3 border border-green-300 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2';
-                    if (labelEl) labelEl.textContent = '✓ ' + fileName;
-                    // Trigger change event in case any listener depends on it
-                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                showAlert('success', 'PDF Siap', 'Request Order berhasil dibuat dan otomatis dilampirkan.');
-            } catch (err) {
-                showAlert('warning', 'Lampiran Gagal', 'PDF berhasil diunduh, tetapi gagal dilampirkan otomatis. Silakan coba klik Download PDF sekali lagi.');
-            }
+            return { doc, fileName };
         }
 
         // =========================================================================
