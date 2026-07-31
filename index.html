@@ -13505,6 +13505,15 @@
             try {
                 const res = await fetch(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
                 const data = await res.json();
+                // ── GUARD RACE CONDITION ──
+                // Kalau selagi fetch berlangsung user sudah ganti pilihan No. PO di
+                // dropdown, JANGAN timpa field dengan data No. PO yang lama —
+                // ini penyebab bug "data tidak sesuai No. PO yang dipilih".
+                const currentSel = document.getElementById('proc-no-po-select');
+                if (currentSel && String(currentSel.value || '').trim() !== String(noPO).trim()) {
+                    console.warn('[Process PO] Abaikan hasil No. Telepon/Alamat untuk PO "' + noPO + '" — user sudah berpindah ke PO lain.');
+                    return;
+                }
                 if (data && data.success) {
                     if (phoneEl) phoneEl.value = data.phone || '';
                     if (alamatEl) alamatEl.value = data.alamat || '';
@@ -14446,11 +14455,15 @@
         /**
          * Handler utama Import PDF
          */
-        async function handlePDFImport(fileOverride) {
+        async function handlePDFImport(fileOverride, expectedNoPO) {
             const fileInput = document.getElementById('process-pdfFile');
             const statusEl = document.getElementById('import-status');
             const btnImport = document.getElementById('btn-import');
             const file = fileOverride || fileInput.files[0];
+            // expectedNoPO hanya diisi saat import dipicu otomatis oleh pemilihan
+            // No. PO (lihat _maybeAutoPullRequestOrderForSelectedPO). Untuk import
+            // manual (klik tombol "Import" oleh user) expectedNoPO kosong sehingga
+            // guard di bawah tidak berlaku.
 
             if (!file) {
                 showAlert('warning', 'Pilih File', 'Silakan pilih file PDF terlebih dahulu.');
@@ -14474,6 +14487,21 @@
 
                 // 2. Parse menggunakan koordinat kolom → akurasi tinggi
                 const parsed = parsePOData(pageData, rawText);
+
+                // ── GUARD RACE CONDITION ──
+                // Ekstraksi teks PDF (extractTextFromPDF + parsePOData) bisa makan
+                // waktu beberapa detik. Kalau proses ini dipicu otomatis dari
+                // pemilihan No. PO (expectedNoPO terisi) dan selagi menunggu user
+                // sudah berpindah ke No. PO lain di dropdown, JANGAN tulis hasil
+                // ekstraksi ke form — ini akar penyebab bug "data yang ketarik
+                // tidak sesuai dengan No. PO yang dipanggil".
+                const noPoSelEl = document.getElementById('proc-no-po-select');
+                if (expectedNoPO && noPoSelEl && String(noPoSelEl.value || '').trim() !== String(expectedNoPO).trim()) {
+                    console.warn('[Process PO] Abaikan hasil ekstraksi PDF untuk PO "' + expectedNoPO + '" — user sudah berpindah ke PO lain.');
+                    statusEl.textContent = 'Dibatalkan — pilihan No. PO sudah berubah sebelum ekstraksi selesai.';
+                    statusEl.className = 'text-xs text-gray-400 mt-1';
+                    return;
+                }
 
                 // ── Isi field form ──
                 document.getElementById('proc-ordered-by').value = parsed.ordered_by || '';
@@ -14676,17 +14704,21 @@
 
             driveSel.value = matchOpt.value;
             driveSel.dataset.lastPulled = matchOpt.value;
-            await handlePullRequestOrderFromDrive();
+            // noPO dikirim sebagai "expectedNoPO" supaya setiap tahap async
+            // berikutnya (fetch file, ekstrak PDF) bisa memvalidasi apakah user
+            // masih memilih No. PO yang sama sebelum mengisi form.
+            await handlePullRequestOrderFromDrive(noPO);
         }
 
         // ─── Tarik file PDF Request Order terpilih dari Google Drive, lalu ─────────
         // langsung ekstrak datanya memakai pipeline yang sama seperti Import PDF manual
         // (handlePDFImport), sehingga otomatis mengisi field & tabel Process PO.
-        async function handlePullRequestOrderFromDrive() {
+        async function handlePullRequestOrderFromDrive(expectedNoPO) {
             const sel = document.getElementById('proc-drive-ro-select');
             const statusEl = document.getElementById('proc-drive-status');
             const btnPull = document.getElementById('btn-proc-drive-pull');
             const fileId = sel?.value;
+            const noPoSelEl = document.getElementById('proc-no-po-select');
 
             if (!fileId) {
                 showAlert('warning', 'Pilih File', 'Silakan pilih file Request Order dari daftar Google Drive terlebih dahulu.');
@@ -14709,6 +14741,19 @@
                     throw new Error((result && result.message) || 'File tidak ditemukan di Google Drive.');
                 }
 
+                // ── GUARD RACE CONDITION ──
+                // Fetch ke Google Drive butuh waktu. Kalau selagi menunggu user sudah
+                // ganti pilihan No. PO ke PO lain, batalkan — jangan lanjut mengekstrak
+                // & mengisi form dengan data PO yang sudah tidak relevan lagi.
+                if (expectedNoPO && noPoSelEl && String(noPoSelEl.value || '').trim() !== String(expectedNoPO).trim()) {
+                    console.warn('[Process PO] Batalkan pull Drive untuk PO "' + expectedNoPO + '" — user sudah berpindah ke PO lain.');
+                    if (statusEl) {
+                        statusEl.textContent = 'Dibatalkan — pilihan No. PO sudah berubah.';
+                        statusEl.className = 'text-xs text-gray-400 mt-1';
+                    }
+                    return;
+                }
+
                 // Konversi base64 menjadi objek File agar bisa dipakai pipeline Import PDF yang sudah ada
                 const byteChars = atob(result.base64);
                 const byteNumbers = new Array(byteChars.length);
@@ -14724,7 +14769,7 @@
                 showAlert('success', 'Berhasil Ditarik', `File Request Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
 
                 sel.dataset.lastPulled = fileId;
-                await handlePDFImport(file);
+                await handlePDFImport(file, expectedNoPO);
             } catch (err) {
                 if (statusEl) {
                     statusEl.textContent = '❌ Gagal: ' + err.message;
