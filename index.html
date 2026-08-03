@@ -14,6 +14,43 @@
     <meta name="application-name" content="nod. Dashboard">
     <meta name="theme-color" content="#f59e0b">
 
+    <!-- ═══════════════════════════════════════════════════════════════════
+         BUG FIX: karakter animasi (mascot) di halaman login "bocor" tampil
+         dalam 2 skenario:
+         1) Saat REFRESH untuk user yang session-nya masih valid: elemen
+            #login-page (berikut video mascot di dalamnya) baru disembunyikan
+            oleh startApp() lewat script di akhir <body>. Sebelum script itu
+            jalan, browser sudah sempat merender #login-page apa adanya
+            (tidak ada class "hidden" bawaan di HTML), sehingga mascot yang
+            seharusnya sudah tidak relevan (user sudah login) sempat "muncul
+            dilayar" walau cuma sekejap.
+         2) Di HANDPHONE: mascot hanya disembunyikan lewat CSS media query
+            (max-width:560px), murni berbasis lebar viewport. Di HP dengan
+            lebar CSS px lebih besar (mis. mode landscape, atau sebagian
+            phablet) query ini tidak kena, sehingga mascot tetap muncul
+            walau harusnya tidak ada karakter animasi sama sekali di HP.
+
+         Fix: jalankan script SINKRON dini ini di paling atas <head>
+         (sebelum #login-page/video mascot bahkan sempat di-parse), lalu
+         tandai <html> dengan class yang dipakai CSS untuk menyembunyikan
+         elemen terkait SEBELUM sempat ter-render sama sekali (tidak ada
+         flash). Deteksi mobile pakai User-Agent (bukan cuma lebar layar)
+         supaya konsisten independen dari orientasi/lebar viewport. -->
+    <script>
+        (function () {
+            try {
+                var hasSession = !!(sessionStorage.getItem('currentUserRole') && sessionStorage.getItem('sessionToken'));
+                if (hasSession) document.documentElement.classList.add('has-saved-session');
+            } catch (e) { /* sessionStorage tidak tersedia (mode privat dsb), abaikan */ }
+
+            var ua = navigator.userAgent || '';
+            var isTabletUA = /iPad|Tablet/i.test(ua) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            var isMobileUA = !isTabletUA && /Mobi|Android|iPhone|iPod/i.test(ua);
+            if (isMobileUA) document.documentElement.classList.add('is-mobile-ua');
+        })();
+    </script>
+
     <!-- Apple Touch Icons (digunakan saat Save to Home Screen di iOS) -->
     <link rel="apple-touch-icon"
         href="data:image/png;base64,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">
@@ -1639,6 +1676,9 @@
             const app = document.getElementById('app-container');
             app.classList.add('hidden');
             app.classList.remove('flex');
+            // Lepas class "has-saved-session" (lihat fix flash mascot di <head>) agar
+            // #login-page benar-benar bisa ditampilkan lagi setelah logout.
+            document.documentElement.classList.remove('has-saved-session');
             document.getElementById('login-page').classList.remove('hidden');
             resetLoginCover();
 
@@ -19740,6 +19780,11 @@
                         const app = document.getElementById('app-container');
                         app.classList.add('hidden');
                         app.classList.remove('flex');
+                        // Lepas class "has-saved-session" (ditandai di <head> saat awal
+                        // load) supaya CSS !important yang menyembunyikan #login-page
+                        // (fix flash mascot) tidak ikut mengunci halaman login tetap
+                        // tersembunyi setelah user dipaksa logout karena sesi invalid.
+                        document.documentElement.classList.remove('has-saved-session');
                         document.getElementById('login-page').classList.remove('hidden');
                         const err = document.getElementById('loginError');
                         if (err) {
@@ -20189,6 +20234,25 @@
             .login-mascot {
                 display: none;
             }
+        }
+
+        /* Fallback/penguat: deteksi HP lewat User-Agent (bukan cuma lebar viewport),
+           supaya mascot tetap hilang meski HP dibuka landscape / lebar CSS px-nya
+           melebihi breakpoint 560px di atas. Class "is-mobile-ua" ditandai sedini
+           mungkin oleh script inline di <head> (lihat komentar BUG FIX di sana). */
+        html.is-mobile-ua .login-mascot {
+            display: none !important;
+        }
+
+        /* Cegah karakter mascot "bocor" tampil sesaat saat halaman di-refresh oleh
+           user yang sesi login-nya masih valid. Class "has-saved-session" ditandai
+           sedini mungkin (sebelum #login-page sempat di-render) oleh script inline
+           di <head>, sehingga #login-page langsung disembunyikan tanpa menunggu
+           startApp() di akhir <body>. startApp() tetap jalan seperti biasa dan
+           akan menghapus class "hidden" bawaan Tailwind bila ternyata sesi tidak
+           valid (lihat restoreSessionOnLoad). */
+        html.has-saved-session #login-page {
+            display: none !important;
         }
 
         /* ================= LOGIN CARD COVER (SPLIT IMAGE REVEAL) ================= */
