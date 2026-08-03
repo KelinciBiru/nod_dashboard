@@ -20137,23 +20137,9 @@
         }
 
         @media (max-width: 560px) {
+            /* Sembunyikan karakter walker di tampilan mobile/HP; tetap tampil di PC/laptop */
             .login-walker {
-                width: 86px;
-                background: transparent;
-                /* Blend diterapkan di container (bukan langsung ke <video>) karena
-                   mix-blend-mode pada tag <video> sering tidak berfungsi di Safari/iOS,
-                   sehingga background putih video tetap terlihat di HP.
-                   PENTING: JANGAN pakai isolation:isolate di sini — itu membuat
-                   .login-walker jadi grup blending tersendiri yang KOSONG (cuma
-                   berisi video), jadi multiply tidak punya apa-apa untuk di-blend
-                   dan putihnya tetap tampil. Tanpa isolation, blend akan menyatu
-                   dengan background halaman (bg-gray-100) di belakangnya. */
-                mix-blend-mode: multiply;
-            }
-
-            /* Hilangkan background putih pada video karakter di HP */
-            .login-walker-video {
-                background: transparent;
+                display: none;
             }
         }
 
@@ -20204,32 +20190,9 @@
         }
 
         @media (max-width: 560px) {
+            /* Sembunyikan karakter mascot di tampilan mobile/HP; tetap tampil di PC/laptop */
             .login-mascot {
-                left: 100%;
-                right: auto;
-                bottom: 0;
-                margin-left: -14px;
-                width: 104px;
-                z-index: 45;
-                background: transparent;
-                /* Blend diterapkan di container (bukan langsung ke <video>) karena
-                   mix-blend-mode pada tag <video> sering tidak berfungsi di Safari/iOS,
-                   sehingga background putih video tetap terlihat di HP.
-                   PENTING: JANGAN pakai isolation:isolate di sini — itu membuat
-                   .login-mascot jadi grup blending tersendiri yang KOSONG (cuma
-                   berisi video), jadi multiply tidak punya apa-apa untuk di-blend
-                   dan putihnya tetap tampil. Tanpa isolation, blend akan menyatu
-                   dengan background halaman (bg-gray-100) di belakangnya. */
-                mix-blend-mode: multiply;
-            }
-
-            .login-mascot-wave {
-                font-size: 18px;
-            }
-
-            /* Hilangkan background putih pada video karakter di HP */
-            .login-mascot-video {
-                background: transparent;
+                display: none;
             }
         }
 
