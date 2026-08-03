@@ -20139,11 +20139,17 @@
         @media (max-width: 560px) {
             .login-walker {
                 width: 86px;
+                background: transparent;
+                /* Blend diterapkan di container (bukan langsung ke <video>) karena
+                   mix-blend-mode pada tag <video> sering tidak berfungsi di Safari/iOS,
+                   sehingga background putih video tetap terlihat di HP. */
+                mix-blend-mode: multiply;
+                isolation: isolate;
             }
 
             /* Hilangkan background putih pada video karakter di HP */
             .login-walker-video {
-                mix-blend-mode: multiply;
+                background: transparent;
             }
         }
 
@@ -20201,6 +20207,12 @@
                 margin-left: -14px;
                 width: 104px;
                 z-index: 45;
+                background: transparent;
+                /* Blend diterapkan di container (bukan langsung ke <video>) karena
+                   mix-blend-mode pada tag <video> sering tidak berfungsi di Safari/iOS,
+                   sehingga background putih video tetap terlihat di HP. */
+                mix-blend-mode: multiply;
+                isolation: isolate;
             }
 
             .login-mascot-wave {
@@ -20209,7 +20221,7 @@
 
             /* Hilangkan background putih pada video karakter di HP */
             .login-mascot-video {
-                mix-blend-mode: multiply;
+                background: transparent;
             }
         }
 
