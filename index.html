@@ -20104,7 +20104,9 @@
         }
 
         /* ================= LOGIN CARD WALKER (walks in from the left, behind the card) ================= */
+        /* Dinonaktifkan permanen: hanya karakter mascot di samping login card yang ditampilkan (PC/laptop). */
         .login-walker {
+            display: none !important;
             position: absolute;
             left: 0;
             bottom: 0;
@@ -20133,13 +20135,6 @@
             65%,
             100% {
                 transform: translateX(95px);
-            }
-        }
-
-        @media (max-width: 560px) {
-            /* Sembunyikan karakter walker di tampilan mobile/HP; tetap tampil di PC/laptop */
-            .login-walker {
-                display: none;
             }
         }
 
