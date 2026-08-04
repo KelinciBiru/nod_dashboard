@@ -838,6 +838,45 @@
             else _apiCache.clear();
         }
 
+        // =========================================================================
+        // [FIX BUG "Unexpected Token"] Proteksi global untuk res.json()
+        // =========================================================================
+        // Root cause: saat GAS kena limit eksekusi bersamaan, cold-start lambat,
+        // timeout eksekusi (>6 menit), atau butuh re-autentikasi, Google TIDAK
+        // menjalankan kode Code.gs sama sekali — Google infra langsung membalas
+        // dengan HALAMAN HTML (mis. "<!DOCTYPE html>..."), bukan JSON. Semua
+        // pemanggil di file ini yang memanggil `res.json()` lalu meledak dengan
+        // pesan kriptis "Unexpected token '<', "<!DOCTYPE "... is not valid JSON".
+        // Ini BUKAN bug sintaks di kode ini — makanya tidak ketemu walau dicek
+        // ulang; sumbernya di luar kendali kode frontend/backend saat request
+        // sampai ke Google.
+        //
+        // Fix: timpa Response.prototype.json() SEKALI di sini secara global,
+        // supaya SEMUA ~84 titik pemanggilan res.json() di seluruh file ini
+        // otomatis kebagian proteksi tanpa perlu diubah satu-satu:
+        //   - kalau body memang bukan JSON valid, lempar Error dengan pesan
+        //     Indonesia yang jelas (bukan lagi "Unexpected token"), dan tandai
+        //     `err.isGasParseError = true` supaya pemanggil (terutama
+        //     cachedFetch) bisa retry otomatis sekali sebelum menyerah.
+        (function protectGasJsonParsing() {
+            const originalJson = Response.prototype.json;
+            Response.prototype.json = async function () {
+                const text = await this.clone().text();
+                try {
+                    return JSON.parse(text);
+                } catch (parseErr) {
+                    const looksHtml = /^\s*</.test(text);
+                    const msg = looksHtml
+                        ? 'Server GAS sedang sibuk/timeout dan mengembalikan halaman error, bukan data (biasanya karena banyak permintaan bersamaan). Coba lagi sebentar.'
+                        : 'Respons server tidak valid: ' + text.slice(0, 150);
+                    const err = new Error(msg);
+                    err.isGasParseError = true;
+                    err.rawResponsePreview = text.slice(0, 300);
+                    throw err;
+                }
+            };
+        })();
+
         // Fetch with configurable timeout (default 15 detik)
         async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
             const controller = new AbortController();
@@ -874,10 +913,27 @@
                 return cached;
             }
             console.log(`[Cache] MISS: ${cacheKey} → fetching...`);
-            const res = await fetchWithTimeout(url, {}, timeoutMs);
-            const data = await res.json();
-            setCache(cacheKey, data);
-            return data;
+            try {
+                const res = await fetchWithTimeout(url, {}, timeoutMs);
+                const data = await res.json();
+                setCache(cacheKey, data);
+                return data;
+            } catch (err) {
+                // [FIX BUG "Unexpected Token"] Kalau gagalnya karena GAS balas
+                // HTML (bukan JSON) — biasanya transien (cold-start/limit
+                // concurrency sesaat) — coba sekali lagi sebelum menyerah,
+                // supaya user tidak lihat error hanya karena kebetulan kena
+                // 1 request yang nyasar ke halaman error Google.
+                if (err.isGasParseError) {
+                    console.warn(`[cachedFetch] respons tidak valid utk ${cacheKey}, retry sekali:`, err.message);
+                    await new Promise(r => setTimeout(r, 1200));
+                    const res2 = await fetchWithTimeout(url, {}, timeoutMs);
+                    const data2 = await res2.json();
+                    setCache(cacheKey, data2);
+                    return data2;
+                }
+                throw err;
+            }
         }
 
         // =========================================================================
@@ -966,7 +1022,13 @@
                 if (!registry[pageName]) return;
                 activePage = pageName;
                 delete lastHash[pageName]; // baseline akan diisi oleh render manual pertama via setBaseline()
-                timer = setInterval(_tick, POLL_INTERVAL_MS);
+                // [FIX PERFORMA] Jitter kecil (0-3 detik) di jadwal polling supaya
+                // banyak tab/user yang buka halaman ini bersamaan (mis. sesudah
+                // deploy baru / jam masuk kerja) tidak semuanya polling GAS pada
+                // detik yang sama persis — mengurangi lonjakan beban bersamaan
+                // yang jadi salah satu penyebab GAS kena limit & lambat/error.
+                const jitterMs = Math.floor(Math.random() * 3000);
+                timer = setInterval(_tick, POLL_INTERVAL_MS + jitterMs);
             }
 
             function stop() {
