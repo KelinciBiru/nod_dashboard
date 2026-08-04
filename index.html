@@ -18372,10 +18372,21 @@
                     return;
                 }
 
-                // ── 2) Simpan salinan PDF ke folder Google Drive yang sudah ada ──
-                await uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc });
+                // ── 2) & 3) Simpan data ke Outbound_Log (KRITIS — status PO ikut
+                //      berubah) dan simpan salinan PDF ke Drive (PENDUKUNG saja,
+                //      dipakai nanti di Receive PO) dijalankan PARALEL, bukan
+                //      berurutan. Sebelumnya kedua panggilan GAS ini di-await
+                //      satu-satu sehingga total waktu tunggu DOBEL — kalau upload
+                //      Drive saja sudah lambat/cold-start, user keburu timeout
+                //      sebelum sempat sampai ke modal share PDF, padahal PDF-nya
+                //      sendiri sudah selesai dibuat di browser sejak awal.
+                //      Upload ke Drive TIDAK di-await di sini (jalan di background)
+                //      karena kegagalannya tidak boleh menggagalkan proses utama —
+                //      PDF tetap bisa langsung di-share dari sini walau salinan
+                //      cadangan di Drive belum/gagal tersimpan.
+                uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc })
+                    .catch(() => { /* sudah ditangani & ditampilkan di dalam fungsinya sendiri */ });
 
-                // ── 3) Catat data outbound ke sheet (Outbound_Log), seperti sebelumnya ──
                 const result = await fetchWriteWithRetry(WEB_APP_URL, {
                     method: 'POST',
                     redirect: 'follow',
