@@ -850,6 +850,22 @@
             }
         }
 
+        // [FIX BUG] Helper retry-sekali khusus untuk fetch berat/rawan gagal seperti
+        // menarik file PDF dari Google Drive lewat GAS (base64 besar + GAS cold-start
+        // = salah satu penyebab utama "penarikan data dari PDF seringkali gagal").
+        // Kalau percobaan pertama gagal (timeout/AbortError atau network error),
+        // tunggu sebentar lalu coba sekali lagi sebelum benar-benar dianggap gagal —
+        // pola retry+backoff ini sudah dipakai di menu Route untuk kasus serupa.
+        async function fetchWithRetry(url, options = {}, timeoutMs = 30000, retryDelayMs = 1500) {
+            try {
+                return await fetchWithTimeout(url, options, timeoutMs);
+            } catch (err) {
+                console.warn('[fetchWithRetry] percobaan pertama gagal, mencoba ulang sekali:', err.message);
+                await new Promise(r => setTimeout(r, retryDelayMs));
+                return await fetchWithTimeout(url, options, timeoutMs);
+            }
+        }
+
         // Cached fetch helper: returns parsed JSON, uses cache if fresh
         async function cachedFetch(url, cacheKey, timeoutMs = 15000) {
             const cached = getCached(cacheKey);
@@ -11853,7 +11869,7 @@
             if (!sel) return;
             sel.innerHTML = `<option value="">— Memuat daftar No. PO bulan ini... —</option>`;
             try {
-                const res = await fetch(API_URLS.purchaseOrder + '?action=listRequestOrderPDF&monthOnly=1', { redirect: 'follow' });
+                const res = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=listRequestOrderPDF&monthOnly=1', { redirect: 'follow' }, 30000);
                 const result = await res.json();
                 if (!result || result.success !== true) {
                     sel.innerHTML = `<option value="">Gagal memuat daftar No. PO (Code.gs belum di-deploy ulang?)</option>`;
@@ -11888,7 +11904,7 @@
                 const row = Array.isArray(poRows) ? poRows.slice(1).find(r => String(r[1] || '').trim() === noPO) : null;
 
                 // 2. Ambil file PDF Request Order & ekstrak tabel item
-                const pdfRes = await fetch(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const pdfResult = await pdfRes.json();
                 if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
 
@@ -12467,7 +12483,7 @@
             if (!sel) return;
             sel.innerHTML = `<option value="">— Memuat daftar No. RO bulan ini... —</option>`;
             try {
-                const res = await fetch(API_URLS.purchaseOrder + '?action=listRequestOrderPDF&monthOnly=1', { redirect: 'follow' });
+                const res = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=listRequestOrderPDF&monthOnly=1', { redirect: 'follow' }, 30000);
                 const result = await res.json();
                 if (!result || result.success !== true) {
                     sel.innerHTML = `<option value="">Gagal memuat daftar No. RO (Code.gs belum di-deploy ulang?)</option>`;
@@ -12502,7 +12518,7 @@
                 const row = Array.isArray(roRows) ? roRows.slice(1).find(r => String(r[1] || '').trim() === noRO) : null;
 
                 // 2. Ambil file PDF Request Order (RO) & ekstrak tabel item
-                const pdfRes = await fetch(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const pdfResult = await pdfRes.json();
                 if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
 
@@ -14716,7 +14732,7 @@
             sel.innerHTML = `<option value="">— Memuat daftar... —</option>`;
             if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
             try {
-                const res = await fetch(WEB_APP_URL + '?action=listRequestOrderPDF', { redirect: 'follow' });
+                const res = await fetchWithTimeout(WEB_APP_URL + '?action=listRequestOrderPDF', { redirect: 'follow' }, 30000);
                 const result = await res.json();
 
                 // Bedakan: backend tidak mengenali action / error (result.success bukan true)
@@ -14835,7 +14851,7 @@
             }
 
             try {
-                const res = await fetch(WEB_APP_URL + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const res = await fetchWithRetry(WEB_APP_URL + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const result = await res.json();
 
                 if (!result || !result.success || !result.base64) {
@@ -16688,10 +16704,19 @@
             // [8]=Phone     [9]=Shipping Date          [10]=Note
 
             try {
+                // [FIX BUG] Sebelumnya kegagalan fetch (timeout/GAS cold-start/jaringan
+                // putus) diredam total lewat .catch(() => []) dan langsung dianggap sama
+                // dengan "datanya memang kosong" — hasilnya halaman menampilkan pesan
+                // "✅ Tidak ada PO yang berlangsung" padahal sebenarnya gagal mengambil
+                // data, sehingga terlihat seperti menu Report Status "hilang". Sekarang
+                // status gagal/berhasil masing-masing sumber dilacak terpisah, supaya
+                // kalau SEMUA sumber gagal, ditampilkan pesan error + tombol "Coba Lagi"
+                // (bukan pesan "tidak ada PO").
+                let poFetchFailed = false, retuFetchFailed = false;
                 // ── Fetch PO_Data dan Retur_Data secara PARALEL ──
                 const [poRaw, retuRaw] = await Promise.all([
-                    cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData').catch(() => []),
-                    cachedFetch(API_URLS.purchaseOrder + '?action=getReturData', 'getReturData').catch(() => []),
+                    cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData').catch(() => { poFetchFailed = true; return []; }),
+                    cachedFetch(API_URLS.purchaseOrder + '?action=getReturData', 'getReturData').catch(() => { retuFetchFailed = true; return []; }),
                 ]);
 
                 let data = Array.isArray(poRaw) ? poRaw : [];
@@ -16702,7 +16727,21 @@
                     try {
                         const fallback = await cachedFetch(API_URLS.reportStatus, 'reportStatusFallback');
                         data = Array.isArray(fallback) ? fallback : [];
+                        poFetchFailed = false; // fallback berhasil → jangan anggap gagal lagi
                     } catch (_) { }
+                }
+
+                // Kalau kedua sumber data GAGAL diambil (bukan memang kosong), jangan
+                // tampilkan "tidak ada PO" yang menyesatkan — tampilkan error + retry.
+                if (poFetchFailed && retuFetchFailed) {
+                    smoothSwapContent(contentArea, `
+                    <h1 class="text-2xl font-bold mb-4">Report Status PO</h1>
+                    <div class="p-8 text-center bg-red-50 border border-red-200 rounded-lg shadow-sm">
+                        <p class="text-red-600 font-semibold mb-1">⚠️ Gagal memuat data Report Status.</p>
+                        <p class="text-sm text-red-500 mb-4">Koneksi ke server bermasalah atau server sedang lambat merespon. Silakan coba lagi.</p>
+                        <button onclick="showReportStatus()" class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition">Coba Lagi</button>
+                    </div>`);
+                    return;
                 }
 
                 // Parse tanggal format "DD/MM/YYYY HH:MM:SS" dari kolom A
@@ -17219,10 +17258,23 @@
 
                 // ── Daftarkan LiveSync sekali saja (aman dipanggil berkali-kali) ──
                 LiveSync.register('Report Status', {
+                    // [FIX BUG] Sebelumnya tiap fetch di sini dibungkus .catch(() => [])
+                    // sendiri-sendiri, sehingga kalau salah satu gagal (timeout, GAS
+                    // cold-start, jaringan sempat putus di tengah polling 12 detik),
+                    // hasilnya dianggap SUKSES dengan data kosong ([]). LiveSync lalu
+                    // membandingkan hash-nya, melihat "ada perubahan" (padahal cuma
+                    // hasil gagal-fetch), lalu menimpa cache getPOData/getReturData
+                    // dengan array kosong dan me-render ulang halaman → tabel Report
+                    // Status terlihat "hilang" mendadak padahal datanya sebenarnya ada.
+                    // Fix: biarkan error asli menyebar (tanpa .catch di sini) supaya
+                    // check() reject dan ditangkap oleh try/catch LiveSync._tick, yang
+                    // otomatis melewati siklus polling itu TANPA menyentuh cache atau
+                    // me-render ulang — persis pola yang sudah dipakai LiveSync Route &
+                    // Create Task.
                     check: async () => {
                         const [poFresh, retuFresh] = await Promise.all([
-                            fetchWithTimeout(API_URLS.reportStatus + '?action=getPOData').then(r => r.json()).catch(() => []),
-                            fetchWithTimeout(API_URLS.purchaseOrder + '?action=getReturData').then(r => r.json()).catch(() => []),
+                            fetchWithTimeout(API_URLS.reportStatus + '?action=getPOData').then(r => r.json()),
+                            fetchWithTimeout(API_URLS.purchaseOrder + '?action=getReturData').then(r => r.json()),
                         ]);
                         return { poFresh, retuFresh };
                     },
@@ -18440,7 +18492,7 @@
             sel.innerHTML = `<option value="">— Memuat daftar... —</option>`;
             if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
             try {
-                const res = await fetch(RECEIVE_GAS_URL + '?action=listDeliveryOrderPDF', { redirect: 'follow' });
+                const res = await fetchWithTimeout(RECEIVE_GAS_URL + '?action=listDeliveryOrderPDF', { redirect: 'follow' }, 30000);
                 const result = await res.json();
                 const files = (result && result.success && Array.isArray(result.files)) ? result.files : [];
 
@@ -18495,7 +18547,7 @@
             }
 
             try {
-                const res = await fetch(RECEIVE_GAS_URL + '?action=getDeliveryOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' });
+                const res = await fetchWithRetry(RECEIVE_GAS_URL + '?action=getDeliveryOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const result = await res.json();
 
                 if (!result || !result.success || !result.base64) {
