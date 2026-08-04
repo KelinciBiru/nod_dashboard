@@ -1208,7 +1208,7 @@
             try {
                 const deviceInfo = _getDeviceLabel();
                 const location = await _getLoginLocation();
-                const res = await fetch(DASHBOARD_LOG_GAS_URL, {
+                const res = await fetchWithTimeout(DASHBOARD_LOG_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -1246,7 +1246,7 @@
                 const activities = JSON.parse(sessionStorage.getItem('userActivityLog') || '[]');
 
                 if (rowIndex) {
-                    fetch(DASHBOARD_LOG_GAS_URL, {
+                    fetchWithTimeout(DASHBOARD_LOG_GAS_URL, {
                         method: 'POST',
                         redirect: 'follow',
                         headers: { 'Content-Type': 'text/plain' },
@@ -1279,7 +1279,7 @@
             error.classList.add('hidden');
 
             try {
-                const res = await fetch(PO_GAS_URL, {
+                const res = await fetchWithTimeout(PO_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -5441,7 +5441,7 @@
                 // [FIX 12] submitFormService sekarang dicatat ke PO_Data / Retur_Data,
                 // sheet yang dikelola oleh backend PO_GAS (Code.gs) yang sama dengan
                 // Form PO/Form RO — bukan lagi backend Service Center terpisah.
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -5683,7 +5683,7 @@
                     items,
                     fileData, fileName, fileType: 'application/pdf',
                 };
-                const response = await fetch(API_URLS.serviceCenter, {
+                const response = await fetchWithTimeout(API_URLS.serviceCenter, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -7067,7 +7067,7 @@
         async function _sendDriverLocation(driver, lat, lng, accuracy) {
             const roundedAccuracy = (typeof accuracy === 'number' ? Math.round(accuracy) : '');
 
-            const gasPromise = fetch(DELIVERY_GAS_URL, {
+            const gasPromise = fetchWithTimeout(DELIVERY_GAS_URL, {
                 method: 'POST',
                 redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
@@ -7092,7 +7092,7 @@
         }
 
         async function _clearDriverLocation(driver) {
-            const gasPromise = fetch(DELIVERY_GAS_URL, {
+            const gasPromise = fetchWithTimeout(DELIVERY_GAS_URL, {
                 method: 'POST',
                 redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
@@ -7645,7 +7645,7 @@
             selectEl.disabled = true;
             liveSyncNoteMutation();
             try {
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -7699,7 +7699,7 @@
             inputEl.disabled = true;
             liveSyncNoteMutation();
             try {
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -7753,7 +7753,11 @@
 
             LiveSync.register('Create Task', {
                 check: async () => {
-                    const r = await fetch(DELIVERY_GAS_URL + '?action=getCreateTaskData', { redirect: 'follow' });
+                    // [FIX BUG "Unexpected Token"] Sebelumnya raw fetch tanpa timeout/retry —
+                    // kalau GAS lagi sibuk & balas HTML, LiveSync gagal terus tiap 12 detik.
+                    // Sekarang pakai fetchWithRetry (retry sekali) supaya gangguan transien
+                    // tidak langsung bikin siklus polling ini gagal.
+                    const r = await fetchWithRetry(DELIVERY_GAS_URL + '?action=getCreateTaskData', { redirect: 'follow' }, 20000);
                     return await r.json();
                 },
                 onChange: async (freshRaw) => { await showTeamDeliveryCreateTask(freshRaw); }
@@ -7776,8 +7780,12 @@
             }
 
             try {
+                // [FIX BUG "Unexpected Token"] Sama seperti di atas — ganti raw fetchWithTimeout()
+                // ke fetchWithRetry supaya kegagalan pertama (GAS sibuk/timeout/kena
+                // limit eksekusi bersamaan) otomatis dicoba ulang sekali sebelum
+                // benar-benar menampilkan pesan "Gagal memuat data Create Task".
                 const [raw, driverListRaw] = await Promise.all([
-                    _preFetchedRaw || fetch(DELIVERY_GAS_URL + '?action=getCreateTaskData', { redirect: 'follow' }).then(r => r.json()),
+                    _preFetchedRaw || fetchWithRetry(DELIVERY_GAS_URL + '?action=getCreateTaskData', { redirect: 'follow' }, 20000).then(r => r.json()),
                     cachedFetch(DELIVERY_GAS_URL + '?action=getDriverList', 'getDriverList')
                 ]);
 
@@ -8710,7 +8718,7 @@
             const jamBerangkat = getJamWIB();
 
             try {
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -8840,7 +8848,7 @@
                     }
                     fotoPayloadList.push(fotoPayload);
                 }
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -8934,7 +8942,7 @@
             if (btn) { btn.disabled = true; }
 
             try {
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -9028,7 +9036,7 @@
             const jamBerangkat = getJamWIB();
 
             try {
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -9166,7 +9174,7 @@
                     fotoPayloadList.push(fotoPayload);
                 }
 
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -9259,7 +9267,7 @@
             if (btn) { btn.disabled = true; }
 
             try {
-                const res = await fetch(DELIVERY_GAS_URL, {
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -9441,7 +9449,7 @@
                 }
             }
             try {
-                const raw = await fetch(DELIVERY_GAS_URL + '?action=getDriverLocations', { redirect: 'follow' }).then(r => r.json());
+                const raw = await fetchWithTimeout(DELIVERY_GAS_URL + '?action=getDriverLocations', { redirect: 'follow' }).then(r => r.json());
                 if (raw && raw.error) throw new Error(raw.error);
                 return Array.isArray(raw) ? raw : (raw.data || []);
             } catch (e) {
@@ -9655,7 +9663,7 @@
                 // berstatus On-Delivery/On Delivery saat ini.
                 const [rows, planRaw] = await Promise.all([
                     _fetchAllDriverLocations(),
-                    fetch(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' }).then(r => r.json()).catch(() => null)
+                    fetchWithTimeout(DELIVERY_GAS_URL + '?action=getPlanDriver', { redirect: 'follow' }).then(r => r.json()).catch(() => null)
                 ]);
                 _poolDriverLastRawLocations = rows; // [ADDON — DRIVER ONLINE LIST & HISTORY] dipakai ulang oleh _refreshPoolDriverList
 
@@ -9822,7 +9830,7 @@
             _clearPoolDriverHistory();
 
             try {
-                const res = await fetch(DELIVERY_GAS_URL + '?action=getDriverLocationHistory&driver=' + encodeURIComponent(driver) + '&date=' + encodeURIComponent(date), { redirect: 'follow' }).then(r => r.json());
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL + '?action=getDriverLocationHistory&driver=' + encodeURIComponent(driver) + '&date=' + encodeURIComponent(date), { redirect: 'follow' }).then(r => r.json());
                 if (!res || res.success === false) throw new Error(res && res.message ? res.message : 'Gagal memuat riwayat.');
 
                 const points = (res.points || []).filter(p => !isNaN(parseFloat(p[0])) && !isNaN(parseFloat(p[1])));
@@ -10160,7 +10168,7 @@
             const contentArea = document.getElementById('content-area');
 
             try {
-                const res = await fetch(DELIVERY_GAS_URL + '?action=getDeliveryLogToday', { redirect: 'follow' });
+                const res = await fetchWithTimeout(DELIVERY_GAS_URL + '?action=getDeliveryLogToday', { redirect: 'follow' });
                 const raw = await res.json();
                 const data = Array.isArray(raw) ? raw : [];
                 const rows = data.slice(1).filter(row => row[1] !== '' && row[1] != null);
@@ -10248,7 +10256,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.stockMaster, { redirect: 'follow' });
+                const response = await fetchWithTimeout(API_URLS.stockMaster, { redirect: 'follow' });
                 const data = await response.json();
                 const rows = data.slice(3);
                 const HIDDEN_KEYWORDS = ["Descaling Kit", "Sleeve Box"];
@@ -10309,7 +10317,7 @@
             setLoading();
             try {
                 if (!_catalogueData) {
-                    const response = await fetch(API_URLS.catalogue + '?action=getCatalogue', { redirect: 'follow' });
+                    const response = await fetchWithTimeout(API_URLS.catalogue + '?action=getCatalogue', { redirect: 'follow' });
                     const data = await response.json();
                     const rows = data.slice(1); // lewati baris header
 
@@ -11004,7 +11012,7 @@
                 submitBtn.textContent = '⏳ Menyimpan...';
 
                 try {
-                    const res = await fetch(CATALOGUE_GAS_URL, {
+                    const res = await fetchWithTimeout(CATALOGUE_GAS_URL, {
                         method: 'POST',
                         redirect: 'follow',
                         headers: { 'Content-Type': 'text/plain' },
@@ -11044,7 +11052,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.reportInventory, { redirect: 'follow' });
+                const response = await fetchWithTimeout(API_URLS.reportInventory, { redirect: 'follow' });
                 const data = await response.json();
 
                 let tableMingguan = `
@@ -11132,7 +11140,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.planTask, { redirect: 'follow' });
+                const response = await fetchWithTimeout(API_URLS.planTask, { redirect: 'follow' });
                 const data = await response.json();
                 const taskData = data.slice(1).filter(row =>
                     row[0] && !row[0].toString().includes('Tidak ada tugas aktif') && row[0] !== ''
@@ -11248,7 +11256,7 @@
             setLoading('Memuat data KPI...');
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.reportKPI, { redirect: 'follow' });
+                const response = await fetchWithTimeout(API_URLS.reportKPI, { redirect: 'follow' });
                 const data = await response.json();
 
                 function renderTable(title, startRow, endRow, colStart, colEnd) {
@@ -11331,7 +11339,7 @@
             setLoading();
             const contentArea = document.getElementById('content-area');
             try {
-                const response = await fetch(API_URLS.reportMaintenance, { redirect: 'follow' });
+                const response = await fetchWithTimeout(API_URLS.reportMaintenance, { redirect: 'follow' });
                 const data = await response.json();
 
                 function createTable(title, headerRow, bodyRows) {
@@ -11778,7 +11786,7 @@
         async function getOutletSourceData() {
             if (_outletSourceCache) return _outletSourceCache;
             try {
-                const res = await fetch(PO_GAS_URL + '?action=getOutletSourceData', { redirect: 'follow' });
+                const res = await fetchWithTimeout(PO_GAS_URL + '?action=getOutletSourceData', { redirect: 'follow' });
                 const data = await res.json();
                 _outletSourceCache = Array.isArray(data)
                     ? data.filter(Boolean).map(d => ({
@@ -11961,7 +11969,7 @@
 
             try {
                 // 1. Ambil metadata header dari sheet PO_Data (lebih akurat daripada hasil ekstraksi PDF)
-                const poDataRes = await fetch(API_URLS.purchaseOrder + '?action=getPOData', { redirect: 'follow' });
+                const poDataRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getPOData', { redirect: 'follow' });
                 const poRows = await poDataRes.json();
                 const row = Array.isArray(poRows) ? poRows.slice(1).find(r => String(r[1] || '').trim() === noPO) : null;
 
@@ -12102,7 +12110,7 @@
                     category: categoryEl.value,
                     fileData, fileName, fileType: 'application/pdf',
                 };
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST', redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(payload)
@@ -12206,7 +12214,7 @@
                     fileName,
                     fileType: 'application/pdf',
                 };
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -12575,7 +12583,7 @@
 
             try {
                 // 1. Ambil metadata header dari sheet Retur_Data
-                const roDataRes = await fetch(API_URLS.purchaseOrder + '?action=getReturData', { redirect: 'follow' });
+                const roDataRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getReturData', { redirect: 'follow' });
                 const roRows = await roDataRes.json();
                 const row = Array.isArray(roRows) ? roRows.slice(1).find(r => String(r[1] || '').trim() === noRO) : null;
 
@@ -12701,7 +12709,7 @@
                     category: categoryEl.value,
                     fileData, fileName, fileType: 'application/pdf',
                 };
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST', redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(payload)
@@ -12790,7 +12798,7 @@
                     targetSheet: 'Retur_Data',
                     poPrefix: 'Retur-',
                 };
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -13682,7 +13690,7 @@
             const alamatEl = document.getElementById('proc-alamat');
             if (!noPO || (!phoneEl && !alamatEl)) return;
             try {
-                const res = await fetch(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                const res = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
                 const data = await res.json();
                 // ── GUARD RACE CONDITION ──
                 // Kalau selagi fetch berlangsung user sudah ganti pilihan No. PO di
@@ -15104,7 +15112,7 @@
             if (!phoneDO || !alamatFromServer) {
                 try {
                     console.log('[DO Contact] Mengambil No. Telepon & Alamat untuk No. PO:', noPO);
-                    const phoneRes = await fetch(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                    const phoneRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
                     const phoneData = await phoneRes.json();
                     console.log('[DO Contact] Response dari GAS:', phoneData);
                     if (phoneData && phoneData.success) {
@@ -15344,7 +15352,7 @@
                 // Ambil PDF sebagai base64 (tanpa prefix data URI)
                 const pdfBase64 = doc.output('datauristring').split(',')[1];
 
-                const response = await fetch(PO_GAS_URL, {
+                const response = await fetchWithTimeout(PO_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -15624,7 +15632,7 @@
         async function getSourceItems() {
             if (_sourceItemsCache) return _sourceItemsCache;
             try {
-                const res = await fetch(PO_GAS_URL + '?action=getSourceItems', { redirect: 'follow' });
+                const res = await fetchWithTimeout(PO_GAS_URL + '?action=getSourceItems', { redirect: 'follow' });
                 const data = await res.json();
                 _sourceItemsCache = Array.isArray(data)
                     ? data.filter(Boolean).map(d => {
@@ -15662,7 +15670,7 @@
         async function getItemAutoFillData() {
             if (_itemAutoFillCache) return _itemAutoFillCache;
             try {
-                const res = await fetch(PO_GAS_URL + '?action=getItemAutoFillData', { redirect: 'follow' });
+                const res = await fetchWithTimeout(PO_GAS_URL + '?action=getItemAutoFillData', { redirect: 'follow' });
                 const data = await res.json();
                 _itemAutoFillCache = {
                     uomMap: (data && data.uomMap) || {},
@@ -16723,7 +16731,7 @@
             };
 
             try {
-                const response = await fetch(INBOUND_GAS_URL, {
+                const response = await fetchWithTimeout(INBOUND_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -17501,7 +17509,7 @@
             const contentArea = document.getElementById('content-area');
 
             try {
-                const result = await fetch(API_URLS.purchaseOrder + '?action=getPreOrderNeedApprovalData', {
+                const result = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getPreOrderNeedApprovalData', {
                     method: 'GET', redirect: 'follow'
                 }).then(r => r.json());
 
@@ -17611,7 +17619,7 @@
             }
 
             try {
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST',
                     redirect: 'follow',
                     body: JSON.stringify({ action: 'releasePOStatus', token: sessionToken, noPO }),
@@ -17654,7 +17662,7 @@
             }
 
             try {
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST',
                     redirect: 'follow',
                     body: JSON.stringify({ action: 'cancelPreOrderPO', token: sessionToken, noPO }),
@@ -17699,7 +17707,7 @@
             }
 
             try {
-                const response = await fetch(API_URLS.purchaseOrder, {
+                const response = await fetchWithTimeout(API_URLS.purchaseOrder, {
                     method: 'POST',
                     redirect: 'follow',
                     body: JSON.stringify({ action: 'rejectNeedApprovalPO', token: sessionToken, noPO }),
@@ -17827,7 +17835,7 @@
 
             const bodyEl = document.getElementById('delivery-log-detail-body');
             try {
-                const res = await fetch(DELIVERY_LOG_GAS_URL + '?action=getDeliveryLogDetail&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                const res = await fetchWithTimeout(DELIVERY_LOG_GAS_URL + '?action=getDeliveryLogDetail&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
                 const result = await res.json();
 
                 if (!result || result.success === false || !result.data) {
@@ -17898,7 +17906,7 @@
             btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>Menyimpan...';
 
             try {
-                const response = await fetch(API_URLS.reportStatus, {
+                const response = await fetchWithTimeout(API_URLS.reportStatus, {
                     method: 'POST',
                     redirect: 'follow',
                     body: JSON.stringify({ action: 'closePO', token: sessionToken, poNumber }),
@@ -18050,7 +18058,7 @@
                 if (btn) { btn.disabled = true; btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>Menyimpan...'; }
 
                 try {
-                    const response = await fetch(API_URLS.reportStatus, {
+                    const response = await fetchWithTimeout(API_URLS.reportStatus, {
                         method: 'POST',
                         redirect: 'follow',
                         body: JSON.stringify({ action: 'closePO', token: sessionToken, poNumber: noPO }),
@@ -18137,7 +18145,7 @@
             if (btn) { btn.disabled = true; btn.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span>Menyimpan...'; }
 
             try {
-                const response = await fetch(API_URLS.reportStatus, {
+                const response = await fetchWithTimeout(API_URLS.reportStatus, {
                     method: 'POST',
                     redirect: 'follow',
                     body: JSON.stringify({ action: 'closeRO', token: sessionToken, noRO }),
@@ -18306,7 +18314,7 @@
                 await uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc });
 
                 // ── 3) Catat data outbound ke sheet (Outbound_Log), seperti sebelumnya ──
-                const response = await fetch(WEB_APP_URL, {
+                const response = await fetchWithTimeout(WEB_APP_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain untuk avoid CORS preflight
@@ -19905,7 +19913,7 @@
             };
 
             try {
-                const response = await fetch(RECEIVE_GAS_URL, {
+                const response = await fetchWithTimeout(RECEIVE_GAS_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' },
@@ -20072,7 +20080,7 @@
             startApp();
 
             // 2) Validasi token ke server di belakang layar (tidak memblokir UI).
-            fetch(PO_GAS_URL, {
+            fetchWithTimeout(PO_GAS_URL, {
                 method: 'POST',
                 redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
