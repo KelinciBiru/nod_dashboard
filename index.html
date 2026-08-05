@@ -13883,9 +13883,42 @@
             }
         }
 
+        // =========================================================================
+        // [FIX] Tombol "Refresh Halaman" di menu Process PO — reset total tampilan.
+        // =========================================================================
+        // Kadang saat server (GAS) sedang sibuk/lambat, hasil proses sebelumnya
+        // (isian form, tabel item, draft autosave) bisa "tertinggal" di layar
+        // walau prosesnya sendiri sudah selesai/gagal. Tombol ini membersihkan
+        // semuanya dari nol:
+        //   1) Hapus draft autosave (Form PO/Process PO) supaya tidak otomatis
+        //      terisi lagi dengan data lama saat halaman di-render ulang.
+        //   2) Render ulang halaman Process PO dari awal (semua field kosong,
+        //      tabel kosong, lalu daftar No. PO Open & data sumber ditarik ulang
+        //      langsung dari server).
+        async function refreshProcessPOPage() {
+            const ok = await showConfirm(
+                'Refresh Halaman Process PO?',
+                'Semua isian & tabel yang belum diproses di halaman ini akan dikosongkan (termasuk draft tersimpan). Data yang sudah berhasil disimpan ke server TIDAK terpengaruh. Lanjutkan?'
+            );
+            if (!ok) return;
+
+            _clearDraft(DRAFT_KEYS.processPO);
+            await showProcessPO();
+            showAlert('success', 'Halaman Direfresh', 'Tampilan Process PO sudah dikosongkan/direset.');
+        }
+
         async function showProcessPO() {
             document.getElementById('content-area').innerHTML = `
-        <h1 class="text-2xl font-bold text-gray-700 mb-6">Proses PO Masuk</h1>
+        <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
+            <h1 class="text-2xl font-bold text-gray-700">Proses PO Masuk</h1>
+            <button id="btn-refresh-process-po" onclick="refreshProcessPOPage()" title="Reset halaman: bersihkan data/tampilan yang tertinggal"
+                class="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-semibold px-3 py-2 rounded-lg border border-gray-300 transition">
+                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Refresh Halaman
+            </button>
+        </div>
 
         <!-- Baris 1: Upload file + Tanggal Proses PO -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -18362,10 +18395,16 @@
                 items: items
             };
 
+            // [FIX TIMEOUT PROCESS PO] Dideklarasikan di luar try (bukan `const` di
+            // dalam try) supaya tetap bisa diakses dari blok `catch` di bawah kalau
+            // request simpan ke server timeout — PDF yang sudah terlanjur dibuat di
+            // step 1 tidak boleh hilang begitu saja hanya karena step 2 (simpan ke
+            // server) gagal/lambat.
+            let pdfBuild = null;
             try {
                 // ── 1) Bangun PDF berisi seluruh data Process PO (menggantikan tombol
                 //      "Delivery Order" yang sudah dihapus dari tampilan) ──
-                const pdfBuild = await _buildProcessPOPDF();
+                pdfBuild = await _buildProcessPOPDF();
                 if (!pdfBuild) {
                     // Validasi field PDF (Tanggal/No. PO/Crew Packing) gagal — alert sudah
                     // ditampilkan di dalam _buildProcessPOPDF, hentikan proses di sini.
@@ -18387,12 +18426,19 @@
                 uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc })
                     .catch(() => { /* sudah ditangani & ditampilkan di dalam fungsinya sendiri */ });
 
+                // [FIX TIMEOUT PROCESS PO] Timeout dinaikkan dari 30 → 45 detik.
+                // Payload simpanOutbound bisa berisi banyak item + trigger update
+                // status PO_Data di sisi GAS, jadi rawan lebih lambat dari submit
+                // biasa terutama saat GAS baru cold-start. 30 detik sering kurang
+                // dan bikin user "digagalkan" duluan padahal server sebenarnya
+                // masih memproses (dan PDF-nya sendiri sudah selesai dibuat sejak
+                // langkah 1 di atas).
                 const result = await fetchWriteWithRetry(WEB_APP_URL, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain untuk avoid CORS preflight
                     body: JSON.stringify(payload)
-                }, 30000);
+                }, 45000);
 
                 if (result.success) {
 
@@ -18455,7 +18501,30 @@
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
                 }
             } catch (err) {
-                showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
+                // [FIX TIMEOUT PROCESS PO] Sebelumnya kalau simpan ke server timeout
+                // (isGasTimeout), proses langsung berhenti di showAlert error saja —
+                // padahal PDF Delivery Order SUDAH SELESAI DIBUAT di step 1 (pdfBuild)
+                // sebelum request ke server ini dikirim. Akibatnya PDF yang sudah jadi
+                // itu terbuang begitu saja dan user tidak pernah dikasih kesempatan
+                // Simpan/Share, walau datanya kemungkinan besar tetap tersimpan di
+                // server (GAS biasanya tetap lanjut memproses walau koneksi client
+                // sudah menyerah duluan).
+                //
+                // Fix: khusus untuk timeout (bukan error lain seperti validasi/network
+                // total gagal), tetap tampilkan modal preview PDF supaya user bisa
+                // Simpan/Share PDF-nya sekarang juga — dengan pesan peringatan (bukan
+                // pesan sukses ✅) yang mengarahkan user untuk mengecek Report Status
+                // dulu sebelum mengirim ulang, supaya tidak dobel data.
+                if (err && err.isGasTimeout && pdfBuild) {
+                    showPdfPreviewModal(
+                        pdfBuild.doc.output('bloburl'),
+                        '⚠️ Server Lambat Merespon',
+                        `PDF sudah selesai dibuat & bisa langsung di-Share/Simpan. Data BISA JADI sudah tersimpan di server meski koneksi terputus — cek dulu status No. PO ${pdfBuild.noPO || ''} di Report Status sebelum kirim ulang, untuk menghindari data ganda.`,
+                        { blob: pdfBuild.doc.output('blob'), fileName: pdfBuild.fileName }
+                    );
+                } else {
+                    showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + (err?.message || err));
+                }
             } finally {
                 if (saveBtn) {
                     saveBtn.disabled = false;
