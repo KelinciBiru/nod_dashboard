@@ -20083,6 +20083,42 @@
                 items,
             };
 
+            // [FIX TIMEOUT RECEIVE PO] Item mismatch (❌) sudah bisa ditentukan dari
+            // tabel di browser SAJA, tidak butuh respons server sama sekali. Sebelumnya
+            // PDF mismatch baru dibangun DI DALAM blok `if (result.success)` — jadi
+            // kalau panggilan simpan ke server timeout duluan, proses langsung jatuh
+            // ke `catch` polos dan modal PDF tidak pernah sempat dibangun/ditampilkan,
+            // padahal semua data yang dibutuhkan untuk PDF-nya sudah lengkap sejak
+            // sebelum request dikirim. Fix: bangun PDF-nya DULUAN di sini (di luar
+            // try, sama pola dengan fix simpanOutboundFinal di Process PO), supaya
+            // kalau nanti request simpan ke server timeout, PDF fallback tetap bisa
+            // ditampilkan di blok catch.
+            const mismatchItemsForPdf = items
+                .filter(it => it.status === 'Tidak Sesuai')
+                .map(it => ({
+                    id: it.id,
+                    nama: it.namaBarang,
+                    qtyOutbound: it.qtyOutbound,
+                    qtyReceived: it.qtyReceived,
+                    uom: it.uom,
+                    description: it.description,
+                    remark: it.remark,
+                }));
+
+            let pdfBuild = null; // { doc, fileName } — null kalau tidak ada item mismatch
+            if (mismatchItemsForPdf.length > 0) {
+                try {
+                    pdfBuild = await buildReceivedPOMismatchPDF(
+                        { tglTerima, noPO, crewPacking, crewChecking, orderedBy, shipTo, shippingDate },
+                        mismatchItemsForPdf
+                    );
+                } catch (pdfErr) {
+                    console.warn('[Receive PO] Gagal membangun PDF mismatch di awal:', pdfErr.message);
+                    // pdfBuild tetap null — lanjut proses simpan seperti biasa, nanti
+                    // fallback pesan "PDF gagal dibuat" tetap ada di blok sukses.
+                }
+            }
+
             try {
                 const result = await fetchWriteWithRetry(RECEIVE_GAS_URL, {
                     method: 'POST',
@@ -20127,39 +20163,29 @@
                         ? `\nSemua item Sesuai — Status PO ${noPO} → ✅ Closed`
                         : `\nAda item Tidak Sesuai — Status PO ${noPO} tetap Done (belum Closed)`;
 
-                    // ── Item yang tidak sesuai (❌) dijadikan lampiran PDF "Received PO — Mismatch" ──
-                    const mismatchItemsForPdf = items
-                        .filter(it => it.status === 'Tidak Sesuai')
-                        .map(it => ({
-                            id: it.id,
-                            nama: it.namaBarang,
-                            qtyOutbound: it.qtyOutbound,
-                            qtyReceived: it.qtyReceived,
-                            uom: it.uom,
-                            description: it.description,
-                            remark: it.remark,
-                        }));
-
-                    if (mismatchItemsForPdf.length > 0) {
-                        // Ada ketidaksesuaian: buat PDF, simpan otomatis ke device, lalu tampilkan preview.
+                    // [FIX TIMEOUT RECEIVE PO] pdfBuild sudah dibangun DULUAN di atas
+                    // (sebelum request ke server), tidak perlu dibangun ulang di sini.
+                    if (pdfBuild) {
+                        // Ada ketidaksesuaian: PDF sudah siap, simpan otomatis ke device lalu tampilkan preview.
                         try {
-                            const { doc, fileName } = await buildReceivedPOMismatchPDF(
-                                { tglTerima, noPO, crewPacking, crewChecking, orderedBy, shipTo, shippingDate },
-                                mismatchItemsForPdf
-                            );
-                            doc.save(fileName); // simpan otomatis ke folder device (Downloads)
-                            const blobUrl = doc.output('bloburl');
+                            pdfBuild.doc.save(pdfBuild.fileName); // simpan otomatis ke folder device (Downloads)
+                            const blobUrl = pdfBuild.doc.output('bloburl');
                             showPdfPreviewModal(
                                 blobUrl,
                                 '✅ Receive Berhasil Disimpan',
-                                `${items.length} item tersimpan ke Received_Log · PDF "${fileName}" telah diunduh ke perangkat Anda.`
+                                `${items.length} item tersimpan ke Received_Log · PDF "${pdfBuild.fileName}" telah diunduh ke perangkat Anda.`
                             );
                         } catch (pdfErr) {
-                            // Data receive tetap tersimpan walau PDF gagal dibuat.
+                            // Data receive tetap tersimpan walau PDF gagal ditampilkan/disimpan.
                             showAlert('success', '✅ Berhasil Diterima!',
                                 `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}\n(PDF gagal dibuat: ${pdfErr.message})`
                             );
                         }
+                    } else if (mismatchItemsForPdf.length > 0) {
+                        // Ada ketidaksesuaian tapi pembuatan PDF di awal tadi sempat gagal.
+                        showAlert('success', '✅ Berhasil Diterima!',
+                            `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}\n(PDF gagal dibuat, silakan cek Report Status untuk detail item tidak sesuai.)`
+                        );
                     } else {
                         // Semua item sesuai — tidak perlu PDF mismatch.
                         showAlert('success', '✅ Berhasil Diterima!',
@@ -20179,7 +20205,23 @@
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
                 }
             } catch (err) {
-                showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
+                // [FIX TIMEOUT RECEIVE PO] Kalau khusus timeout (bukan error lain) DAN
+                // ada item mismatch yang PDF-nya sudah terlanjur selesai dibangun di
+                // awal (pdfBuild), jangan buang begitu saja — tampilkan tetap modal
+                // preview PDF-nya (dengan pesan peringatan, bukan sukses) supaya user
+                // bisa langsung Simpan/Share sekarang juga, sambil diarahkan cek
+                // Report Status dulu sebelum kirim ulang (data BISA JADI sudah
+                // tersimpan di server walau koneksi client sudah menyerah duluan).
+                if (err && err.isGasTimeout && pdfBuild) {
+                    try { pdfBuild.doc.save(pdfBuild.fileName); } catch (_) { /* simpan otomatis best-effort */ }
+                    showPdfPreviewModal(
+                        pdfBuild.doc.output('bloburl'),
+                        '⚠️ Server Lambat Merespon',
+                        `PDF item tidak sesuai sudah selesai dibuat & bisa langsung di-Share/Simpan. Data BISA JADI sudah tersimpan di server meski koneksi terputus — cek dulu status No. PO ${noPO} di Report Status sebelum kirim ulang, untuk menghindari data ganda.`
+                    );
+                } else {
+                    showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
+                }
             } finally {
                 if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Receive`; }
             }
