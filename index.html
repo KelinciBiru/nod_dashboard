@@ -2136,17 +2136,34 @@
                     shareBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Memproses...`;
                 }
                 const file = new File([_pdfPreviewShareBlob], _pdfPreviewShareFileName, { type: 'application/pdf' });
+                let shared = false;
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ files: [file] });
-                } else {
+                    try {
+                        await navigator.share({ files: [file] });
+                        shared = true;
+                    } catch (shareErr) {
+                        console.error('sharePdfPreviewToWhatsApp: navigator.share() gagal/ditolak:', shareErr);
+                        // [FIX] Sama seperti shareToWhatsApp(): AbortError dengan pesan
+                        // "Share failed" (bukan "canceled") adalah kegagalan ASLI, bukan
+                        // user membatalkan sendiri — sebelumnya ini diam-diam diabaikan
+                        // tanpa fallback sama sekali, membuat tombol terasa "tidak bisa".
+                        const msgLower = (shareErr && shareErr.message ? shareErr.message : '').toLowerCase();
+                        const isUserCancelled = shareErr && shareErr.name === 'AbortError' &&
+                            (msgLower.includes('cancel') || msgLower.includes('batal'));
+                        shared = isUserCancelled;
+                    }
+                }
+                if (!shared) {
+                    // Fallback WAJIB: baik karena browser tidak mendukung share file,
+                    // maupun karena share() gagal — PDF tetap diunduh + WhatsApp dibuka,
+                    // supaya user tetap bisa lampirkan manual, bukan diam tanpa apapun.
                     savePdfPreviewToDevice();
                     window.open('https://wa.me/', '_blank');
-                    showAlert('warning', 'Bagikan Manual', 'Perangkat/browser ini tidak mendukung share file langsung. PDF telah diunduh — silakan lampirkan manual di WhatsApp.');
+                    showAlert('warning', 'Bagikan Manual', 'PDF telah diunduh. Jika pop-up "Bagikan" tidak muncul otomatis, silakan lampirkan file ini secara manual di WhatsApp.');
                 }
             } catch (err) {
-                if (err && err.name !== 'AbortError') {
-                    showAlert('error', 'Gagal Membagikan', err.message || 'Tidak dapat membagikan file ke WhatsApp.');
-                }
+                console.error('sharePdfPreviewToWhatsApp gagal:', err);
+                showAlert('error', 'Gagal Membagikan', (err && err.message) || 'Tidak dapat membagikan file ke WhatsApp.');
             } finally {
                 if (shareBtn) { shareBtn.disabled = false; shareBtn.innerHTML = originalHTML; }
             }
@@ -20230,29 +20247,119 @@
         // =========================================================================
         // FITUR: SHARE TO WHATSAPP
         // =========================================================================
-        function shareToWhatsApp() {
+        // Guard anti dobel-panggil: mencegah tombol yang sempat aktif lagi
+        // (mis. akibat tap ganda/cepat) memicu navigator.share() kedua kalinya
+        // saat proses share pertama masih berjalan.
+        let _isSharingPlanTask = false;
+        // [FIX] Ditulis ulang sebagai async/await (sebelumnya rantai .then/.catch
+        // terpisah dari canvas.toBlob() yang berbasis callback) SUPAYA:
+        //   1) SEMUA error — termasuk yang lolos dari .then()/.catch() lama —
+        //      pasti tertangkap satu try/catch dan pasti melewati tombol reset
+        //      (finally), jadi tombol tidak pernah diam/"stuck" tanpa keterangan.
+        //   2) Ada fallback WAJIB: kalau navigator.share() tidak tersedia, ATAU
+        //      gagal/ditolak diam-diam oleh browser (mis. browser menganggap
+        //      "user gesture" sudah basi karena proses screenshot makan waktu,
+        //      atau kebijakan browser/OS menolak tanpa alasan jelas — ini pola
+        //      umum penyebab tombol "loading lalu balik normal tanpa apa-apa"),
+        //      gambar TETAP diunduh otomatis + user diberi tahu lewat popup,
+        //      bukan cuma diam. Sebelumnya kegagalan share() yang bukan
+        //      'AbortError' hanya menampilkan alert tanpa fallback unduh, jadi
+        //      kalau alert itu sendiri tidak sempat tampil, user benar-benar
+        //      tidak mendapat apapun.
+        //   3) console.error ditambahkan di setiap jalur gagal, supaya kalau
+        //      user lapor lagi, tinggal buka DevTools > Console untuk lihat
+        //      pesan error aslinya dari browser (nama & pesan exception).
+        async function shareToWhatsApp() {
+            if (_isSharingPlanTask) return;
             const captureArea = document.getElementById('captureArea');
             const btn = document.getElementById('shareBtn');
             const originalHTML = btn ? btn.innerHTML : '';
+            if (!captureArea) {
+                showAlert('error', 'Gagal Membagikan', 'Area konten Plan Task tidak ditemukan. Coba muat ulang menu ini.');
+                return;
+            }
+            _isSharingPlanTask = true;
             if (btn) {
                 btn.disabled = true;
                 btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Memproses...`;
             }
-            html2canvas(captureArea, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-                .then(canvas => {
-                    canvas.toBlob(blob => {
-                        if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
-                        const file = new File([blob], 'PlanTask.png', { type: 'image/png' });
-                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                            navigator.share({ files: [file] });
-                        } else {
-                            const link = document.createElement('a');
-                            link.download = 'PlanTask.png';
-                            link.href = canvas.toDataURL('image/png');
-                            link.click();
-                        }
-                    });
+            const resetBtn = () => { _isSharingPlanTask = false; if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; } };
+            // [FIX] Sebelumnya ignoreElements SAJA tidak cukup mencegah canvas
+            // "tainted" di html2canvas 1.4.1 — proses clone internalnya tetap
+            // menyentuh elemen <video> (maskot login, live kamera Scan QR/Barcode)
+            // sebelum filter ignoreElements berlaku, sehingga canvas.toBlob()
+            // bisa gagal diam-diam. Sekarang video-video itu DISEMBUNYIKAN
+            // (display:none) sungguhan dari DOM sebelum screenshot, dan
+            // dikembalikan lagi di finally — supaya video tidak pernah ikut
+            // di-clone sama sekali, bukan cuma "diabaikan saat render".
+            const hiddenVideos = Array.from(document.querySelectorAll('video'));
+            const prevVideoDisplay = hiddenVideos.map(v => v.style.display);
+            hiddenVideos.forEach(v => { v.style.display = 'none'; });
+            try {
+                const canvas = await html2canvas(captureArea, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    ignoreElements: (el) => el.tagName === 'VIDEO'
                 });
+
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                if (!blob) {
+                    throw new Error('Gagal membuat gambar dari data Plan Task (canvas kosong).');
+                }
+
+                const file = new File([blob], 'PlanTask.png', { type: 'image/png' });
+                let shared = false;
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({ files: [file] });
+                        shared = true;
+                    } catch (shareErr) {
+                        console.error('shareToWhatsApp: navigator.share() gagal/ditolak:', shareErr);
+                        // [FIX] SEBELUMNYA: setiap error bernama 'AbortError' otomatis
+                        // dianggap "user membatalkan sendiri" (shared = true) dan
+                        // fallback download DI-SKIP TOTAL — padahal Chrome/Android
+                        // juga memakai AbortError untuk kegagalan ASLI dengan pesan
+                        // seperti "Share failed" (BUKAN "Share canceled"/"cancelled").
+                        // Akibatnya tombol kelihatan "tidak bisa apa-apa": spinner
+                        // jalan, lalu diam, tanpa share dan tanpa fallback.
+                        // SEKARANG: hanya anggap "user cancel" (tidak perlu fallback)
+                        // kalau pesannya memang secara eksplisit menyebut cancel/batal.
+                        // Kegagalan lain (termasuk "Share failed") tetap lanjut ke
+                        // fallback download di bawah, supaya user tetap dapat gambarnya.
+                        const msgLower = (shareErr && shareErr.message ? shareErr.message : '').toLowerCase();
+                        const isUserCancelled = shareErr && shareErr.name === 'AbortError' &&
+                            (msgLower.includes('cancel') || msgLower.includes('batal'));
+                        if (isUserCancelled) {
+                            shared = true;
+                        }
+                    }
+                }
+
+                if (!shared) {
+                    // Fallback WAJIB: baik karena browser tidak mendukung
+                    // navigator.share sama sekali, maupun karena share() ditolak
+                    // diam-diam — gambar tetap diunduh supaya user bisa lampirkan
+                    // manual ke WhatsApp, daripada tidak mendapat apapun.
+                    const link = document.createElement('a');
+                    link.download = 'PlanTask.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    showAlert('warning', 'Bagikan Manual', 'Gambar Plan Task telah diunduh. Jika pop-up "Bagikan" tidak muncul otomatis, silakan lampirkan gambar ini secara manual di WhatsApp.');
+                }
+            } catch (err) {
+                console.error('shareToWhatsApp gagal:', err);
+                const msg = err && err.message ? err.message : 'terjadi kesalahan tak terduga';
+                if (/tainted/i.test(msg)) {
+                    showAlert('error', 'Gagal Membagikan', 'Gagal membuat gambar Plan Task karena ada elemen video/kamera aktif di halaman ini yang mengganggu proses screenshot. Tutup dulu fitur Scan Kamera/QR yang mungkin masih terbuka, lalu coba Share lagi.');
+                } else {
+                    showAlert('error', 'Gagal Membagikan', 'Gagal membagikan Plan Task: ' + msg + '. Coba lagi.');
+                }
+            } finally {
+                hiddenVideos.forEach((v, i) => { v.style.display = prevVideoDisplay[i]; });
+                resetBtn();
+            }
         }
         // Konfigurasi wajib untuk pdf.js
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
