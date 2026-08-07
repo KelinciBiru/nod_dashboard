@@ -152,7 +152,7 @@
     <!-- =====================================================================
          MODAL ALERT (mengganti browser alert)
     ====================================================================== -->
-    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/40 z-[99999] flex items-center justify-center p-4">
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/40 z-[999999] flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center transform transition-all">
             <div id="modal-icon" class="text-5xl mb-3"></div>
             <h3 id="modal-title" class="text-lg font-bold text-gray-800 mb-1"></h3>
@@ -165,7 +165,7 @@
     <!-- =====================================================================
          MODAL KONFIRMASI (mengganti browser confirm)
     ====================================================================== -->
-    <div id="confirm-overlay" class="hidden fixed inset-0 bg-black/40 z-[99999] flex items-center justify-center p-4">
+    <div id="confirm-overlay" class="hidden fixed inset-0 bg-black/40 z-[999999] flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
             <div class="text-5xl mb-3">⚠️</div>
             <h3 id="confirm-title" class="text-lg font-bold text-gray-800 mb-1"></h3>
@@ -2050,7 +2050,23 @@
             document.getElementById('modal-message').textContent = message;
             document.getElementById('modal-btn').className =
                 `w-full py-2 rounded-xl font-bold text-white transition ${colors[type] || colors.info}`;
-            document.getElementById('modal-overlay').classList.remove('hidden');
+            const overlay = document.getElementById('modal-overlay');
+            // [FIX] Pindahkan overlay ini ke posisi PALING TERAKHIR di <body>.
+            // Sebelumnya, showAlert() yang dipanggil SAAT modal lain (mis.
+            // #pdf-preview-overlay setelah tombol "Share WhatsApp" gagal/fallback)
+            // masih terbuka akan tetap tampil "hidden ter-remove" di DOM, TAPI
+            // karena #modal-overlay berada LEBIH AWAL di DOM daripada modal lain
+            // yang z-index-nya SAMA (z-[99999]), urutan render menang ke modal
+            // yang belakangan di DOM — sehingga alert ini ter-render DI BAWAH
+            // modal lain yang masih terbuka dan sama sekali tidak terlihat oleh
+            // user (persis kasus "modal Share to WhatsApp tidak pernah muncul":
+            // popup konfirmasi/peringatannya sebenarnya SUDAH muncul, hanya
+            // tersembunyi total di belakang modal preview PDF yang masih aktif).
+            // Dengan appendChild ke akhir <body> setiap kali showAlert()
+            // dipanggil, alert ini dipastikan SELALU jadi elemen paling akhir
+            // sehingga SELALU di atas modal apa pun yang sedang terbuka.
+            document.body.appendChild(overlay);
+            overlay.classList.remove('hidden');
         }
 
         function closeModal() {
@@ -2067,7 +2083,12 @@
             return new Promise(resolve => {
                 document.getElementById('confirm-title').textContent = title;
                 document.getElementById('confirm-message').textContent = message;
-                document.getElementById('confirm-overlay').classList.remove('hidden');
+                // [FIX] Sama seperti showAlert(): pastikan modal konfirmasi ini
+                // selalu jadi elemen paling akhir di <body> supaya selalu tampil
+                // di atas modal lain yang mungkin masih terbuka (z-index sama).
+                const confirmOverlay = document.getElementById('confirm-overlay');
+                document.body.appendChild(confirmOverlay);
+                confirmOverlay.classList.remove('hidden');
                 confirmResolve = (result) => {
                     document.getElementById('confirm-overlay').classList.add('hidden');
                     resolve(result);
@@ -2083,6 +2104,7 @@
         // "Simpan" dan "Share WhatsApp" akan ditampilkan di modal preview ini.
         let _pdfPreviewShareBlob = null;
         let _pdfPreviewShareFileName = 'Document.pdf';
+        let _pdfPreviewShareMime = 'application/pdf';
         function showPdfPreviewModal(blobUrl, title, subtitle, shareFile) {
             document.getElementById('pdf-preview-title').textContent = title || 'Preview PDF';
             document.getElementById('pdf-preview-subtitle').textContent = subtitle || '';
@@ -2092,6 +2114,15 @@
 
             _pdfPreviewShareBlob = (shareFile && shareFile.blob) ? shareFile.blob : null;
             _pdfPreviewShareFileName = (shareFile && shareFile.fileName) ? shareFile.fileName : 'Document.pdf';
+            // [FIX] mime bisa berbeda-beda (mis. 'image/png' untuk Plan Task,
+            // bukan cuma 'application/pdf'), supaya modal preview ini generik
+            // dan bisa dipakai ulang untuk hasil screenshot gambar juga.
+            _pdfPreviewShareMime = (shareFile && shareFile.mime) ? shareFile.mime : 'application/pdf';
+            // Tombol "Print" hanya relevan untuk PDF; untuk gambar disembunyikan
+            // supaya tidak membingungkan (print gambar lewat print dialog browser
+            // hasilnya kurang rapi dibanding PDF asli).
+            const printBtn = document.getElementById('pdf-preview-print-btn');
+            if (printBtn) printBtn.classList.toggle('hidden', _pdfPreviewShareMime !== 'application/pdf');
             const saveBtn = document.getElementById('pdf-preview-save-btn');
             const shareBtn = document.getElementById('pdf-preview-share-btn');
             const showActions = !!_pdfPreviewShareBlob;
@@ -2111,6 +2142,9 @@
             }
             _pdfPreviewShareBlob = null;
             _pdfPreviewShareFileName = 'Document.pdf';
+            _pdfPreviewShareMime = 'application/pdf';
+            const printBtn = document.getElementById('pdf-preview-print-btn');
+            if (printBtn) printBtn.classList.remove('hidden');
         }
         /** Tombol "Simpan" di modal preview PDF — simpan file ke perangkat/komputer lokal */
         function savePdfPreviewToDevice() {
@@ -2130,40 +2164,31 @@
             if (!_pdfPreviewShareBlob) return;
             const shareBtn = document.getElementById('pdf-preview-share-btn');
             const originalHTML = shareBtn ? shareBtn.innerHTML : '';
+            // Label buat pesan ke user: "PDF" atau "Gambar", sesuai jenis file
+            // yang sedang di-preview (mime disetel oleh showPdfPreviewModal()).
+            const isImage = (_pdfPreviewShareMime || '').startsWith('image/');
+            const itemLabel = isImage ? 'Gambar' : 'PDF';
             try {
                 if (shareBtn) {
                     shareBtn.disabled = true;
                     shareBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Memproses...`;
                 }
-                const file = new File([_pdfPreviewShareBlob], _pdfPreviewShareFileName, { type: 'application/pdf' });
-                let shared = false;
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    try {
-                        // [FIX] Sama seperti shareToWhatsApp() di Plan Task: batasi
-                        // navigator.share() 10 detik supaya tidak macet selamanya
-                        // kalau promise share() untuk file tidak pernah
-                        // resolve/reject di sebagian browser/WebView.
-                        await withTimeout(navigator.share({ files: [file] }), 10000, 'share timeout');
-                        shared = true;
-                    } catch (shareErr) {
-                        console.error('sharePdfPreviewToWhatsApp: navigator.share() gagal/ditolak:', shareErr);
-                        // [FIX] Sama seperti shareToWhatsApp(): AbortError dengan pesan
-                        // "Share failed" (bukan "canceled") adalah kegagalan ASLI, bukan
-                        // user membatalkan sendiri — sebelumnya ini diam-diam diabaikan
-                        // tanpa fallback sama sekali, membuat tombol terasa "tidak bisa".
-                        const msgLower = (shareErr && shareErr.message ? shareErr.message : '').toLowerCase();
-                        const isUserCancelled = shareErr && shareErr.name === 'AbortError' &&
-                            (msgLower.includes('cancel') || msgLower.includes('batal'));
-                        shared = isUserCancelled;
-                    }
-                }
+                // [FIX] Pakai helper terpusat _attemptNativeShareFile() (sama yang
+                // dipakai shareToWhatsApp()) — navigator.share() dipanggil SEGERA
+                // di sini, langsung dalam event handler klik tombol "Share
+                // WhatsApp" di modal preview ini, jadi masih dalam jendela "user
+                // activation" klik yang baru (fresh gesture), terlepas dari klik
+                // sebelumnya di menu asal sudah kedaluwarsa atau tidak.
+                const { shared, reason } = await _attemptNativeShareFile(_pdfPreviewShareBlob, _pdfPreviewShareFileName, _pdfPreviewShareMime);
                 if (!shared) {
                     // Fallback WAJIB: baik karena browser tidak mendukung share file,
-                    // maupun karena share() gagal — PDF tetap diunduh + WhatsApp dibuka,
-                    // supaya user tetap bisa lampirkan manual, bukan diam tanpa apapun.
+                    // maupun karena share() gagal — file tetap diunduh + WhatsApp
+                    // dibuka, supaya user tetap bisa lampirkan manual, bukan diam
+                    // tanpa apapun. Pesan sekarang spesifik sesuai alasan (lihat
+                    // _shareFallbackMessage), bukan cuma satu pesan generik.
                     savePdfPreviewToDevice();
                     window.open('https://wa.me/', '_blank');
-                    showAlert('warning', 'Bagikan Manual', 'PDF telah diunduh. Jika pop-up "Bagikan" tidak muncul otomatis, silakan lampirkan file ini secara manual di WhatsApp.');
+                    showAlert('warning', 'Bagikan Manual', _shareFallbackMessage(reason, itemLabel));
                 }
             } catch (err) {
                 console.error('sharePdfPreviewToWhatsApp gagal:', err);
@@ -11380,6 +11405,14 @@
                         </div>
                     </div>
                 </div>`;
+
+                // [FIX] Pre-generate gambar Plan Task DI LATAR BELAKANG segera
+                // setelah tabel selesai dirender (bukan menunggu tombol Share
+                // diklik). Delay kecil (setTimeout) supaya render tabel di layar
+                // selesai duluan sebelum html2canvas mulai bekerja. Ini yang
+                // memungkinkan tombol "Share to WhatsApp" langsung memicu popup
+                // pilihan aplikasi dalam SATU KLIK begitu user menekannya.
+                setTimeout(() => { warmPlanTaskShareImage(); }, 300);
             } catch (err) { setError(err.message); }
         }
 
@@ -20292,6 +20325,107 @@
                 })
             ]);
         }
+
+        // =========================================================================
+        // [FIX] HELPER TERPUSAT: percobaan native Web Share (popup "Pilih
+        // Aplikasi") — dipakai baik oleh shareToWhatsApp() (Plan Task) maupun
+        // sharePdfPreviewToWhatsApp() (modal preview PDF/gambar), supaya
+        // logikanya SATU tempat dan konsisten, plus ada diagnosa JELAS lewat
+        // console.error kalau popup itu memang tidak bisa muncul.
+        //
+        // PENTING — batasan platform (bukan bug yang bisa "diperbaiki" lewat
+        // kode apa pun): popup "Pilih Aplikasi" adalah UI bawaan
+        // browser/OS (Web Share API). Ada 3 syarat MUTLAK di luar kendali
+        // JavaScript:
+        //   1) Halaman harus dibuka lewat HTTPS (atau http://localhost) —
+        //      "secure context". Kalau dashboard diakses lewat http://
+        //      biasa (mis. IP lokal seperti http://192.168.x.x:port/ dari
+        //      server Python di menu PWA), browser MEMBLOKIR total
+        //      navigator.share/canShare, dan tidak ada cara lain untuk
+        //      memaksanya lewat kode.
+        //   2) Browser-nya harus mendukung Web Share API level 2 (share
+        //      file, bukan cuma teks/link). Ini sudah didukung luas di
+        //      Chrome/Edge Android & desktop (Win/Mac/ChromeOS) versi
+        //      baru, tapi TIDAK didukung di Firefox maupun sebagian
+        //      WebView Android lama.
+        //   3) Popup itu HARUS dipicu langsung dari gesture klik user
+        //      (bukan dari kode yang jalan sendiri/setTimeout) — begitu
+        //      ada proses berat (mis. html2canvas) SEBELUM share()
+        //      dipanggil, "jendela aktivasi" klik itu bisa habis dan
+        //      share() gagal diam-diam.
+        //
+        // Fungsi ini TIDAK bisa menghilangkan batasan #1 dan #2 (itu murni
+        // keputusan keamanan browser), TAPI meng-cover #3 sebaik mungkin
+        // dengan memanggil navigator.share() SESEGERA MUNGKIN begitu file
+        // siap — dan kalau tetap gagal, mengembalikan alasan spesifiknya
+        // (bukan cuma "gagal") supaya bisa didiagnosa dari Console (F12).
+        function _diagnoseWebShareSupport() {
+            return {
+                isSecureContext: (typeof window.isSecureContext === 'boolean') ? window.isSecureContext : null,
+                hasShare: typeof navigator.share === 'function',
+                hasCanShare: typeof navigator.canShare === 'function',
+            };
+        }
+
+        async function _attemptNativeShareFile(blob, fileName, mime) {
+            const diag = _diagnoseWebShareSupport();
+            if (diag.isSecureContext === false) {
+                console.error('[ShareWhatsApp] BLOCKED: halaman ini bukan "secure context" (bukan HTTPS/localhost). ' +
+                    'Browser memblokir Web Share API untuk file di luar HTTPS. URL saat ini:', location.href);
+                return { shared: false, reason: 'insecure-context' };
+            }
+            if (!diag.hasShare || !diag.hasCanShare) {
+                console.error('[ShareWhatsApp] BLOCKED: browser ini tidak mendukung Web Share API untuk file. ' +
+                    'navigator.share tersedia?', diag.hasShare, '| navigator.canShare tersedia?', diag.hasCanShare,
+                    '| User-Agent:', navigator.userAgent);
+                return { shared: false, reason: 'unsupported-browser' };
+            }
+            let file;
+            try {
+                file = new File([blob], fileName, { type: mime });
+            } catch (fileErr) {
+                console.error('[ShareWhatsApp] Gagal membuat objek File dari blob:', fileErr);
+                return { shared: false, reason: 'file-error' };
+            }
+            if (!navigator.canShare({ files: [file] })) {
+                console.error('[ShareWhatsApp] BLOCKED: navigator.canShare({files}) = false untuk mime "' + mime + '". ' +
+                    'Browser ini tidak mengizinkan berbagi jenis file ini.');
+                return { shared: false, reason: 'unsupported-filetype' };
+            }
+            try {
+                // Panggilan navigator.share() ini SENGAJA tidak didahului proses
+                // async lain apa pun di fungsi ini — dipanggil sesegera mungkin
+                // begitu dipanggil oleh caller, supaya masih dalam jendela
+                // aktivasi klik user.
+                await withTimeout(navigator.share({ files: [file] }), 10000, 'share timeout');
+                console.log('[ShareWhatsApp] navigator.share() sukses — popup "Pilih Aplikasi" seharusnya sudah muncul dan file terkirim.');
+                return { shared: true, reason: 'ok' };
+            } catch (shareErr) {
+                console.error('[ShareWhatsApp] navigator.share() gagal/ditolak:', shareErr && shareErr.name, shareErr && shareErr.message);
+                const msgLower = (shareErr && shareErr.message ? shareErr.message : '').toLowerCase();
+                const isUserCancelled = shareErr && shareErr.name === 'AbortError' &&
+                    (msgLower.includes('cancel') || msgLower.includes('batal'));
+                // Kalau user sendiri yang membatalkan dari popup (memang sempat
+                // muncul), anggap "selesai" — bukan kegagalan yang perlu fallback.
+                return { shared: isUserCancelled, reason: isUserCancelled ? 'user-cancelled' : 'share-failed' };
+            }
+        }
+
+        function _shareFallbackMessage(reason, itemLabel) {
+            const lower = (itemLabel || 'File').toLowerCase();
+            switch (reason) {
+                case 'insecure-context':
+                    return `Popup "Pilih Aplikasi" tidak bisa muncul karena dashboard ini dibuka tanpa HTTPS (browser memblokir fitur Bagikan file di luar HTTPS/localhost). ${itemLabel} tetap diunduh — lampirkan manual ke WhatsApp, atau minta admin mengakses dashboard lewat alamat HTTPS.`;
+                case 'unsupported-browser':
+                    return `Browser/aplikasi ini tidak mendukung popup "Bagikan" bawaan untuk file. ${itemLabel} tetap diunduh — lampirkan manual ke WhatsApp, atau coba lewat Chrome/Edge terbaru.`;
+                case 'unsupported-filetype':
+                    return `Browser ini tidak bisa membagikan jenis file ${lower} ini lewat popup "Bagikan". ${itemLabel} tetap diunduh — lampirkan manual ke WhatsApp.`;
+                case 'share-failed':
+                    return `Popup "Bagikan" gagal dibuka oleh browser (lihat Console untuk detail). ${itemLabel} tetap diunduh — lampirkan manual ke WhatsApp.`;
+                default:
+                    return `${itemLabel} telah diunduh. Jika pop-up "Bagikan" tidak muncul otomatis, silakan lampirkan ${lower} ini secara manual di WhatsApp.`;
+            }
+        }
         // [FIX] Ditulis ulang sebagai async/await (sebelumnya rantai .then/.catch
         // terpisah dari canvas.toBlob() yang berbasis callback) SUPAYA:
         //   1) SEMUA error — termasuk yang lolos dari .then()/.catch() lama —
@@ -20310,38 +20444,43 @@
         //   3) console.error ditambahkan di setiap jalur gagal, supaya kalau
         //      user lapor lagi, tinggal buka DevTools > Console untuk lihat
         //      pesan error aslinya dari browser (nama & pesan exception).
-        async function shareToWhatsApp() {
-            if (_isSharingPlanTask) return;
+        // [FIX] shareToWhatsApp() sekarang mengutamakan jalur SATU KLIK LANGSUNG
+        // ke popup pilihan aplikasi (native share sheet) — bukan lagi selalu
+        // lewat modal preview dulu. Caranya: gambar Plan Task di-generate DI
+        // LATAR BELAKANG (warmPlanTaskShareImage()) begitu halaman Plan Task
+        // selesai dimuat, disimpan di cache. Saat tombol "Share to WhatsApp"
+        // diklik, kalau cache masih segar, kode langsung membuat File dari
+        // cache lalu memanggil navigator.share() SAAT ITU JUGA — tanpa proses
+        // berat (html2canvas) di antara klik dan share(), sehingga masih di
+        // dalam jendela waktu "user activation" browser dan popup share
+        // benar-benar muncul dalam satu klik.
+        //
+        // PENTING (batasan platform, bukan bug): begitu popup itu muncul,
+        // TETAP harus user yang memilih WhatsApp dari daftar aplikasi — web
+        // browser TIDAK diizinkan (dan sengaja dilarang oleh spesifikasi Web
+        // Share API demi keamanan) langsung mendorong file ke satu aplikasi
+        // tertentu tanpa persetujuan/pilihan user. Kalau ini dilewati, artinya
+        // sembarang website bisa diam-diam "menembak" file ke aplikasi apa pun
+        // di perangkat user tanpa izin — itulah alasan popup pilihan ini
+        // sengaja tidak bisa dihilangkan oleh kode apa pun, di semua browser.
+        // Begitu WhatsApp dipilih di popup itu, gambar sudah otomatis
+        // terlampir dan langsung masuk ke aplikasi WhatsApp siap kirim.
+        //
+        // Kalau cache belum siap (mis. baru pertama kali buka Plan Task dan
+        // proses warm belum selesai, atau warm gagal), kode fallback ke jalur
+        // lama: generate gambar dulu (ada jeda) → tampilkan modal preview →
+        // klik "Share WhatsApp" di modal itu (klik BARU = gesture segar lagi).
+        let _planTaskShareCache = { blob: null, generatedAt: 0 };
+        let _planTaskShareWarmPromise = null;
+        const PLAN_TASK_SHARE_CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 5 menit
+
+        async function buildPlanTaskShareBlob() {
             const captureArea = document.getElementById('captureArea');
-            const btn = document.getElementById('shareBtn');
-            const originalHTML = btn ? btn.innerHTML : '';
-            if (!captureArea) {
-                showAlert('error', 'Gagal Membagikan', 'Area konten Plan Task tidak ditemukan. Coba muat ulang menu ini.');
-                return;
-            }
-            _isSharingPlanTask = true;
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Memproses...`;
-            }
-            const resetBtn = () => { _isSharingPlanTask = false; if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; } };
-            // [FIX] Sebelumnya ignoreElements SAJA tidak cukup mencegah canvas
-            // "tainted" di html2canvas 1.4.1 — proses clone internalnya tetap
-            // menyentuh elemen <video> (maskot login, live kamera Scan QR/Barcode)
-            // sebelum filter ignoreElements berlaku, sehingga canvas.toBlob()
-            // bisa gagal diam-diam. Sekarang video-video itu DISEMBUNYIKAN
-            // (display:none) sungguhan dari DOM sebelum screenshot, dan
-            // dikembalikan lagi di finally — supaya video tidak pernah ikut
-            // di-clone sama sekali, bukan cuma "diabaikan saat render".
+            if (!captureArea) throw new Error('Area konten Plan Task tidak ditemukan.');
             const hiddenVideos = Array.from(document.querySelectorAll('video'));
             const prevVideoDisplay = hiddenVideos.map(v => v.style.display);
             hiddenVideos.forEach(v => { v.style.display = 'none'; });
             try {
-                // [FIX] html2canvas dibatasi 20 detik — sebelumnya tanpa batas
-                // waktu sama sekali, jadi kalau proses screenshot ikut macet
-                // (mis. video mascot yang berat di DOM ikut memperlambat proses
-                // clone dokumen internal html2canvas), tombol "Memproses..."
-                // bisa nyangkut selamanya tanpa hasil apapun.
                 const canvas = await withTimeout(
                     html2canvas(captureArea, {
                         scale: 2,
@@ -20352,57 +20491,79 @@
                     20000,
                     'html2canvas timeout'
                 );
-
                 const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-                if (!blob) {
-                    throw new Error('Gagal membuat gambar dari data Plan Task (canvas kosong).');
-                }
+                if (!blob) throw new Error('Gagal membuat gambar dari data Plan Task (canvas kosong).');
+                return blob;
+            } finally {
+                hiddenVideos.forEach((v, i) => { v.style.display = prevVideoDisplay[i]; });
+            }
+        }
 
-                const file = new File([blob], 'PlanTask.png', { type: 'image/png' });
-                let shared = false;
+        // Dipanggil diam-diam (tanpa mengubah tampilan tombol) begitu halaman
+        // Plan Task selesai dirender, supaya saat user benar-benar klik
+        // "Share to WhatsApp", gambar sudah siap di cache dan share() bisa
+        // langsung dipanggil dalam satu klik.
+        function warmPlanTaskShareImage() {
+            _planTaskShareWarmPromise = buildPlanTaskShareBlob()
+                .then(blob => {
+                    _planTaskShareCache = { blob, generatedAt: Date.now() };
+                    return blob;
+                })
+                .catch(err => {
+                    console.error('warmPlanTaskShareImage: gagal pre-generate gambar (akan dicoba ulang saat tombol Share diklik):', err);
+                    _planTaskShareCache = { blob: null, generatedAt: 0 };
+                    return null;
+                });
+            return _planTaskShareWarmPromise;
+        }
 
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    try {
-                        // [FIX] navigator.share() dibatasi 10 detik — di sebagian
-                        // browser/WebView, promise share() untuk file kadang tidak
-                        // pernah resolve/reject sama sekali (hang tanpa batas),
-                        // sehingga tanpa timeout ini popup share tidak akan pernah
-                        // muncul dan tombol macet loading selamanya.
-                        await withTimeout(navigator.share({ files: [file] }), 10000, 'share timeout');
-                        shared = true;
-                    } catch (shareErr) {
-                        console.error('shareToWhatsApp: navigator.share() gagal/ditolak:', shareErr);
-                        // [FIX] SEBELUMNYA: setiap error bernama 'AbortError' otomatis
-                        // dianggap "user membatalkan sendiri" (shared = true) dan
-                        // fallback download DI-SKIP TOTAL — padahal Chrome/Android
-                        // juga memakai AbortError untuk kegagalan ASLI dengan pesan
-                        // seperti "Share failed" (BUKAN "Share canceled"/"cancelled").
-                        // Akibatnya tombol kelihatan "tidak bisa apa-apa": spinner
-                        // jalan, lalu diam, tanpa share dan tanpa fallback.
-                        // SEKARANG: hanya anggap "user cancel" (tidak perlu fallback)
-                        // kalau pesannya memang secara eksplisit menyebut cancel/batal.
-                        // Kegagalan lain (termasuk "Share failed") tetap lanjut ke
-                        // fallback download di bawah, supaya user tetap dapat gambarnya.
-                        const msgLower = (shareErr && shareErr.message ? shareErr.message : '').toLowerCase();
-                        const isUserCancelled = shareErr && shareErr.name === 'AbortError' &&
-                            (msgLower.includes('cancel') || msgLower.includes('batal'));
-                        if (isUserCancelled) {
-                            shared = true;
-                        }
-                    }
-                }
+        async function shareToWhatsApp() {
+            if (_isSharingPlanTask) return;
+            const btn = document.getElementById('shareBtn');
+            const originalHTML = btn ? btn.innerHTML : '';
+            if (!document.getElementById('captureArea')) {
+                showAlert('error', 'Gagal Membagikan', 'Area konten Plan Task tidak ditemukan. Coba muat ulang menu ini.');
+                return;
+            }
+            _isSharingPlanTask = true;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Memproses...`;
+            }
+            const resetBtn = () => { _isSharingPlanTask = false; if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; } };
 
-                if (!shared) {
-                    // Fallback WAJIB: baik karena browser tidak mendukung
-                    // navigator.share sama sekali, maupun karena share() ditolak
-                    // diam-diam — gambar tetap diunduh supaya user bisa lampirkan
-                    // manual ke WhatsApp, daripada tidak mendapat apapun.
-                    const link = document.createElement('a');
-                    link.download = 'PlanTask.png';
-                    link.href = canvas.toDataURL('image/png');
-                    link.click();
-                    showAlert('warning', 'Bagikan Manual', 'Gambar Plan Task telah diunduh. Jika pop-up "Bagikan" tidak muncul otomatis, silakan lampirkan gambar ini secara manual di WhatsApp.');
-                }
+            const cacheFresh = _planTaskShareCache.blob &&
+                (Date.now() - _planTaskShareCache.generatedAt) < PLAN_TASK_SHARE_CACHE_MAX_AGE_MS;
+
+            // [FIX] SATU jalur untuk KEDUA kasus (cache siap ATAU belum):
+            // begitu blob (dari cache, atau baru selesai di-generate) siap,
+            // LANGSUNG coba native share() di klik yang SAMA — tidak lagi
+            // menunggu klik KEDUA lewat modal preview. Sebelumnya, kalau
+            // cache belum siap (mis. pertama kali buka Plan Task), kode
+            // langsung lompat ke modal preview TANPA sempat mencoba
+            // navigator.share() sama sekali, sehingga popup "Pilih Aplikasi"
+            // baru punya kesempatan muncul pada klik KEDUA (tombol "Share
+            // WhatsApp" di dalam modal) — banyak user berhenti di situ dan
+            // menyimpulkan popup itu "tidak pernah muncul".
+            try {
+                const blob = cacheFresh ? _planTaskShareCache.blob : await buildPlanTaskShareBlob();
+                _planTaskShareCache = { blob, generatedAt: Date.now() };
+
+                const { shared, reason } = await _attemptNativeShareFile(blob, 'PlanTask.png', 'image/png');
+                if (shared) { resetBtn(); return; }
+
+                // Native share tidak berhasil (tidak didukung/gagal/insecure
+                // context) → tetap tampilkan modal preview sebagai jalur kedua
+                // (tombol "Share WhatsApp" di modal ini akan mencoba lagi
+                // dengan gesture klik yang baru) + Simpan manual, plus alasan
+                // spesifik ditampilkan sebagai subtitle modal.
+                const blobUrl = URL.createObjectURL(blob);
+                showPdfPreviewModal(
+                    blobUrl,
+                    'Preview Plan Task',
+                    _shareFallbackMessage(reason, 'Gambar'),
+                    { blob, fileName: 'PlanTask.png', mime: 'image/png' }
+                );
             } catch (err) {
                 console.error('shareToWhatsApp gagal:', err);
                 const msg = err && err.message ? err.message : 'terjadi kesalahan tak terduga';
@@ -20414,7 +20575,6 @@
                     showAlert('error', 'Gagal Membagikan', 'Gagal membagikan Plan Task: ' + msg + '. Coba lagi.');
                 }
             } finally {
-                hiddenVideos.forEach((v, i) => { v.style.display = prevVideoDisplay[i]; });
                 resetBtn();
             }
         }
