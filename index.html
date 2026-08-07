@@ -2139,7 +2139,11 @@
                 let shared = false;
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
-                        await navigator.share({ files: [file] });
+                        // [FIX] Sama seperti shareToWhatsApp() di Plan Task: batasi
+                        // navigator.share() 10 detik supaya tidak macet selamanya
+                        // kalau promise share() untuk file tidak pernah
+                        // resolve/reject di sebagian browser/WebView.
+                        await withTimeout(navigator.share({ files: [file] }), 10000, 'share timeout');
                         shared = true;
                     } catch (shareErr) {
                         console.error('sharePdfPreviewToWhatsApp: navigator.share() gagal/ditolak:', shareErr);
@@ -8138,8 +8142,11 @@
                         const statusResume = String(r[5] || '').trim();
                         const driverResume = String(r[9] || '').trim();
                         if (!driverResume || driverResume.toLowerCase() !== currentDriverName.toLowerCase()) return;
-                        const isROResume = noPOResume.startsWith('Retur-')
-                            || statusResume === 'Ready To PickUp' || statusResume === 'On Delivery';
+                        // [FIX 30] Sama seperti isRO di _buildRouteCard — tidak lagi
+                        // dicek dari prefix "Retur-", karena tiket "Retur-Service-..."
+                        // (Return) sebenarnya PO_Data/alur PO, bukan RO. Status saja
+                        // sudah cukup andal sebagai sinyal (lihat catatan di _buildRouteCard).
+                        const isROResume = statusResume === 'Ready To PickUp' || statusResume === 'On Delivery';
                         const isOnDeliveryResume = isROResume
                             ? (statusResume === 'On Delivery')
                             : (statusResume === 'On-Delivery');
@@ -8387,18 +8394,24 @@
             // card PO biasa. Nilai "Ship To" asli tetap disimpan di shipToActual,
             // dipakai untuk baris info tambahan di card RO & data yang dikirim ke
             // Delivery_Log.
-            // [FIX 24 — BARU] isRO TIDAK LAGI hanya dicek dari prefix "Retur-" —
+            // [FIX 24] isRO TIDAK LAGI dicek dari prefix "Retur-" —
             // tiket Form Service tipe "Pick Up" juga disimpan di Retur_Data
             // dengan status "Ready To PickUp"/"On Delivery", TAPI No. Tiket-nya
             // berformat "Service-DDMMYYYY-00X" (TANPA prefix "Retur-"). Kalau
             // hanya dicek dari prefix, card tiket Pick Up ini salah dianggap PO
             // biasa (label "Ready To Ship", handler routeStartDelivery yang
-            // menulis ke Delivery_Log/PO_Data, bukan Retur_Data). Karena hanya
-            // baris asal Retur_Data yang bisa berstatus "Ready To PickUp" /
-            // "On Delivery" (lihat filter activeRows di atas), Status dipakai
-            // sebagai sinyal tambahan yang lebih andal daripada prefix saja.
-            const isRO = noPO.startsWith('Retur-')
-                || status === 'Ready To PickUp' || status === 'On Delivery';
+            // menulis ke Delivery_Log/PO_Data, bukan Retur_Data).
+            // [FIX 30 — BARU] Sebaliknya, tiket Form Service tipe "Return"
+            // ("Retur-Service-DDMMYYYY-00X") justru disimpan di PO_Data dengan
+            // alur status PO ("Ready To Ship"/"On-Delivery"), BUKAN di Retur_Data.
+            // Dulu prefix "Retur-" saja membuat card ini salah dianggap RO →
+            // pakai handler routeStartPickupRetur yang menulis ke Retur_Data,
+            // padahal datanya ada di PO_Data, sehingga tombol "Start" gagal/
+            // tidak berefek untuk driver. Karena hanya baris asal Retur_Data
+            // yang bisa berstatus "Ready To PickUp"/"On Delivery" (lihat filter
+            // activeRows di atas), Status sendirian sudah cukup jadi sinyal —
+            // prefix "Retur-" TIDAK dipakai lagi sama sekali untuk klasifikasi ini.
+            const isRO = status === 'Ready To PickUp' || status === 'On Delivery';
             const fromLocation = String(r[14] || '').trim();
             const shipToActual = String(r[1] || '').trim();
             const customer = isRO ? (fromLocation || shipToActual) : shipToActual;
@@ -13194,8 +13207,13 @@
             const today = new Date().toISOString().split('T')[0];
 
             // ── Hitung No. PO Retur berikutnya (prefix "Retur-") ──
+            // [FIX 30] Sama seperti buildRequestOrderPDF: kalau sedang mode
+            // Revisi RO, pakai No. RO yang sudah ada (window._revisiROActive)
+            // apa adanya — jangan generate nomor baru.
             let resolvedPONumber = null;
-            if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
+            if (window._revisiROActive) {
+                resolvedPONumber = window._revisiROActive;
+            } else if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
                 const catCode = CATEGORY_CODE[categoryEl.value];
                 const dateStr = formatDateForPO(new Date());
                 const prefix = `Retur-${catCode}-${dateStr}-`;
@@ -13558,8 +13576,16 @@
             const today = new Date().toISOString().split('T')[0];
 
             // ── Hitung No. PO berikutnya dari data yang sudah ada ──
+            // [FIX 30] Kalau sedang dalam mode Revisi PO, JANGAN hitung/generate
+            // nomor baru sama sekali — No. PO yang sudah ada (window._revisiPOActive)
+            // harus tetap dipakai apa adanya di PDF (poLabel), nama file, dan QR
+            // code. Sebelumnya kode ini selalu menjalankan blok generate-nomor-
+            // baru di bawah tanpa peduli mode revisi, sehingga PDF hasil revisi
+            // tercetak dengan No. PO yang berbeda dari No. PO aslinya.
             let resolvedPONumber = null;
-            if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
+            if (window._revisiPOActive) {
+                resolvedPONumber = window._revisiPOActive;
+            } else if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
                 const catCode = CATEGORY_CODE[categoryEl.value];
                 const dateStr = formatDateForPO(new Date());
                 const prefix = `${catCode}-${dateStr}-`;
@@ -20251,6 +20277,21 @@
         // (mis. akibat tap ganda/cepat) memicu navigator.share() kedua kalinya
         // saat proses share pertama masih berjalan.
         let _isSharingPlanTask = false;
+        // [FIX] Helper anti-macet: bungkus sebuah Promise dengan batas waktu.
+        // Promise asli TIDAK dibatalkan (browser tidak menyediakan cara untuk
+        // itu pada html2canvas/navigator.share), tapi Promise.race membuat kode
+        // kita tetap lanjut ke fallback begitu batas waktu terlampaui, alih-alih
+        // menunggu selamanya kalau promise itu sendiri tidak pernah
+        // resolve/reject (kasus nyata: navigator.share() untuk file yang kadang
+        // hang total di sebagian browser/WebView Android).
+        function withTimeout(promise, ms, timeoutMessage) {
+            return Promise.race([
+                promise,
+                new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error(timeoutMessage || 'Waktu tunggu habis')), ms);
+                })
+            ]);
+        }
         // [FIX] Ditulis ulang sebagai async/await (sebelumnya rantai .then/.catch
         // terpisah dari canvas.toBlob() yang berbasis callback) SUPAYA:
         //   1) SEMUA error — termasuk yang lolos dari .then()/.catch() lama —
@@ -20296,12 +20337,21 @@
             const prevVideoDisplay = hiddenVideos.map(v => v.style.display);
             hiddenVideos.forEach(v => { v.style.display = 'none'; });
             try {
-                const canvas = await html2canvas(captureArea, {
-                    scale: 2,
-                    useCORS: true,
-                    backgroundColor: '#ffffff',
-                    ignoreElements: (el) => el.tagName === 'VIDEO'
-                });
+                // [FIX] html2canvas dibatasi 20 detik — sebelumnya tanpa batas
+                // waktu sama sekali, jadi kalau proses screenshot ikut macet
+                // (mis. video mascot yang berat di DOM ikut memperlambat proses
+                // clone dokumen internal html2canvas), tombol "Memproses..."
+                // bisa nyangkut selamanya tanpa hasil apapun.
+                const canvas = await withTimeout(
+                    html2canvas(captureArea, {
+                        scale: 2,
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                        ignoreElements: (el) => el.tagName === 'VIDEO'
+                    }),
+                    20000,
+                    'html2canvas timeout'
+                );
 
                 const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
                 if (!blob) {
@@ -20313,7 +20363,12 @@
 
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
-                        await navigator.share({ files: [file] });
+                        // [FIX] navigator.share() dibatasi 10 detik — di sebagian
+                        // browser/WebView, promise share() untuk file kadang tidak
+                        // pernah resolve/reject sama sekali (hang tanpa batas),
+                        // sehingga tanpa timeout ini popup share tidak akan pernah
+                        // muncul dan tombol macet loading selamanya.
+                        await withTimeout(navigator.share({ files: [file] }), 10000, 'share timeout');
                         shared = true;
                     } catch (shareErr) {
                         console.error('shareToWhatsApp: navigator.share() gagal/ditolak:', shareErr);
@@ -20353,6 +20408,8 @@
                 const msg = err && err.message ? err.message : 'terjadi kesalahan tak terduga';
                 if (/tainted/i.test(msg)) {
                     showAlert('error', 'Gagal Membagikan', 'Gagal membuat gambar Plan Task karena ada elemen video/kamera aktif di halaman ini yang mengganggu proses screenshot. Tutup dulu fitur Scan Kamera/QR yang mungkin masih terbuka, lalu coba Share lagi.');
+                } else if (/html2canvas timeout/i.test(msg)) {
+                    showAlert('error', 'Gagal Membagikan', 'Proses pembuatan gambar Plan Task memakan waktu terlalu lama (lebih dari 20 detik) sehingga dibatalkan. Coba tutup menu lain yang sedang terbuka lalu coba Share lagi.');
                 } else {
                     showAlert('error', 'Gagal Membagikan', 'Gagal membagikan Plan Task: ' + msg + '. Coba lagi.');
                 }
