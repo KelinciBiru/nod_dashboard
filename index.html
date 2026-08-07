@@ -20367,7 +20367,18 @@
             };
         }
 
+        // [FIX] Guard anti-overlap: navigator.share() melempar InvalidStateError
+        // ("An earlier share has not yet completed") kalau dipanggil lagi
+        // selagi share sebelumnya masih berjalan (mis. tombol share ke-klik
+        // 2x cepat / double-tap). Flag ini mencegah panggilan navigator.share()
+        // baru sampai yang lama selesai (berhasil/gagal/dibatalkan).
+        let _isNativeSharing = false;
+
         async function _attemptNativeShareFile(blob, fileName, mime) {
+            if (_isNativeSharing) {
+                console.warn('[ShareWhatsApp] Proses share sebelumnya belum selesai, permintaan baru diabaikan.');
+                return { shared: false, reason: 'share-in-progress' };
+            }
             const diag = _diagnoseWebShareSupport();
             if (diag.isSecureContext === false) {
                 console.error('[ShareWhatsApp] BLOCKED: halaman ini bukan "secure context" (bukan HTTPS/localhost). ' +
@@ -20393,6 +20404,7 @@
                 return { shared: false, reason: 'unsupported-filetype' };
             }
             try {
+                _isNativeSharing = true;
                 // Panggilan navigator.share() ini SENGAJA tidak didahului proses
                 // async lain apa pun di fungsi ini — dipanggil sesegera mungkin
                 // begitu dipanggil oleh caller, supaya masih dalam jendela
@@ -20408,6 +20420,10 @@
                 // Kalau user sendiri yang membatalkan dari popup (memang sempat
                 // muncul), anggap "selesai" — bukan kegagalan yang perlu fallback.
                 return { shared: isUserCancelled, reason: isUserCancelled ? 'user-cancelled' : 'share-failed' };
+            } finally {
+                // Selalu reset flag walau berhasil/gagal/timeout/dibatalkan,
+                // supaya percobaan share berikutnya tidak terkunci selamanya.
+                _isNativeSharing = false;
             }
         }
 
