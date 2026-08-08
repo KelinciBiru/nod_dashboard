@@ -14563,6 +14563,20 @@
         }
 
         /**
+         * [FIX] Kumpulan kata-kata penyusun VALID_DESC (mis. "capsule", "selling",
+         * "b2b", "machine", dst). Dipakai di finalizeItemGroup() untuk membatasi
+         * token generik (bukan angka/UOM/kode ID) yang boleh dianggap kandidat
+         * kolom Description berdasarkan jarak-X — supaya nama barang yang panjang
+         * (mis. "NOD x Herd Coffee Roaster (CS) - The Pink Tiger") tidak "bocor"
+         * ke bucket desc hanya karena token-nya secara horizontal lebih dekat ke
+         * posisi kolom Description, yang sebelumnya menyebabkan Nama Barang hasil
+         * ekstrak PDF hanya menyisakan satu-dua token (bahkan cuma tanda "-").
+         */
+        const DESC_WORDS = new Set(
+            VALID_DESC.join(' ').toLowerCase().split(/\s+/).filter(Boolean)
+        );
+
+        /**
          * Klasifikasi description sebagai fallback jika kolom DESC tidak ditemukan di PDF
          */
         function classifyDescription(namaBarang) {
@@ -14871,7 +14885,20 @@
                     } else if (isIdCodeToken && colKeys.includes('id')) {
                         allowedCols = ['id'];
                     } else {
-                        allowedCols = colKeys.filter(k => k === 'name' || k === 'desc' || k === 'note');
+                        // [FIX] Token generik (bagian dari Nama Barang) HANYA boleh
+                        // dianggap kandidat kolom "desc" jika kata itu sendiri memang
+                        // salah satu kata penyusun VALID_DESC (mis. "Machine",
+                        // "Selling", "Capsule", dst). Sebelumnya SEMUA token generik
+                        // (termasuk setiap kata dalam nama barang) ikut diadu jarak-X
+                        // ke kolom desc, sehingga nama barang yang panjang/melebar
+                        // (posisi X-nya melewati area kolom Description) kehilangan
+                        // kata-katanya satu per satu ke bucket desc — pada kasus
+                        // terparah nyaris seluruh nama barang "hilang" dan yang
+                        // tersisa di bucket name hanya token seperti "-".
+                        const isDescWordToken = DESC_WORDS.has(s.toLowerCase());
+                        allowedCols = isDescWordToken
+                            ? colKeys.filter(k => k === 'name' || k === 'desc' || k === 'note')
+                            : colKeys.filter(k => k === 'name' || k === 'note');
                     }
                     if (!allowedCols || allowedCols.length === 0) allowedCols = colKeys;
 
