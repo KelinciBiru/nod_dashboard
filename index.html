@@ -1317,7 +1317,7 @@
             const colors = {
                 success: 'bg-green-600',
                 error: 'bg-red-600',
-                info: 'bg-gray-900',
+                info: 'bg-blue-600',
                 warning: 'bg-amber-600',
             };
             const toast = document.createElement('div');
@@ -1331,6 +1331,20 @@
                 toast.classList.add('opacity-0', 'translate-y-2');
                 setTimeout(() => toast.remove(), 300);
             }, durationMs);
+        }
+
+        /**
+         * Notifikasi ringan non-blocking (toast) untuk hasil aksi yang TIDAK butuh
+         * approval/keputusan user — mis. "Berhasil Disimpan", "PO Berhasil Ditutup".
+         * Beda dari showAlert (modal, wajib diklik OK): dipakai supaya notifikasi
+         * sukses/info tidak menumpuk jadi banyak modal yang menghalangi layar,
+         * terutama untuk aksi yang sudah lebih dulu dikonfirmasi lewat showConfirm().
+         * Untuk error/warning yang butuh perhatian & aksi user (retry, perbaiki
+         * input, dst) tetap pakai showAlert (modal).
+         */
+        function showToastAlert(type, title, message, durationMs = 5500) {
+            const body = message ? `<b>${title}</b><br><span class="font-normal opacity-90">${message}</span>` : `<b>${title}</b>`;
+            showBgToast(type, body, durationMs);
         }
 
         /** Notifikasi kecil non-blocking di pojok kanan atas saat data ter-update otomatis. */
@@ -2211,6 +2225,32 @@
                         <div class="h-2.5 bg-gray-100 rounded w-1/3"></div>
                     </div>
                 </div>`).join('');
+        }
+
+        /** Skeleton grid kartu produk (dipakai di Catalogue — bentuknya grid, bukan tabel). */
+        function skeletonGridPage(title, subtitle, cardCount = 8) {
+            if (window.__liveSyncSilent) return;
+            document.getElementById('content-area').innerHTML = `
+            <h1 class="text-2xl font-bold text-gray-700 mb-1">${title || ''}</h1>
+            ${subtitle ? `<p class="text-sm text-gray-500 mb-4">${subtitle}</p>` : '<div class="mb-4"></div>'}
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                ${Array.from({ length: cardCount }).map(() => `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-pulse">
+                    <div class="h-28 bg-gray-100"></div>
+                    <div class="p-3">
+                        <div class="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+                        <div class="h-2.5 bg-gray-100 rounded w-1/2"></div>
+                    </div>
+                </div>`).join('')}
+            </div>`;
+        }
+
+        /** Skeleton baris <tr> (dipakai di dalam <tbody> tabel yang thead-nya sudah tetap tampil, mis. Report Status Repair). */
+        function skeletonTableRows(colCount, rowCount = 4) {
+            const cell = () => `<td class="px-4 py-3"><div class="h-3 bg-gray-100 rounded w-4/5"></div></td>`;
+            return Array.from({ length: rowCount }).map(() =>
+                `<tr class="animate-pulse">${Array.from({ length: colCount }).map(cell).join('')}</tr>`
+            ).join('');
         }
 
         function setError(message) {
@@ -3425,12 +3465,7 @@
                             </tr>
                         </thead>
                         <tbody id="rsr-ongoing-tbody">
-                            <tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
-                                <div class="flex items-center justify-center gap-3">
-                                    <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
-                                    Memuat data...
-                                </div>
-                            </td></tr>
+                            ${skeletonTableRows(6, 4)}
                         </tbody>
                     </table>
                 </div>
@@ -3454,12 +3489,7 @@
                             </tr>
                         </thead>
                         <tbody id="rsr-solved-tbody">
-                            <tr><td colspan="5" class="px-4 py-10 text-center text-gray-400">
-                                <div class="flex items-center justify-center gap-3">
-                                    <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
-                                    Memuat data...
-                                </div>
-                            </td></tr>
+                            ${skeletonTableRows(5, 3)}
                         </tbody>
                     </table>
                 </div>
@@ -4447,7 +4477,7 @@
                 if (!result.success) throw new Error(result.message || 'Gagal menyimpan data.');
 
                 onSuccessCloseModal();
-                showAlert('success', 'Berhasil Disimpan', `Data Task Technician untuk Serial Number "${payload.serial}" berhasil disimpan (${payload.status}).`);
+                showToastAlert('success', 'Berhasil Disimpan', `Data Task Technician untuk Serial Number "${payload.serial}" berhasil disimpan (${payload.status}).`);
 
                 // Reset form ke kondisi awal
                 document.getElementById('tt-serial').value = '';
@@ -6033,7 +6063,12 @@
                     items,
                     fileData, fileName, fileType: 'application/pdf',
                 };
-                const result = await fetchWriteWithRetry(API_URLS.serviceCenter, {
+                // [FIX 17] Sebelumnya salah kirim ke API_URLS.serviceCenter (backend
+                // Service Center lama, tidak punya action 'revisiFormService' sama
+                // sekali — selalu gagal "Action tidak dikenal"). submitFormService
+                // (non-revisi) sudah dipindah ke backend PO_GAS sejak [FIX 12];
+                // revisi ini disamakan supaya konsisten dan benar-benar tersimpan.
+                const result = await fetchWriteWithRetry(API_URLS.purchaseOrder, {
                     method: 'POST',
                     redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -7095,7 +7130,7 @@
                             `Data telah tersimpan ke Regis_Log · PDF Invoice "${fileName}" telah diunduh ke perangkat Anda.`
                         );
                     } catch (pdfErr) {
-                        showAlert('success', '✅ Berhasil',
+                        showToastAlert('success', '✅ Berhasil',
                             `Data warranty registration telah tersimpan ke Regis_Log.\n(PDF Invoice gagal dibuat: ${pdfErr.message})`
                         );
                     }
@@ -9124,7 +9159,7 @@
                         cardEl.classList.add('border-blue-200', 'bg-blue-50/30');
                     }
 
-                    showAlert('success', '🚚 Pengiriman Dimulai!',
+                    showToastAlert('success', '🚚 Pengiriman Dimulai!',
                         `PO ${noPO} → On-Delivery\nJam berangkat: ${jamBerangkat}\nData dicatat ke Delivery_Log.`);
 
                     // [Navigasi In-App — BARU] Langsung tampilkan peta navigasi ke
@@ -9246,7 +9281,7 @@
                     }
                     const lokasiInfo = mapsUrl ? `\nLokasi Tiba: ${mapsUrl}` : '';
                     const fotoInfo = fotoPayloadList.length ? `\n📸 ${fotoPayloadList.length} foto bukti penerimaan dicatat.` : '';
-                    showAlert('success', '✅ Pengantaran Selesai!',
+                    showToastAlert('success', '✅ Pengantaran Selesai!',
                         `PO ${noPO} dicatat Done.\nNama Pengirim: ${namaPengirim}\nNama Penerima: ${namaPenerima}\nTgl Diterima: ${tglKonfirmasi} | Jam Tiba: ${jamTiba}${lokasiInfo}${fotoInfo}`);
 
                     setTimeout(() => {
@@ -9325,7 +9360,7 @@
                         card.style.transform = 'scale(0.95)';
                         setTimeout(() => card.remove(), 420);
                     }
-                    showAlert('info', 'Pengiriman Dibatalkan',
+                    showToastAlert('info', 'Pengiriman Dibatalkan',
                         `PO ${noPO} dibatalkan.\nDriver: ${namaDriver}\nAlasan: ${alasan}`);
 
                     setTimeout(() => {
@@ -9439,7 +9474,7 @@
                         cardEl.classList.add('border-blue-200', 'bg-blue-50/30');
                     }
 
-                    showAlert('success', '🚚 Pickup Dimulai!',
+                    showToastAlert('success', '🚚 Pickup Dimulai!',
                         `RO ${noRO} → On Delivery\nJam berangkat: ${jamBerangkat}\nData dicatat ke Delivery_Log.`);
 
                     // [Navigasi In-App — BARU] Langsung tampilkan peta navigasi ke
@@ -9568,7 +9603,7 @@
                     }
                     const lokasiInfo = mapsUrl ? `\nLokasi Tiba: ${mapsUrl}` : '';
                     const fotoInfo = fotoPayloadList.length ? `\n📸 ${fotoPayloadList.length} foto bukti dicatat.` : '';
-                    showAlert('success', '✅ Retur Selesai!',
+                    showToastAlert('success', '✅ Retur Selesai!',
                         `RO ${noRO} dicatat Done.\nNama Pengirim: ${namaPengirim}\nNama Penerima: ${namaPenerima}\nTgl Diterima: ${tglKonfirmasi} | Jam Tiba: ${jamTiba}${lokasiInfo}${fotoInfo}`);
 
                     setTimeout(() => {
@@ -9644,7 +9679,7 @@
                         card.style.transform = 'scale(0.95)';
                         setTimeout(() => card.remove(), 420);
                     }
-                    showAlert('info', 'Retur Dibatalkan', `RO ${noRO} dikembalikan ke status Ready To PickUp.`);
+                    showToastAlert('info', 'Retur Dibatalkan', `RO ${noRO} dikembalikan ke status Ready To PickUp.`);
 
                     setTimeout(() => {
                         const grid = document.getElementById('route-cards-grid');
@@ -10512,7 +10547,7 @@
         // Akses: ADMIN & DRIVER
         // =========================================================================
         async function showTeamDeliveryReportFinish() {
-            setLoading('Memuat laporan rute hari ini...');
+            skeletonTablePage('Team Delivery - Report Finish', 'Memuat laporan rute hari ini...', 6);
             const contentArea = document.getElementById('content-area');
 
             try {
@@ -10601,7 +10636,7 @@
         // HALAMAN: STOCK MASTER
         // =========================================================================
         async function showStockMaster() {
-            setLoading();
+            skeletonTablePage('Stock Master', 'Memuat data stock...', 8);
             const contentArea = document.getElementById('content-area');
             try {
                 const response = await fetchWithTimeout(API_URLS.stockMaster, { redirect: 'follow' });
@@ -10662,7 +10697,7 @@
         let _catalogueSearchQuery = '';
 
         async function showCatalogue() {
-            setLoading();
+            skeletonGridPage('Catalogue', 'Memuat katalog barang...', 8);
             try {
                 if (!_catalogueData) {
                     const response = await fetchWithTimeout(API_URLS.catalogue + '?action=getCatalogue', { redirect: 'follow' });
@@ -11069,7 +11104,7 @@
                 if (listEl) listEl.classList.add('hidden');
             }
 
-            showAlert('success', 'Barang Ditambahkan', `${items.length} barang dari Catalogue berhasil ditambahkan ke ${mode === 'RO' ? 'Form RO' : 'Form PO'}.`);
+            showToastAlert('success', 'Barang Ditambahkan', `${items.length} barang dari Catalogue berhasil ditambahkan ke ${mode === 'RO' ? 'Form RO' : 'Form PO'}.`);
         }
 
         /**
@@ -11379,7 +11414,7 @@
                     if (result.success) {
                         modal.remove();
                         _catalogueData = null; // paksa reload data dari sheet saat kembali ke Catalogue
-                        showAlert('success', '✅ Produk Ditambahkan', `${namaBarang} berhasil ditambahkan ke katalog.`);
+                        showToastAlert('success', '✅ Produk Ditambahkan', `${namaBarang} berhasil ditambahkan ke katalog.`);
                         await showCatalogue();
                     } else {
                         throw new Error(result.message || 'Gagal menyimpan data ke sheet Catalogue.');
@@ -11396,7 +11431,7 @@
         // HALAMAN: REPORT INVENTORY
         // =========================================================================
         async function showReportInventory() {
-            setLoading();
+            skeletonTablePage('Report Inventory', 'Memuat data inventory mingguan & bulanan...', 8);
             const contentArea = document.getElementById('content-area');
             try {
                 const response = await fetchWithTimeout(API_URLS.reportInventory, { redirect: 'follow' });
@@ -11484,7 +11519,7 @@
         // HALAMAN: PLAN TASK
         // =========================================================================
         async function showPlanTask() {
-            setLoading();
+            skeletonTablePage('Plan Task', 'Memuat data plan task...', 6);
             const contentArea = document.getElementById('content-area');
             try {
                 const response = await fetchWithTimeout(API_URLS.planTask, { redirect: 'follow' });
@@ -11608,7 +11643,7 @@
         // HALAMAN: REPORT KPI
         // =========================================================================
         async function showReportKPI() {
-            setLoading('Memuat data KPI...');
+            skeletonTablePage('Report KPI', 'Memuat data KPI...', 6);
             const contentArea = document.getElementById('content-area');
             try {
                 const response = await fetchWithTimeout(API_URLS.reportKPI, { redirect: 'follow' });
@@ -11691,7 +11726,7 @@
         // HALAMAN: REPORT MAINTENANCE
         // =========================================================================
         async function showReportMaintenance() {
-            setLoading();
+            skeletonTablePage('Report Maintenance', 'Memuat data maintenance...', 8);
             const contentArea = document.getElementById('content-area');
             try {
                 const response = await fetchWithTimeout(API_URLS.reportMaintenance, { redirect: 'follow' });
@@ -14198,7 +14233,7 @@
 
             _clearDraft(DRAFT_KEYS.processPO);
             await showProcessPO();
-            showAlert('success', 'Halaman Direfresh', 'Tampilan Process PO sudah dikosongkan/direset.');
+            showToastAlert('success', 'Halaman Direfresh', 'Tampilan Process PO sudah dikosongkan/direset.');
         }
 
         async function showProcessPO() {
@@ -15350,7 +15385,7 @@
                     statusEl.textContent = '✅ File berhasil ditarik dari Google Drive — mengekstrak data...';
                     statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
                 }
-                showAlert('success', 'Berhasil Ditarik', `File Request Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
+                showToastAlert('success', 'Berhasil Ditarik', `File Request Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
 
                 sel.dataset.lastPulled = fileId;
                 await handlePDFImport(file, expectedNoPO);
@@ -17137,7 +17172,7 @@
                 }, 25000);
 
                 if (result.success) {
-                    showAlert('success', '✅ Berhasil Diproses!', `Data inbound (${items.length} item) tersimpan ke spreadsheet.`);
+                    showToastAlert('success', '✅ Berhasil Diproses!', `Data inbound (${items.length} item) tersimpan ke spreadsheet.`);
                     // Reset form
                     document.getElementById('inb-ex-lokasi').value = '';
                     document.getElementById('inb-crew').value = '';
@@ -17902,7 +17937,7 @@
         // Header tiap tabel: No. PO, Ordered By, Ship To, Status, Link PDF, Aksi (Release).
         // =========================================================================
         async function showPOPreOrderApproval() {
-            setLoading('Memuat data Pre-Order/Need Approval...');
+            skeletonTablePage('List PO Pre-Order/Need Approval', 'Memuat data Pre-Order/Need Approval...', 6);
             const contentArea = document.getElementById('content-area');
 
             try {
@@ -18029,7 +18064,7 @@
                         row.style.transform = 'translateX(20px)';
                         setTimeout(() => row.remove(), 300);
                     }
-                    showAlert('success', 'PO Berhasil di-Release', `PO ${noPO} sekarang berstatus "Open".`);
+                    showToastAlert('success', 'PO Berhasil di-Release', `PO ${noPO} sekarang berstatus "Open".`);
                 } else {
                     showAlert('error', 'Gagal Release PO', result.message || 'Terjadi kesalahan, coba lagi.');
                     if (btn) { btn.disabled = false; btn.innerText = 'Release'; }
@@ -18071,7 +18106,7 @@
                         row.style.transform = 'translateX(20px)';
                         setTimeout(() => row.remove(), 300);
                     }
-                    showAlert('success', 'PO Berhasil Dibatalkan', `PO ${noPO} sekarang berstatus "Cancel".`);
+                    showToastAlert('success', 'PO Berhasil Dibatalkan', `PO ${noPO} sekarang berstatus "Cancel".`);
                 } else {
                     showAlert('error', 'Gagal Membatalkan PO', result.message || 'Terjadi kesalahan, coba lagi.');
                     if (btn) { btn.disabled = false; btn.innerText = 'Cancelled'; }
@@ -18115,7 +18150,7 @@
                         row.style.transform = 'translateX(20px)';
                         setTimeout(() => row.remove(), 300);
                     }
-                    showAlert('success', 'PO Berhasil Ditolak', `PO ${noPO} sekarang berstatus "Rejected".`);
+                    showToastAlert('success', 'PO Berhasil Ditolak', `PO ${noPO} sekarang berstatus "Rejected".`);
                 } else {
                     showAlert('error', 'Gagal Menolak PO', result.message || 'Terjadi kesalahan, coba lagi.');
                     if (btn) { btn.disabled = false; btn.innerText = 'Rejected'; }
@@ -18318,7 +18353,7 @@
                     btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Remove`;
                     btn.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center mx-auto';
                     btn.disabled = false;
-                    showAlert('success', 'PO Berhasil Ditutup', `PO ${poNumber} telah ditandai sebagai Closed.`);
+                    showToastAlert('success', 'PO Berhasil Ditutup', `PO ${poNumber} telah ditandai sebagai Closed.`);
                 } else {
                     showAlert('error', 'Gagal Menutup PO', result.message || 'Terjadi kesalahan, coba lagi.');
                     btn.disabled = false;
@@ -18486,7 +18521,7 @@
             updatePoBulkActionState();
 
             if (failCount === 0) {
-                showAlert('success', 'PO Berhasil Ditutup', `${successCount} PO telah ditandai sebagai Closed.`);
+                showToastAlert('success', 'PO Berhasil Ditutup', `${successCount} PO telah ditandai sebagai Closed.`);
             } else {
                 showAlert('error', 'Sebagian Gagal', `${successCount} PO berhasil ditutup, ${failCount} gagal. Silakan coba lagi untuk yang gagal.`);
             }
@@ -18556,7 +18591,7 @@
                         btn.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition flex items-center mx-auto';
                         btn.disabled = false;
                     }
-                    showAlert('success', 'RO Berhasil Ditutup', `RO ${noRO} telah ditandai sebagai Closed.`);
+                    showToastAlert('success', 'RO Berhasil Ditutup', `RO ${noRO} telah ditandai sebagai Closed.`);
                 } else {
                     showAlert('error', 'Gagal Menutup RO', result.message || 'Terjadi kesalahan, coba lagi.');
                     if (btn) { btn.disabled = false; btn.innerText = 'Closed'; }
@@ -19282,7 +19317,7 @@
                     statusEl.textContent = '✅ File berhasil ditarik dari Google Drive — mengekstrak data...';
                     statusEl.className = 'text-xs text-green-600 mt-1 font-semibold';
                 }
-                showAlert('success', 'Berhasil Ditarik', `File Delivery Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
+                showToastAlert('success', 'Berhasil Ditarik', `File Delivery Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
 
                 sel.dataset.lastPulled = fileId;
                 await handleReceivePDFTextExtract(file);
@@ -20443,18 +20478,18 @@
                             );
                         } catch (pdfErr) {
                             // Data receive tetap tersimpan walau PDF gagal ditampilkan/disimpan.
-                            showAlert('success', '✅ Berhasil Diterima!',
+                            showToastAlert('success', '✅ Berhasil Diterima!',
                                 `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}\n(PDF gagal dibuat: ${pdfErr.message})`
                             );
                         }
                     } else if (mismatchItemsForPdf.length > 0) {
                         // Ada ketidaksesuaian tapi pembuatan PDF di awal tadi sempat gagal.
-                        showAlert('success', '✅ Berhasil Diterima!',
+                        showToastAlert('success', '✅ Berhasil Diterima!',
                             `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}\n(PDF gagal dibuat, silakan cek Report Status untuk detail item tidak sesuai.)`
                         );
                     } else {
                         // Semua item sesuai — tidak perlu PDF mismatch.
-                        showAlert('success', '✅ Berhasil Diterima!',
+                        showToastAlert('success', '✅ Berhasil Diterima!',
                             `Data receive (${items.length} item) tersimpan ke Received_Log.${statusUpdated ? statusMsg : ''}`
                         );
                     }
