@@ -237,7 +237,6 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.4.4/qrcode.min.js"></script>
     <!-- Leaflet (peta Pool Driver — Live Location) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -10423,8 +10422,6 @@
             }
             if (modal) modal.classList.add('hidden');
             document.body.style.overflow = '';
-            // Hentikan kamera Receive PO jika aktif
-            if (typeof stopReceiveQRScan === 'function') stopReceiveQRScan();
         }
 
         /**
@@ -13535,13 +13532,6 @@
             const poLabel = resolvedPONumber || (noPO && noPO !== 'Pilih kategori untuk melihat preview No. RO' ? noPO : '-');
             doc.text('No. RO: ' + poLabel, pageWidth - marginX, 22, { align: 'right' });
 
-            // ── QR Code ──
-            const roQR = await generateROQRCodeDataURL({
-                poLabel, today, orderedBy, phone,
-                category: categoryEl ? categoryEl.value : '',
-                allocatedTo, alamat, shippingDate, items
-            });
-
             // Garis pemisah
             doc.setDrawColor(229, 231, 235);
             doc.setLineWidth(0.4);
@@ -13652,23 +13642,6 @@
                 doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
             });
 
-            // ── QR Code (kanan bawah) ──
-            if (roQR && roQR.dataUrl) {
-                const qrSize = 22;
-                const qrX = pageWidth - marginX - qrSize;
-                const qrY = pageHeight - 30 - 4 - qrSize;
-                try {
-                    doc.addImage(roQR.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(6.5);
-                    doc.setTextColor(107, 114, 128);
-                    doc.text('Scan untuk buka lokasi Maps', qrX + qrSize, qrY - 2, { align: 'right' });
-                    if (roQR.truncated) {
-                        doc.setFontSize(5.5);
-                        doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
-                    }
-                } catch (errQr) { console.error('[Retur QR]', errQr); }
-            }
 
             // ── Footer ──
             const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
@@ -13912,19 +13885,6 @@
             const poLabel = resolvedPONumber || (noPO && noPO !== 'Pilih kategori untuk melihat preview No. PO' ? noPO : '-');
             doc.text('No. PO: ' + poLabel, pageWidth - marginX, 22, { align: 'right' });
 
-            // ── Generate QR Code (berisi seluruh isi Request Order) ──
-            const roQR = await generateROQRCodeDataURL({
-                poLabel,
-                today,
-                orderedBy,
-                phone,
-                category: categoryEl ? categoryEl.value : '',
-                allocatedTo,
-                alamat,
-                shippingDate,
-                items
-            });
-
             // Garis pemisah
             doc.setDrawColor(229, 231, 235);
             doc.setLineWidth(0.4);
@@ -14042,29 +14002,6 @@
                 doc.setFont('helvetica', 'bold');
                 doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
             });
-
-            // ── QR Code (kanan bawah halaman) — berisi seluruh isi Request Order ──
-            if (roQR && roQR.dataUrl) {
-                const qrSize = 22;
-                const qrX = pageWidth - marginX - qrSize;
-                const qrY = pageHeight - 30 - 4 - qrSize; // 4mm di atas footer
-                try {
-                    doc.addImage(roQR.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(6.5);
-                    doc.setTextColor(107, 114, 128);
-                    // Rata kanan ke tepi QR (= margin kertas) supaya tidak mepet/terpotong di ujung kertas
-                    doc.text('Scan untuk buka lokasi Maps', qrX + qrSize, qrY - 2, { align: 'right' });
-                    if (roQR.truncated) {
-                        doc.setFontSize(5.5);
-                        doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
-                    }
-                } catch (errQr) {
-                    console.error('[RO QR] Gagal menambahkan QR Code ke PDF:', errQr);
-                }
-            } else {
-                console.warn('[RO QR] QR Code tidak dibuat (roQR kosong/null).');
-            }
 
             // ── Footer (background pola gelombang + teks vektor tajam) ──
             const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
@@ -15592,14 +15529,6 @@
             // (diisi saat scan/import PDF), baru fallback ke Ship To.
             const alamatDatasetDO = document.getElementById('proc-ordered-by')?.dataset?.alamat || '';
             const alamatDO = alamatFromServer || alamatDatasetDO || shipTo;
-            const mapsUrlDO = document.getElementById('proc-ordered-by')?.dataset?.mapsurl || '';
-
-            // ── Generate QR Code (berisi Google Maps URL lokasi alamat PO) ──
-            const doQR = await generateDOQRCodeDataURL({
-                noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items,
-                alamat: alamatDO, mapsUrl: mapsUrlDO
-            });
-
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -15749,29 +15678,6 @@
                 doc.text(sigNames[i] || '( ___________ )', x, finalY + 24);
             });
 
-            // ── QR Code (kanan bawah halaman) — berisi seluruh data hasil Process PO ──
-            if (doQR && doQR.dataUrl) {
-                const qrSize = 22;
-                const qrX = pageWidth - marginX - qrSize;
-                const qrY = pageHeight - 30 - 4 - qrSize; // 4mm di atas footer
-                try {
-                    doc.addImage(doQR.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(6.5);
-                    doc.setTextColor(107, 114, 128);
-                    // Rata kanan ke tepi QR (= margin kertas) supaya tidak mepet/terpotong di ujung kertas
-                    doc.text('Scan untuk lihat data PO', qrX + qrSize, qrY - 2, { align: 'right' });
-                    if (doQR.truncated) {
-                        doc.setFontSize(5.5);
-                        doc.text('(ringkasan)', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
-                    }
-                } catch (errQr) {
-                    console.error('[DO QR] Gagal menambahkan QR Code ke PDF:', errQr);
-                }
-            } else {
-                console.warn('[DO QR] QR Code tidak dibuat (doQR kosong/null).');
-            }
-
             // ── Footer (background pola gelombang + teks vektor tajam) ──
             const footerY = drawFooterBlock(doc, marginX, pageWidth, pageHeight);
 
@@ -15834,127 +15740,6 @@
                 console.error('[Delivery Order] Gagal upload ke Google Drive:', err);
                 setStatus('⚠️ PDF sudah terunduh, namun gagal disimpan otomatis ke Google Drive: ' + err.message, 'text-amber-600');
                 showBgToast('warning', `Gagal menyimpan salinan PDF ${noPO || ''} ke Google Drive (PDF tetap ada di preview/download).`, 7000);
-            }
-        }
-
-        /**
-         * Menghasilkan teks QR Code berisi seluruh data hasil Process PO
-         * yang diproses oleh team Warehouse (Delivery Order).
-         * Format: teks ringkasan data PO yang dapat dibaca saat di-scan.
-         */
-        function buildDeliveryOrderQRText({ noPO, tglProses, crewPacking, orderedBy, shipTo, shippingDate, items, alamat, mapsUrl }) {
-            const lines = [];
-            lines.push('=== DELIVERY ORDER ===');
-            if (noPO) lines.push('No. PO: ' + noPO);
-            if (tglProses) lines.push('Tgl Proses: ' + tglProses);
-            if (crewPacking) lines.push('Crew Packing: ' + crewPacking);
-            if (orderedBy) lines.push('Ordered By: ' + orderedBy);
-            if (shipTo) lines.push('Ship To: ' + shipTo);
-            if (shippingDate) lines.push('Shipping Date: ' + shippingDate);
-            if (alamat) lines.push('Alamat: ' + alamat);
-            if (mapsUrl && mapsUrl.startsWith('http')) lines.push('Maps: ' + mapsUrl);
-
-            if (items && items.length > 0) {
-                lines.push('--- ITEM ---');
-                items.forEach((it, i) => {
-                    const qty = it.qty || '-';
-                    const uom = it.uom || '';
-                    const nama = it.nama || '-';
-                    lines.push((i + 1) + '. ' + nama + ' - ' + qty + (uom ? ' ' + uom : ''));
-                    if (it.id) lines.push('   ID: ' + it.id);
-                    if (it.description) lines.push('   Desc: ' + it.description);
-                    if (it.remark) lines.push('   Ket: ' + it.remark);
-                });
-            }
-
-            lines.push('=== NOD Warehouse System ===');
-            return lines.join('\n');
-        }
-
-        /**
-         * Generate QR Code (PNG data URL) dari sebuah teks menggunakan library
-         * `qrcode`. Jika teks terlalu panjang untuk ditampung QR Code (kapasitas
-         * maksimum Model 2 Versi 40), fungsi ini akan otomatis memotong daftar
-         * item secara bertahap sampai berhasil. Mengembalikan { dataUrl, truncated }
-         * atau null jika library tidak tersedia / gagal total.
-         */
-        async function generateDOQRCodeDataURL(doData) {
-            if (typeof QRCode === 'undefined') {
-                console.warn('[DO QR] Library QRCode tidak termuat — QR Code dilewati.');
-                return null;
-            }
-
-            const qrOptions = {
-                errorCorrectionLevel: 'L',
-                margin: 1,
-                color: { dark: '#111827', light: '#FFFFFF' }
-            };
-
-            // QR Code berisi seluruh data hasil Process PO (DO) yang diproses team Warehouse
-            const fullText = buildDeliveryOrderQRText(doData);
-
-            // Coba generate dengan data lengkap dulu; jika terlalu panjang, potong item satu per satu
-            const itemsCopy = doData.items ? [...doData.items] : [];
-            let text = fullText;
-            let truncated = false;
-
-            while (true) {
-                try {
-                    const dataUrl = await QRCode.toDataURL(text, qrOptions);
-                    return { dataUrl, truncated };
-                } catch (err) {
-                    if (itemsCopy.length === 0) {
-                        console.error('[DO QR] Gagal generate QR Code bahkan tanpa item:', err);
-                        return null;
-                    }
-                    // Kurangi satu item dari belakang dan coba lagi
-                    itemsCopy.pop();
-                    truncated = true;
-                    text = buildDeliveryOrderQRText({ ...doData, items: itemsCopy });
-                }
-            }
-        }
-
-        /**
-         * Menghasilkan Google Maps URL berdasarkan alamat PO.
-         * QR Code ini — ketika di-scan driver saat tiba di lokasi —
-         * akan membuka Google Maps ke titik alamat tujuan PO.
-         */
-        function buildRequestOrderQRText({ poLabel, today, orderedBy, phone, category, allocatedTo, alamat, shippingDate, items, mapsUrl }) {
-            // Prioritas: gunakan mapsUrl jika sudah ada (koordinat pasti),
-            // jika tidak ada gunakan geocode via alamat teks.
-            if (mapsUrl && mapsUrl.startsWith('http')) return mapsUrl;
-            if (alamat) return 'https://maps.google.com/?q=' + encodeURIComponent(alamat);
-            return 'https://maps.google.com/';
-        }
-
-        /**
-         * Generate QR Code (PNG data URL) dari sebuah teks menggunakan library
-         * `qrcode`. Jika teks terlalu panjang untuk ditampung QR Code (kapasitas
-         * maksimum Model 2 Versi 40), fungsi ini akan otomatis memotong daftar
-         * item secara bertahap sampai berhasil. Mengembalikan { dataUrl, truncated }
-         * atau null jika library tidak tersedia / gagal total.
-         */
-        async function generateROQRCodeDataURL(roData) {
-            if (typeof QRCode === 'undefined') {
-                console.warn('[RO QR] Library QRCode tidak termuat — QR Code dilewati.');
-                return null;
-            }
-
-            const qrOptions = {
-                errorCorrectionLevel: 'L',
-                margin: 1,
-                color: { dark: '#111827', light: '#FFFFFF' }
-            };
-
-            // QR Code berisi Google Maps URL ke alamat PO
-            const text = buildRequestOrderQRText(roData);
-            try {
-                const dataUrl = await QRCode.toDataURL(text, qrOptions);
-                return { dataUrl, truncated: false };
-            } catch (err) {
-                console.error('[RO QR] Gagal generate QR Code:', err);
-                return null;
             }
         }
 
@@ -18898,35 +18683,10 @@
         // =========================================================================
         // HALAMAN: RECEIVE PO
         // =========================================================================
-        let _receiveQRStream = null;
 
         async function showReceivePO() {
             document.getElementById('content-area').innerHTML = `
         <h1 class="text-2xl font-bold text-gray-700 mb-6">Receive PO</h1>
-
-        <!-- Scan QR Delivery Order -->
-        <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
-            <label class="block text-xs font-bold text-gray-500 mb-2">SCAN QR CODE — DELIVERY ORDER</label>
-            <div class="flex flex-col gap-3">
-                <div id="recv-qr-container" class="hidden">
-                    <p class="text-xs text-gray-400 mt-1 mb-2">Arahkan kamera ke QR Code pada Delivery Order PDF</p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <button id="btn-start-qr-recv" onclick="startReceiveQRScan()"
-                        class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition">
-                        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM4 9.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
-                        </svg>
-                        Buka Kamera Scan QR
-                    </button>
-                    <button id="btn-stop-qr-recv" onclick="stopReceiveQRScan()" class="hidden flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-lg transition">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                        Stop Kamera
-                    </button>
-                </div>
-                <p id="recv-qr-status" class="text-xs text-gray-400"></p>
-            </div>
-        </div>
 
         <!-- Import PDF Delivery Order -->
         <div class="bg-white p-4 rounded-lg shadow border border-gray-200 mb-4">
@@ -18995,7 +18755,7 @@
             </div>
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">NO. PO</label>
-                <input type="text" id="recv-no-po" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-gray-50" placeholder="Otomatis terisi dari QR...">
+                <input type="text" id="recv-no-po" class="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-gray-50" placeholder="Otomatis terisi dari PDF...">
             </div>
         </div>
 
@@ -19003,7 +18763,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">CREW PACKING <span class="font-normal text-gray-400">(dari Delivery Order)</span></label>
-                <input type="text" id="recv-crew-packing" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+                <input type="text" id="recv-crew-packing" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari PDF..." readonly>
             </div>
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">CREW CHECKING</label>
@@ -19015,15 +18775,15 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">ORDERED BY</label>
-                <input type="text" id="recv-ordered-by" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+                <input type="text" id="recv-ordered-by" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari PDF..." readonly>
             </div>
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">SHIP TO</label>
-                <input type="text" id="recv-ship" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+                <input type="text" id="recv-ship" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari PDF..." readonly>
             </div>
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">SHIPPING DATE</label>
-                <input type="text" id="recv-shipping-date" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari QR..." readonly>
+                <input type="text" id="recv-shipping-date" class="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 outline-none" placeholder="Otomatis dari PDF..." readonly>
             </div>
         </div>
 
@@ -19045,7 +18805,7 @@
                         </tr>
                     </thead>
                     <tbody id="recv-table-body">
-                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Scan QR Code atau Import PDF Delivery Order untuk mengisi data secara otomatis</td></tr>
+                        <tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Import PDF Delivery Order untuk mengisi data secara otomatis</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -19071,7 +18831,7 @@
             const tbody = document.getElementById('recv-table-body');
             if (!tbody) return;
             if (!items || items.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Tidak ada item ditemukan dalam QR Code.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-gray-400 italic">Tidak ada item ditemukan dalam PDF.</td></tr>`;
                 return;
             }
             tbody.innerHTML = '';
@@ -19131,41 +18891,7 @@
             }
         }
 
-        // ─── Parse teks QR Code Delivery Order jadi object data ───────────────────
-        function parseDeliveryOrderQRText(text) {
-            const result = { noPO: '', tglProses: '', crewPacking: '', orderedBy: '', shipTo: '', shippingDate: '', items: [] };
-            const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-            let inItems = false;
-            let currentItem = null;
-            for (const line of lines) {
-                if (line.startsWith('No. PO:')) { result.noPO = line.replace('No. PO:', '').trim(); continue; }
-                if (line.startsWith('Tgl Proses:')) { result.tglProses = line.replace('Tgl Proses:', '').trim(); continue; }
-                if (line.startsWith('Crew Packing:')) { result.crewPacking = line.replace('Crew Packing:', '').trim(); continue; }
-                if (line.startsWith('Ordered By:')) { result.orderedBy = line.replace('Ordered By:', '').trim(); continue; }
-                if (line.startsWith('Ship To:')) { result.shipTo = line.replace('Ship To:', '').trim(); continue; }
-                if (line.startsWith('Shipping Date:')) { result.shippingDate = line.replace('Shipping Date:', '').trim(); continue; }
-                if (line === '--- ITEM ---') { inItems = true; continue; }
-                if (line.startsWith('===')) { inItems = false; continue; }
-                if (inItems) {
-                    const itemMatch = line.match(/^(\d+)\.\s+(.+?)\s+-\s+(\S+)(?:\s+(.*))?$/);
-                    if (itemMatch) {
-                        if (currentItem) result.items.push(currentItem);
-                        const uomDesc = (itemMatch[4] || '').trim();
-                        currentItem = { id: '', nama: itemMatch[2].trim(), qty: itemMatch[3], uom: uomDesc, description: '' };
-                    } else if (line.startsWith('ID:') && currentItem) {
-                        currentItem.id = line.replace('ID:', '').trim();
-                    } else if (line.startsWith('Desc:') && currentItem) {
-                        currentItem.description = line.replace('Desc:', '').trim();
-                    } else if (line.startsWith('Ket:') && currentItem) {
-                        currentItem.remark = line.replace('Ket:', '').trim();
-                    }
-                }
-            }
-            if (currentItem) result.items.push(currentItem);
-            return result;
-        }
-
-        // ─── Isi form Receive PO dari data hasil parse QR ──────────────────────────
+        // ─── Isi form Receive PO dari data hasil parse PDF Delivery Order ──────────
         function fillReceivePOFromQR(doData) {
             const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
             setVal('recv-no-po', doData.noPO);
@@ -19174,7 +18900,8 @@
             setVal('recv-ship', doData.shipTo);
             setVal('recv-shipping-date', doData.shippingDate);
             renderReceiveTableRows(doData.items);
-            document.getElementById('recv-qr-status').textContent = '✅ Data berhasil diisi dari QR Code Delivery Order.';
+            const statusEl = document.getElementById('recv-import-status');
+            if (statusEl) statusEl.textContent = '✅ Data berhasil diisi dari PDF Delivery Order.';
         }
 
         // ─── Ekstrak Teks PDF Delivery Order (tanpa QR Code) ───────────────────
@@ -19894,68 +19621,6 @@
             return result;
         }
 
-        let _recvHtml5QR = null;
-
-        async function startReceiveQRScan() {
-            const container = document.getElementById('recv-qr-container');
-            const btnStart = document.getElementById('btn-start-qr-recv');
-            const btnStop = document.getElementById('btn-stop-qr-recv');
-            const status = document.getElementById('recv-qr-status');
-            if (!container) return;
-
-            // Buat elemen video/div untuk html5-qrcode jika belum ada
-            let qrDiv = document.getElementById('recv-qr-reader');
-            if (!qrDiv) {
-                qrDiv = document.createElement('div');
-                qrDiv.id = 'recv-qr-reader';
-                qrDiv.style.width = '100%';
-                qrDiv.style.maxWidth = '360px';
-                container.innerHTML = '';
-                container.appendChild(qrDiv);
-            }
-
-            container.classList.remove('hidden');
-            btnStart.classList.add('hidden');
-            btnStop.classList.remove('hidden');
-            status.textContent = 'Kamera aktif — arahkan ke QR Code Delivery Order...';
-
-            try {
-                _recvHtml5QR = new Html5Qrcode('recv-qr-reader');
-                await _recvHtml5QR.start(
-                    { facingMode: 'environment' },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    (decodedText) => {
-                        stopReceiveQRScan();
-                        const doData = parseDeliveryOrderQRText(decodedText);
-                        fillReceivePOFromQR(doData);
-                    },
-                    () => { } // error frame — abaikan
-                );
-            } catch (err) {
-                status.textContent = '⚠️ Kamera tidak dapat diakses: ' + err.message;
-                container.classList.add('hidden');
-                btnStart.classList.remove('hidden');
-                btnStop.classList.add('hidden');
-            }
-        }
-
-        function stopReceiveQRScan() {
-            if (_recvHtml5QR) {
-                const inst = _recvHtml5QR;
-                _recvHtml5QR = null;
-                inst.stop().then(() => { try { inst.clear(); } catch (_) { } }).catch(() => { });
-            }
-            const container = document.getElementById('recv-qr-container');
-            const btnStart = document.getElementById('btn-start-qr-recv');
-            const btnStop = document.getElementById('btn-stop-qr-recv');
-            if (container) container.classList.add('hidden');
-            if (btnStart) btnStart.classList.remove('hidden');
-            if (btnStop) btnStop.classList.add('hidden');
-        }
-
-        // Receive QR scan juga dihentikan oleh stopQRCamera yang sudah ada di navTo
-        // (stopQRCamera dipanggil otomatis setiap kali pindah halaman)
-
         // ─── Builder murni PDF "Received PO — Mismatch" (hanya item bertanda ❌) ──
         // Tidak melakukan validasi/alert/manipulasi tombol — hanya membangun & mengembalikan dokumen.
         // Dipanggil oleh simpanReceiveFinal() setelah data berhasil tersimpan ke Received_Log.
@@ -20352,12 +20017,12 @@
             const shippingDate = document.getElementById('recv-shipping-date')?.value?.trim() || '';
 
             if (!tglTerima) { showAlert('warning', 'Data Belum Lengkap', 'Tanggal Terima belum diisi.'); return; }
-            if (!noPO) { showAlert('warning', 'Data Belum Lengkap', 'No. PO belum terisi. Scan QR Code terlebih dahulu.'); return; }
+            if (!noPO) { showAlert('warning', 'Data Belum Lengkap', 'No. PO belum terisi. Import PDF Delivery Order terlebih dahulu.'); return; }
             if (!crewChecking) { showAlert('warning', 'Data Belum Lengkap', 'Crew Checking belum diisi.'); return; }
 
             const rows = document.querySelectorAll('#recv-table-body tr');
             const hasRealRows = Array.from(rows).some(row => row.cells.length >= 6 && !row.querySelector('td[colspan]'));
-            if (!hasRealRows) { showAlert('warning', 'Tabel Kosong', 'Scan QR Code terlebih dahulu untuk mengisi data item.'); return; }
+            if (!hasRealRows) { showAlert('warning', 'Tabel Kosong', 'Import PDF Delivery Order terlebih dahulu untuk mengisi data item.'); return; }
 
             const items = [];
             rows.forEach(row => {
@@ -20526,8 +20191,9 @@
                             const el = document.getElementById(id); if (el) el.value = '';
                         });
                         document.getElementById('recv-tgl-terima').value = new Date().toISOString().split('T')[0];
-                        document.getElementById('recv-table-body').innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Scan QR Code Delivery Order untuk mengisi data secara otomatis</td></tr>`;
-                        document.getElementById('recv-qr-status').textContent = '';
+                        document.getElementById('recv-table-body').innerHTML = `<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Import PDF Delivery Order untuk mengisi data secara otomatis</td></tr>`;
+                        const importStatusEl = document.getElementById('recv-import-status');
+                        if (importStatusEl) importStatusEl.textContent = '';
                     }, 1500);
                 } else {
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
