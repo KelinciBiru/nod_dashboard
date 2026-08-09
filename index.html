@@ -15898,7 +15898,7 @@
         // [FIX BARU] Ikut memanaskan cache getItemAutoFillData() (UOM &
         // Description) supaya begitu user mulai mengisi tabel Detail Item,
         // auto-isi UOM/Description tidak menunggu fetch pertama.
-        function preloadSourceItems() { getSourceItems(); getItemAutoFillData(); }
+        function preloadSourceItems() { getSourceItems(); getItemAutoFillData(); ensureGlobalItemDatalist(); }
 
         // =========================================================================
         // [FIX BARU] AUTO-ISI UOM & DESCRIPTION BERDASARKAN "Item" DI FORM PO / FORM RO
@@ -15971,15 +15971,69 @@
         }
 
         // =========================================================================
-        // AUTOCOMPLETE ITEM (DROPDOWN MENGAMBANG DI LUAR TABEL)
-        // Dipakai bersama oleh Form PO, Process PO, dan Process Inbound supaya
-        // dropdown pilihan item tidak ke-clip/ke-scroll di dalam tabel yang
-        // punya overflow-x-auto, melainkan "melayang" di atas seluruh halaman
-        // persis seperti dropdown native (mis. UOM).
+        // AUTOCOMPLETE ITEM — SEKARANG MEMAKAI <datalist> NATIVE
+        // [FIX] Sebelumnya dropdown pilihan item ("Nama Barang"/"Item") dibuat
+        // manual: <ul> yang di-portal ke <body>, diposisikan pakai position:fixed
+        // + hitungan JS (getBoundingClientRect, visualViewport, dst). Di HP,
+        // pendekatan itu tetap rawan "nyasar" karena harus menebak-nebak kapan
+        // keyboard virtual & auto-scroll browser selesai bergerak.
+        //
+        // Sekarang dropdown-nya memakai <datalist> bawaan browser — TEPAT
+        // mekanisme yang sama dengan dropdown <select> UOM/Kategori/Description
+        // yang selama ini SUDAH selalu tampil pas di bawah kolomnya. Karena
+        // posisinya 100% ditentukan browser/OS (bukan JS kita), dropdown ini
+        // otomatis konsisten, tidak pernah salah tempat, dan filter-nya (ketik
+        // untuk mencari) juga bawaan browser.
+        //
+        // Satu <datalist> dipakai bersama oleh SEMUA baris di SEMUA menu (Form
+        // PO, Form RO, Form Service, Process PO, Process Inbound) karena semua
+        // sumber datanya sama (getSourceItems() — sheet "LIST"). Dipopulate
+        // sekali saja lalu dipakai berulang; jauh lebih ringan dibanding
+        // render ulang <li> tiap baris/tiap ketik seperti sebelumnya.
         // =========================================================================
+        const GLOBAL_ITEM_DATALIST_ID = 'global-item-datalist';
+        let _globalItemDatalistFillPromise = null;
+
+        function ensureGlobalItemDatalist() {
+            let dl = document.getElementById(GLOBAL_ITEM_DATALIST_ID);
+            if (!dl) {
+                dl = document.createElement('datalist');
+                dl.id = GLOBAL_ITEM_DATALIST_ID;
+                document.body.appendChild(dl);
+            }
+            if (!_globalItemDatalistFillPromise) {
+                _globalItemDatalistFillPromise = getSourceItems().then(items => {
+                    const seen = new Set();
+                    const frag = document.createDocumentFragment();
+                    items.forEach(item => {
+                        const nama = (item.nama || '').trim();
+                        if (!nama) return;
+                        const key = nama.toLowerCase();
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        const opt = document.createElement('option');
+                        opt.value = nama;
+                        frag.appendChild(opt);
+                    });
+                    dl.innerHTML = '';
+                    dl.appendChild(frag);
+                });
+            }
+            return _globalItemDatalistFillPromise;
+        }
+
         function attachItemAutocomplete(input, list, tr, tbody, opts = {}) {
-            const maxResults = opts.maxResults || 30;
             const onSelect = opts.onSelect || (() => { });
+
+            // <ul> lama (kalau ada, dari markup sebelum fix ini) sudah tidak
+            // dipakai sama sekali — cukup dibuang supaya tidak numpuk di DOM.
+            if (list && list.parentNode) list.remove();
+
+            // Hubungkan input ke datalist global lewat attribute "list" — ini
+            // yang membuat browser menampilkan dropdown native tepat di bawah
+            // kolom, sama seperti dropdown <select> lainnya.
+            ensureGlobalItemDatalist();
+            input.setAttribute('list', GLOBAL_ITEM_DATALIST_ID);
 
             // Sinkronkan attribute "title" dengan isi input, supaya saat teks
             // panjang terpotong (ellipsis) di layar kecil, user tetap bisa
@@ -15987,289 +16041,41 @@
             // tap-and-hold (di sebagian besar browser HP).
             function syncTitle() { input.title = input.value; }
             syncTitle();
-            input.addEventListener('input', syncTitle);
-            input.addEventListener('change', syncTitle);
 
-            // Pindahkan list ke <body> (portal) supaya tidak ke-clip oleh
-            // container tabel yang punya overflow-x-auto, dan posisikan
-            // mengambang tepat di bawah input memakai posisi fixed.
-            document.body.appendChild(list);
-            list.classList.remove('absolute', 'left-0', 'top-full', 'mt-1', 'mt-0.5', 'w-full', 'w-64');
-            list.style.position = 'fixed';
-            list.style.zIndex = '9999';
-
-            // Di HP, keyboard virtual muncul setelah event focus dan mendorong
-            // viewport (kadang dengan delay/animasi), jadi posisi yang dihitung
-            // tepat saat focus bisa langsung basi begitu keyboard selesai muncul.
-            // window.visualViewport melaporkan ukuran viewport yang SUDAH
-            // memperhitungkan keyboard, jadi dipakai sebagai acuan utama kalau ada.
-            const vv = window.visualViewport;
-            const MAX_LIST_H = 224; // selaras dengan class Tailwind max-h-56 di template
-
-            function positionList() {
-                const r = input.getBoundingClientRect();
-                const viewportH = vv ? vv.height : window.innerHeight;
-                const viewportOffsetTop = vv ? vv.offsetTop : 0;
-                const viewportW = vv ? vv.width : window.innerWidth;
-                const viewportBottom = viewportOffsetTop + viewportH;
-
-                const spaceBelow = viewportBottom - r.bottom;
-                const spaceAbove = r.top - viewportOffsetTop;
-                const listWidth = Math.max(r.width, 220);
-                const left = Math.max(8, Math.min(r.left, viewportW - listWidth - 8));
-
-                list.style.left = left + 'px';
-                list.style.width = listWidth + 'px';
-                list.style.minWidth = '220px';
-
-                // Tidak mengandalkan list.offsetHeight (bisa 0 sebelum browser
-                // selesai melayout, terutama saat pertama kali list ditampilkan)
-                // — cukup bandingkan ruang kosong di atas vs di bawah input.
-                // Kalau ruang di bawah jelas tidak cukup untuk dropdown ukuran
-                // wajar (MAX_LIST_H) DAN ruang di atas lebih luas, tampilkan
-                // dropdown di ATAS supaya tidak pernah menimpa kotak input.
-                const notEnoughBelow = spaceBelow < Math.min(MAX_LIST_H, 140);
-                const flipUp = notEnoughBelow && spaceAbove > spaceBelow;
-
-                // PENTING: pakai patokan yang SAMA (CSS pixel relatif ke layout
-                // viewport, yaitu hasil getBoundingClientRect()) untuk top MAUPUN
-                // bottom. Sebelumnya bottom sempat dihitung pakai window.innerHeight
-                // yang bisa berbeda dari acuan visual viewport di atas, sehingga
-                // dropdown "flip ke atas" malah jatuh di posisi yang salah dan
-                // balik lagi menimpa input.
-                let listTop;
-                let listMaxH;
-                if (flipUp) {
-                    listMaxH = Math.max(100, Math.min(MAX_LIST_H, spaceAbove - 12));
-                    listTop = r.top - listMaxH - 4;
-                } else {
-                    listMaxH = Math.max(100, Math.min(MAX_LIST_H, spaceBelow - 12));
-                    listTop = r.bottom + 4;
-                }
-
-                // Pengaman terakhir: posisi top hasil hitungan TIDAK BOLEH pernah
-                // jatuh di rentang vertikal kotak input itu sendiri (r.top..r.bottom),
-                // apapun skenarionya. Kalau sampai terjadi (mis. ruang sangat sempit
-                // di kedua sisi), paksa dropdown nempel rapat di bawah/atas input.
-                const listBottom = listTop + listMaxH;
-                const overlapsInput = listTop < r.bottom && listBottom > r.top;
-                if (overlapsInput) {
-                    if (flipUp) {
-                        listTop = Math.min(listTop, r.top - 4 - listMaxH);
-                    } else {
-                        listTop = Math.max(listTop, r.bottom + 4);
-                    }
-                }
-
-                list.style.bottom = '';
-                list.style.top = listTop + 'px';
-                list.style.maxHeight = listMaxH + 'px';
-            }
-
-            // Registry global supaya cuma ADA SATU dropdown autocomplete yang
-            // boleh terbuka dalam satu waktu di seluruh halaman. Tanpa ini,
-            // dropdown milik baris lain yang belum sempat ke-hide (mis. karena
-            // event blur-nya telat/gagal) bisa numpuk bareng dropdown baris
-            // yang sedang aktif dan muncul di posisi yang salah/tidak beraturan.
-            if (!window.__acHideFns) window.__acHideFns = [];
-
-            function hideList() { list.classList.add('hidden'); stopAutoReposition(); }
-            window.__acHideFns.push(hideList);
-
-            function showList() {
-                // Tutup dulu semua dropdown autocomplete lain sebelum membuka punya kita.
-                window.__acHideFns.forEach(fn => { if (fn !== hideList) fn(); });
-                list.classList.remove('hidden');
-
-                // [FIX] Paksa kolom inputnya ke posisi yang stabil di viewport dulu,
-                // SEBELUM menghitung posisi dropdown. Tanpa ini, di HP kita "berlomba"
-                // dengan auto-scroll bawaan browser yang membawa input fokus ke area
-                // terlihat begitu keyboard virtual muncul — kalau hitungan posisi kita
-                // sempat jalan duluan (atau browsernya masih scroll belakangan setelah
-                // reposisi kita berhenti), dropdown jadi nyangkut di posisi LAMA yang
-                // sudah tidak relevan lagi (terlihat "random", jauh dari kolom Nama
-                // Barang yang sebenarnya). Dengan scrollIntoView di awal, kita sendiri
-                // yang menentukan posisi akhir input, baru dropdown dihitung menempel
-                // padanya — bukan menebak-nebak scroll browser.
-                try {
-                    input.scrollIntoView({ block: 'center', behavior: 'instant' });
-                } catch (e) {
-                    input.scrollIntoView(); // fallback browser lama yang tidak dukung opsi object
-                }
-
-                positionList();
-                // Reposisi berkali-kali setelah keyboard HP selesai animasi muncul
-                // (durasinya bisa beda-beda tergantung device/OS), supaya dropdown
-                // selalu "menempel" pas walau viewport masih bergeser beberapa saat.
-                requestAnimationFrame(positionList);
-                setTimeout(positionList, 50);
-                setTimeout(positionList, 150);
-                setTimeout(positionList, 350);
-                setTimeout(positionList, 600);
-                setTimeout(positionList, 900);
-                setTimeout(positionList, 1300);
-                startAutoReposition();
-            }
-
-            let _repositionRaf = null;
-            function startAutoReposition() {
-                stopAutoReposition();
-                const loop = () => {
-                    if (list.classList.contains('hidden')) return;
-                    positionList();
-                    // [FIX] Dibiarkan jalan TERUS selama dropdown masih terbuka (bukan
-                    // berhenti di 40 tick/~0.7 detik seperti sebelumnya). Biayanya kecil
-                    // (cuma 1 dropdown yang aktif dalam satu waktu, lihat registry di
-                    // atas), tapi manfaatnya besar: keyboard HP yang animasinya lambat
-                    // atau auto-scroll browser yang telat tidak akan bikin dropdown
-                    // ketinggalan posisi lagi.
-                    _repositionRaf = requestAnimationFrame(loop);
-                };
-                _repositionRaf = requestAnimationFrame(loop);
-            }
-            function stopAutoReposition() {
-                if (_repositionRaf) { cancelAnimationFrame(_repositionRaf); _repositionRaf = null; }
-            }
-
-            // Sembunyikan + lepas list dari body saat baris dihapus, supaya
-            // tidak ada elemen "yatim" menumpuk di <body>.
-            const rowObserver = new MutationObserver(() => {
-                if (!document.body.contains(tr)) {
-                    stopAutoReposition();
-                    list.remove();
-                    rowObserver.disconnect();
-                    window.removeEventListener('scroll', onScrollOrResize, true);
-                    window.removeEventListener('resize', onScrollOrResize);
-                    if (vv) {
-                        vv.removeEventListener('resize', onScrollOrResize);
-                        vv.removeEventListener('scroll', onScrollOrResize);
-                    }
-                    if (window.__acHideFns) {
-                        const idx = window.__acHideFns.indexOf(hideList);
-                        if (idx !== -1) window.__acHideFns.splice(idx, 1);
-                    }
-                }
-            });
-            if (tbody) rowObserver.observe(tbody, { childList: true });
-
-            function onScrollOrResize() {
-                if (!list.classList.contains('hidden')) positionList();
-            }
-            window.addEventListener('scroll', onScrollOrResize, true);
-            window.addEventListener('resize', onScrollOrResize);
-            // visualViewport menangkap perubahan akibat keyboard virtual muncul/hilang
-            // di HP, yang TIDAK selalu memicu window 'resize' biasa.
-            if (vv) {
-                vv.addEventListener('resize', onScrollOrResize);
-                vv.addEventListener('scroll', onScrollOrResize);
-            }
-
-            // item di sini adalah object {id, nama} (lihat getSourceItems). Nama
-            // barang tetap yang ditampilkan & dicari di dropdown, tapi id-nya
-            // disimpan di li.dataset.id supaya bisa dipakai untuk auto-isi
-            // kolom ID begitu barisnya dipilih (lewat klik ataupun Enter).
-            function renderList(filtered) {
-                list.innerHTML = '';
-                if (filtered.length === 0) { hideList(); return; }
-                filtered.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = item.nama;
-                    li.dataset.id = item.id || '';
-                    li.className = 'px-3 py-2.5 hover:bg-amber-50 hover:text-amber-700 cursor-pointer transition border-b border-gray-50 last:border-b-0';
-                    li.onmousedown = (e) => {
-                        e.preventDefault();
-                        input.value = item.nama;
-                        syncTitle();
-                        hideList();
-                        onSelect(item);
-                    };
-                    list.appendChild(li);
-                });
-                showList();
-            }
-
-            async function refresh() {
-                const q = input.value.trim().toLowerCase();
-                const items = await getSourceItems();
-                const filtered = q
-                    ? items.filter(i => i.nama.toLowerCase().includes(q)).slice(0, maxResults)
-                    : items.slice(0, maxResults);
-                renderList(filtered);
-                // Kalau nama yang sedang diketik sudah PERSIS sama dengan salah
-                // satu item di master data, langsung isi ID-nya saat itu juga —
-                // tidak perlu menunggu user mengklik item dropdown, menekan
-                // Enter, ataupun pindah fokus (blur) dari kotak input dulu.
-                if (q) {
-                    const exact = items.find(i => (i.nama || '').trim().toLowerCase() === q);
-                    if (exact) onSelect(exact);
-                }
-            }
-
-            input.addEventListener('input', refresh);
-            input.addEventListener('focus', async () => {
+            // Karena <datalist> tidak memberi kita event "item dipilih" secara
+            // langsung (browser cuma mengisi value input-nya), auto-isi ID/UOM/
+            // Description dilakukan dengan mencocokkan isi input ke master data
+            // setiap kali berubah — baik karena diklik dari saran datalist,
+            // diketik manual persis sama, ataupun setelah blur.
+            async function trySelectExact() {
                 const val = input.value.trim();
-                if (val) {
-                    // Kalau isi kotak ini sudah PERSIS sama dengan salah satu nama
-                    // barang di katalog (baik karena user sudah pilih sebelumnya,
-                    // ataupun karena barisnya sudah diisi otomatis dari Catalogue),
-                    // anggap sudah "terisi lengkap" dan JANGAN buka dropdown lagi
-                    // hanya karena user klik/fokus ke kotak itu. Dropdown akan tetap
-                    // muncul lagi begitu user benar-benar mengetik (event 'input').
-                    const items = await getSourceItems();
-                    const isExactMatch = items.some(i => (i.nama || '').trim().toLowerCase() === val.toLowerCase());
-                    if (isExactMatch) return;
-                }
-                refresh();
-            });
-            input.addEventListener('blur', () => {
-                setTimeout(hideList, 150);
-                // Kalau user mengetik manual nama barang yang PERSIS sama dengan
-                // salah satu item di master data (tanpa sempat memilih lewat
-                // dropdown/Enter), tetap panggil onSelect begitu kotaknya blur,
-                // supaya kolom ID tetap ikut ter-auto-isi sesuai nama barangnya.
-                setTimeout(async () => {
-                    const val = input.value.trim();
-                    if (!val) return;
-                    const items = await getSourceItems();
-                    const matched = items.find(i => (i.nama || '').trim().toLowerCase() === val.toLowerCase());
-                    if (matched) onSelect(matched);
-                }, 160);
-            });
+                if (!val) return;
+                const items = await getSourceItems();
+                const matched = items.find(i => (i.nama || '').trim().toLowerCase() === val.toLowerCase());
+                if (matched) onSelect(matched);
+            }
 
-            input.addEventListener('keydown', (e) => {
-                const lis = list.querySelectorAll('li');
-                const active = list.querySelector('li.bg-amber-100');
-                const isListVisible = !list.classList.contains('hidden') && lis.length > 0;
-                if (e.key === 'ArrowDown') {
+            input.addEventListener('input', () => { syncTitle(); trySelectExact(); });
+            input.addEventListener('change', () => { syncTitle(); trySelectExact(); });
+            input.addEventListener('blur', () => setTimeout(trySelectExact, 150));
+
+            // Enter memicu "tambah baris" HANYA kalau isi kolom sudah cocok
+            // persis dengan salah satu item (artinya sudah benar-benar dipilih/
+            // selesai diketik) — supaya tidak bertabrakan dengan Enter yang
+            // dipakai browser untuk menerima saran datalist yang sedang di-highlight.
+            input.addEventListener('keydown', async (e) => {
+                if (e.key !== 'Enter' || !opts.onEnterNoList) return;
+                const val = input.value.trim();
+                if (!val) return;
+                const items = await getSourceItems();
+                const isExact = items.some(i => (i.nama || '').trim().toLowerCase() === val.toLowerCase());
+                if (isExact) {
                     e.preventDefault();
-                    const next = active ? active.nextElementSibling : lis[0];
-                    if (active) active.classList.remove('bg-amber-100');
-                    if (next) next.classList.add('bg-amber-100');
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    const prev = active ? active.previousElementSibling : lis[lis.length - 1];
-                    if (active) active.classList.remove('bg-amber-100');
-                    if (prev) prev.classList.add('bg-amber-100');
-                } else if (e.key === 'Enter') {
-                    if (isListVisible) {
-                        e.preventDefault();
-                        const toSelect = active || lis[0];
-                        if (toSelect) {
-                            input.value = toSelect.textContent;
-                            syncTitle();
-                            hideList();
-                            onSelect({ id: toSelect.dataset.id || '', nama: toSelect.textContent });
-                        }
-                    } else if (opts.onEnterNoList) {
-                        e.preventDefault();
-                        opts.onEnterNoList(e);
-                    }
-                } else if (e.key === 'Escape') {
-                    hideList();
+                    opts.onEnterNoList(e);
                 }
             });
 
-            return { positionList, hideList, showList };
+            return {};
         }
 
         // =========================================================================
