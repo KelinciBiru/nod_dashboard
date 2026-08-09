@@ -933,6 +933,25 @@
         }
 
         // =========================================================================
+        // [FIX BARU] AUTO-GROW UNTUK KOLOM "REMARK"
+        // Semua kolom Remark (Form Service, Process PO, Process Inbound, Receive
+        // PO) diubah dari <input type="text"> jadi <textarea rows="1"> supaya
+        // begitu isiannya panjang, tampilannya melebar jadi beberapa baris
+        // (seperti paragraf) alih-alih tersembunyi/ke-scroll di dalam kotak satu
+        // baris — user bisa lihat keseluruhan teks yang sedang diketik.
+        // autoResizeTextarea() dipanggil lewat oninput="" di setiap <textarea>
+        // Remark, DAN wajib dipanggil ulang secara manual setiap kali isinya
+        // di-set lewat JS (bukan diketik user langsung, mis. saat memuat data
+        // Revisi/draft), karena event 'input' tidak terpicu oleh perubahan
+        // .value lewat kode.
+        // =========================================================================
+        function autoResizeTextarea(el) {
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        }
+
+        // =========================================================================
         // KONFIGURASI URL API
         // =========================================================================
         const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbx1kCct_cErpP7JmBdWLYzdSbYYtKtqhNMxYKjXy_4EI3Q6voI2og8y926NXpj4TEEC/exec';
@@ -5452,7 +5471,7 @@
                     <input type="text" class="fs-item-serial w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number">
                 </td>
                 <td class="p-2">
-                    <input type="text" class="fs-item-remark w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Catatan...">
+                    <textarea rows="1" class="fs-item-remark w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top" style="min-height:26px;" placeholder="Catatan..." oninput="autoResizeTextarea(this)"></textarea>
                 </td>
                 <td class="p-2 text-center">
                     <button onclick="hapusBarisFormService(this)" title="Hapus baris"
@@ -5973,7 +5992,7 @@
                         uomEl.value = match ? match.value : (uomEl.options[0]?.value || '');
                     }
                     if (serialEl) serialEl.value = it.serial || '';
-                    if (remarkEl) remarkEl.value = it.remark || '';
+                    if (remarkEl) { remarkEl.value = it.remark || ''; autoResizeTextarea(remarkEl); }
                 });
                 if (tbody.querySelectorAll('tr').length === 0) {
                     tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
@@ -15121,7 +15140,7 @@
                             </td>
                             <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
                             <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
-                            <td class="p-2"><input type="text" class="remark-po-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Remark..."></td>
+                            <td class="p-2"><textarea rows="1" class="remark-po-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top" style="min-height:26px;" placeholder="Remark..." oninput="autoResizeTextarea(this)"></textarea></td>
                             <td class="p-2 text-center"><button onclick="hapusBaris(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>
                         </tr>`;
                     }).join('');
@@ -15159,7 +15178,7 @@
                             </td>
                             <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
                             <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
-                            <td class="p-2"><input type="text" class="remark-po-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Remark..."></td>
+                            <td class="p-2"><textarea rows="1" class="remark-po-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top" style="min-height:26px;" placeholder="Remark..." oninput="autoResizeTextarea(this)"></textarea></td>
                         </tr>`;
                 }
 
@@ -16167,7 +16186,7 @@
                 <td class="p-2"><select class="w-full text-xs border border-gray-200 rounded p-1 focus:ring-1 focus:ring-amber-400 outline-none bg-white">${descOpts}</select></td>
                 <td class="p-2"><input type="text" class="serial-number-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Serial Number..."></td>
                 <td class="p-2"><input type="text" class="id-device-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="ID Device..."></td>
-                <td class="p-2"><input type="text" class="remark-po-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Remark..."></td>
+                <td class="p-2"><textarea rows="1" class="remark-po-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top" style="min-height:26px;" placeholder="Remark..." oninput="autoResizeTextarea(this)"></textarea></td>
                 <td class="p-2 text-center"><button onclick="hapusBaris(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>`;
 
             tbody.appendChild(tr);
@@ -16347,7 +16366,7 @@
                     if (tr.querySelector('.nama-barang-input')) { const el = tr.querySelector('.nama-barang-input'); el.value = item.nama || ''; el.title = el.value; }
                     if (tr.querySelector('.qty-input')) tr.querySelector('.qty-input').value = item.qty || '1';
                     if (tr.querySelector('.serial-input')) tr.querySelector('.serial-input').value = item.serial || '';
-                    if (tr.querySelector('.remark-input')) tr.querySelector('.remark-input').value = item.remark || '';
+                    if (tr.querySelector('.remark-input')) { const rEl = tr.querySelector('.remark-input'); rEl.value = item.remark || ''; autoResizeTextarea(rEl); }
                 });
             }
         }
@@ -16404,7 +16423,7 @@
                 </td>
                 <td class="p-2 text-center"><input type="number" min="0" value="${prefillQty}" class="qty-input w-20 p-1 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-amber-400 outline-none"></td>
                 <td class="p-2" style="min-width:140px"><input type="text" class="serial-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" style="min-width:120px" placeholder="Serial Number"></td>
-                <td class="p-2" style="min-width:120px"><input type="text" class="remark-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" style="min-width:100px" placeholder="Remark"></td>
+                <td class="p-2" style="min-width:120px"><textarea rows="1" class="remark-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top" style="min-width:100px; min-height:26px;" placeholder="Remark" oninput="autoResizeTextarea(this)"></textarea></td>
                 <td class="p-2 text-center"><button onclick="hapusBarisInbound(this)" title="Hapus baris" class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>`;
 
             tbody.appendChild(tr);
@@ -18687,13 +18706,15 @@
                     <td class="p-2 text-center align-middle text-gray-500">${escapeHtml(it.uom || '-')}</td>
                     <td class="p-2 align-middle text-gray-500">${escapeHtml(it.description || '-')}</td>
                     <td class="p-2 align-middle">
-                        <input type="text"
-                            class="recv-remark-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-amber-400 outline-none"
+                        <textarea rows="1"
+                            class="recv-remark-input w-full p-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top"
+                            style="min-height:26px;"
                             placeholder="Remark..."
-                            value="${escapeHtml(it.remark || '')}">
+                            oninput="autoResizeTextarea(this)">${escapeHtml(it.remark || '')}</textarea>
                     </td>
                 `;
                 tbody.appendChild(tr);
+                autoResizeTextarea(tr.querySelector('.recv-remark-input'));
                 // Initial check
                 updateReceiveCheckByIdx(idx, qtyOut, qtyOut);
             });
