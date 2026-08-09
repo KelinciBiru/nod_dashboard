@@ -16015,10 +16015,11 @@
 
                 const spaceBelow = viewportBottom - r.bottom;
                 const spaceAbove = r.top - viewportOffsetTop;
-                const left = Math.max(8, Math.min(r.left, viewportW - 228));
+                const listWidth = Math.max(r.width, 220);
+                const left = Math.max(8, Math.min(r.left, viewportW - listWidth - 8));
 
                 list.style.left = left + 'px';
-                list.style.width = Math.max(r.width, 220) + 'px';
+                list.style.width = listWidth + 'px';
                 list.style.minWidth = '220px';
 
                 // Tidak mengandalkan list.offsetHeight (bisa 0 sebelum browser
@@ -16079,30 +16080,50 @@
                 // Tutup dulu semua dropdown autocomplete lain sebelum membuka punya kita.
                 window.__acHideFns.forEach(fn => { if (fn !== hideList) fn(); });
                 list.classList.remove('hidden');
+
+                // [FIX] Paksa kolom inputnya ke posisi yang stabil di viewport dulu,
+                // SEBELUM menghitung posisi dropdown. Tanpa ini, di HP kita "berlomba"
+                // dengan auto-scroll bawaan browser yang membawa input fokus ke area
+                // terlihat begitu keyboard virtual muncul — kalau hitungan posisi kita
+                // sempat jalan duluan (atau browsernya masih scroll belakangan setelah
+                // reposisi kita berhenti), dropdown jadi nyangkut di posisi LAMA yang
+                // sudah tidak relevan lagi (terlihat "random", jauh dari kolom Nama
+                // Barang yang sebenarnya). Dengan scrollIntoView di awal, kita sendiri
+                // yang menentukan posisi akhir input, baru dropdown dihitung menempel
+                // padanya — bukan menebak-nebak scroll browser.
+                try {
+                    input.scrollIntoView({ block: 'center', behavior: 'instant' });
+                } catch (e) {
+                    input.scrollIntoView(); // fallback browser lama yang tidak dukung opsi object
+                }
+
                 positionList();
-                // Reposisi sekali lagi setelah keyboard HP selesai animasi muncul,
-                // dan jalankan pengaman reposisi singkat memakai requestAnimationFrame
-                // supaya dropdown selalu "menempel" pas walau viewport masih bergeser.
+                // Reposisi berkali-kali setelah keyboard HP selesai animasi muncul
+                // (durasinya bisa beda-beda tergantung device/OS), supaya dropdown
+                // selalu "menempel" pas walau viewport masih bergeser beberapa saat.
                 requestAnimationFrame(positionList);
                 setTimeout(positionList, 50);
                 setTimeout(positionList, 150);
                 setTimeout(positionList, 350);
+                setTimeout(positionList, 600);
+                setTimeout(positionList, 900);
+                setTimeout(positionList, 1300);
                 startAutoReposition();
             }
 
             let _repositionRaf = null;
             function startAutoReposition() {
                 stopAutoReposition();
-                let ticks = 0;
                 const loop = () => {
                     if (list.classList.contains('hidden')) return;
                     positionList();
-                    ticks++;
-                    // Jalan terus selama list terbuka, tapi setelah 40 tick (~0.7 detik)
-                    // turunkan frekuensi jadi mengandalkan event scroll/resize saja.
-                    if (ticks < 40) {
-                        _repositionRaf = requestAnimationFrame(loop);
-                    }
+                    // [FIX] Dibiarkan jalan TERUS selama dropdown masih terbuka (bukan
+                    // berhenti di 40 tick/~0.7 detik seperti sebelumnya). Biayanya kecil
+                    // (cuma 1 dropdown yang aktif dalam satu waktu, lihat registry di
+                    // atas), tapi manfaatnya besar: keyboard HP yang animasinya lambat
+                    // atau auto-scroll browser yang telat tidak akan bikin dropdown
+                    // ketinggalan posisi lagi.
+                    _repositionRaf = requestAnimationFrame(loop);
                 };
                 _repositionRaf = requestAnimationFrame(loop);
             }
