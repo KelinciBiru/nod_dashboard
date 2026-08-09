@@ -12140,7 +12140,7 @@
                     if (tr.querySelector('.po-item-qty')) tr.querySelector('.po-item-qty').value = item.qty || '1';
                     if (tr.querySelector('.po-item-uom')) tr.querySelector('.po-item-uom').value = item.uom || '';
                     if (tr.querySelector('.po-item-desc')) tr.querySelector('.po-item-desc').value = item.desc || '';
-                    if (tr.querySelector('.po-item-note')) tr.querySelector('.po-item-note').value = item.note || '';
+                    if (tr.querySelector('.po-item-note')) { const nEl = tr.querySelector('.po-item-note'); nEl.value = item.note || ''; autoResizeTextarea(nEl); }
                 });
             }
         }
@@ -12332,7 +12332,7 @@
                     const match = [...descEl.options].find(o => o.value.toLowerCase() === String(it.description || '').toLowerCase());
                     descEl.value = match ? match.value : (descEl.options[descEl.options.length - 1]?.value || '');
                 }
-                if (noteEl) noteEl.value = it.note || '';
+                if (noteEl) { noteEl.value = it.note || ''; autoResizeTextarea(noteEl); }
             });
             if (tbody.querySelectorAll('tr').length === 0) {
                 tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
@@ -13302,7 +13302,7 @@
                     <select class="po-item-desc w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px;">${descOpts}</select>
                 </td>
                 <td class="p-2">
-                    <input type="text" class="po-item-note w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Catatan...">
+                    <textarea rows="1" class="po-item-note w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top" style="min-height:26px;" placeholder="Catatan..." oninput="autoResizeTextarea(this)"></textarea>
                 </td>
                 <td class="p-2 text-center">
                     <button onclick="hapusBarisFormRetur(this)" title="Hapus baris"
@@ -13409,7 +13409,7 @@
                     if (tr.querySelector('.po-item-qty')) tr.querySelector('.po-item-qty').value = item.qty || '1';
                     if (tr.querySelector('.po-item-uom')) tr.querySelector('.po-item-uom').value = item.uom || '';
                     if (tr.querySelector('.po-item-desc')) tr.querySelector('.po-item-desc').value = item.desc || '';
-                    if (tr.querySelector('.po-item-note')) tr.querySelector('.po-item-note').value = item.note || '';
+                    if (tr.querySelector('.po-item-note')) { const nEl = tr.querySelector('.po-item-note'); nEl.value = item.note || ''; autoResizeTextarea(nEl); }
                 });
             }
         }
@@ -13728,7 +13728,7 @@
                     <select class="po-item-desc w-full text-sm border border-gray-300 rounded-lg py-2.5 px-1.5 focus:ring-1 focus:ring-amber-400 outline-none bg-white" style="min-height:42px;">${descOpts}</select>
                 </td>
                 <td class="p-2">
-                    <input type="text" class="po-item-note w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none" placeholder="Catatan...">
+                    <textarea rows="1" class="po-item-note w-full p-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none overflow-hidden align-top" style="min-height:26px;" placeholder="Catatan..." oninput="autoResizeTextarea(this)"></textarea>
                 </td>
                 <td class="p-2 text-center">
                     <button onclick="hapusBarisFormPO(this)" title="Hapus baris"
