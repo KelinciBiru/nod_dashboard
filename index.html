@@ -1131,6 +1131,93 @@
             }
         }
 
+        // ─── Fetch dengan progress persen (khusus "Tarik & Ekstrak" PDF dari ───────
+        // Google Drive di menu Process PO & Receive PO) — pakai XMLHttpRequest
+        // karena event progress hanya tersedia lewat XHR, bukan fetch() biasa.
+        // Kalau server tidak mengirim Content-Length (lengthComputable=false,
+        // umum terjadi pada respons Google Apps Script), progres asli tidak bisa
+        // dihitung — pemanggil akan menyimulasikan kenaikan persen secara halus
+        // (lihat _startIndeterminateProgressSim) supaya bar tetap terlihat
+        // berjalan, bukan diam di 0%.
+        function fetchPDFWithProgress(url, timeoutMs, onProgress) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                xhr.timeout = timeoutMs;
+                xhr.onprogress = (e) => {
+                    if (typeof onProgress === 'function') {
+                        onProgress(e.lengthComputable ? (e.loaded / e.total) * 100 : null, !e.lengthComputable);
+                    }
+                };
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            resolve(JSON.parse(xhr.responseText));
+                        } catch (err) {
+                            reject(new Error('Respons server tidak valid (bukan JSON).'));
+                        }
+                    } else {
+                        reject(new Error('Server merespons dengan status ' + xhr.status));
+                    }
+                };
+                xhr.onerror = () => reject(new Error('Gagal terhubung ke server (periksa koneksi internet).'));
+                xhr.ontimeout = () => reject(new Error('Waktu tunggu server habis saat menarik file dari Google Drive.'));
+                xhr.send();
+            });
+        }
+
+        // Retry sekali (pola sama seperti fetchWithRetry) khusus untuk fetchPDFWithProgress
+        async function fetchPDFWithProgressRetry(url, timeoutMs, onProgress, retryDelayMs = 1500) {
+            try {
+                return await fetchPDFWithProgress(url, timeoutMs, onProgress);
+            } catch (err) {
+                console.warn('[fetchPDFWithProgressRetry] percobaan pertama gagal, mencoba ulang sekali:', err.message);
+                await new Promise(r => setTimeout(r, retryDelayMs));
+                return await fetchPDFWithProgress(url, timeoutMs, onProgress);
+            }
+        }
+
+        // ─── UI progress bar persen untuk "Tarik & Ekstrak" PDF dari Google Drive ──
+        // prefix: 'proc' (Process PO) atau 'recv' (Receive PO) — menyesuaikan id
+        // elemen yang dirender masing-masing di showProcessPO() / showReceivePO().
+        function showDrivePullProgress(prefix, label) {
+            const wrap = document.getElementById(prefix + '-drive-pull-progress-wrap');
+            if (!wrap) return;
+            wrap.classList.remove('hidden');
+            updateDrivePullProgress(prefix, 0, label || 'Memulai...');
+        }
+
+        function updateDrivePullProgress(prefix, percent, label) {
+            const wrap = document.getElementById(prefix + '-drive-pull-progress-wrap');
+            if (!wrap) return;
+            const bar = document.getElementById(prefix + '-drive-pull-bar');
+            const pctEl = document.getElementById(prefix + '-drive-pull-pct');
+            const labelEl = document.getElementById(prefix + '-drive-pull-label');
+            const p = Math.max(0, Math.min(100, Math.round(percent)));
+            if (bar) bar.style.width = p + '%';
+            if (pctEl) pctEl.textContent = p + '%';
+            if (labelEl && label) labelEl.textContent = label;
+        }
+
+        function hideDrivePullProgress(prefix, delayMs = 700) {
+            const wrap = document.getElementById(prefix + '-drive-pull-progress-wrap');
+            if (!wrap) return;
+            setTimeout(() => { wrap.classList.add('hidden'); }, delayMs);
+        }
+
+        // Simulasikan kenaikan persen halus selagi menunggu respons server yang
+        // tidak melaporkan Content-Length (lengthComputable=false) — supaya user
+        // tetap melihat progres berjalan, bukan macet di angka yang sama. Berhenti
+        // otomatis begitu progres asli tersedia (dibersihkan oleh pemanggil) atau
+        // saat mencapai capPercent (menunggu tahap berikutnya selesai).
+        function _startIndeterminateProgressSim(prefix, label, capPercent = 85) {
+            let simPct = 0;
+            return setInterval(() => {
+                simPct = Math.min(simPct + Math.random() * 5 + 1, capPercent);
+                updateDrivePullProgress(prefix, simPct, label);
+            }, 300);
+        }
+
         // [FIX PERF] Helper retry khusus untuk aksi SIMPAN/KIRIM (submit PO, RO,
         // Form Service, Warranty, Delivery Done, dst) — beda dari fetchWithRetry
         // biasa karena di sini kita HARUS hati-hati soal duplikat data:
@@ -14359,6 +14446,15 @@
                     </button>
                 </div>
                 <p id="po-list-status" class="text-xs text-gray-400 mt-1"></p>
+                <div id="proc-drive-pull-progress-wrap" class="hidden mt-2">
+                    <div class="flex items-center justify-between mb-1 gap-2">
+                        <span id="proc-drive-pull-label" class="text-xs text-blue-600 font-medium truncate">Menarik file dari Google Drive...</span>
+                        <span id="proc-drive-pull-pct" class="text-xs text-blue-600 font-bold flex-shrink-0">0%</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div id="proc-drive-pull-bar" class="h-full bg-blue-500 rounded-full transition-all duration-200" style="width:0%"></div>
+                    </div>
+                </div>
             </div>
             <div class="bg-white p-4 rounded-lg shadow border border-gray-200">
                 <label class="block text-xs font-bold text-gray-500 mb-2">CREW PACKING</label>
@@ -14556,7 +14652,10 @@
          * Return: { text: string, pageData: [ rows[] ] }
          * rows[] = [ { y, tokens: [{str, x}] } ]
          */
-        async function extractTextFromPDF(file) {
+        // onPageProgress(halamanKe, totalHalaman) opsional — dipanggil setelah tiap
+        // halaman selesai diproses, dipakai oleh alur "Tarik & Ekstrak" dari Google
+        // Drive untuk menaikkan progress bar persen secara nyata per halaman.
+        async function extractTextFromPDF(file, onPageProgress) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             let fullText = '';
@@ -14585,6 +14684,7 @@
                     fullText += row.tokens.map(t => t.str).join(' ') + '\n';
                 }
                 fullText += '\n';
+                if (typeof onPageProgress === 'function') onPageProgress(p, pdf.numPages);
             }
             return { text: fullText.trim(), pageData };
         }
@@ -15148,7 +15248,9 @@
         /**
          * Handler utama Import PDF
          */
-        async function handlePDFImport(fileOverride, expectedNoPO) {
+        // onPageProgress opsional — diteruskan ke extractTextFromPDF, dipakai oleh
+        // alur "Tarik & Ekstrak" dari Google Drive untuk progress bar persen.
+        async function handlePDFImport(fileOverride, expectedNoPO, onPageProgress) {
             const fileInput = document.getElementById('process-pdfFile');
             const statusEl = document.getElementById('import-status');
             const btnImport = document.getElementById('btn-import');
@@ -15170,7 +15272,7 @@
 
             try {
                 // 1. Ekstrak teks + koordinat dari PDF (semua halaman)
-                const { text: rawText, pageData } = await extractTextFromPDF(file);
+                const { text: rawText, pageData } = await extractTextFromPDF(file, onPageProgress);
 
                 if (!rawText || rawText.length < 10) {
                     throw new Error('PDF tidak dapat dibaca atau tidak mengandung teks (kemungkinan PDF scan/gambar).');
@@ -15281,7 +15383,7 @@
             } catch (err) {
                 statusEl.textContent = '❌ Gagal: ' + err.message;
                 statusEl.className = 'text-xs text-red-500 mt-1';
-                showAlert('error', 'Gagal Import', 'Terjadi kesalahan saat memproses PDF: ' + err.message);
+                showToastAlert('error', 'Gagal Import', 'Terjadi kesalahan saat memproses PDF: ' + err.message);
             } finally {
                 btnImport.disabled = false;
                 btnImport.innerHTML = `<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Import`;
@@ -15426,9 +15528,20 @@
                 statusEl.className = 'text-xs text-blue-500 mt-1';
             }
 
+            // ── Progress bar persen: 0-85% penarikan file dari Drive, 85-90% ────
+            // menyiapkan data, 90-100% ekstraksi PDF (per halaman).
+            showDrivePullProgress('proc', 'Mengambil file PDF dari Google Drive...');
+            let simTimer = _startIndeterminateProgressSim('proc', 'Mengambil file PDF dari Google Drive...', 85);
+
             try {
-                const res = await fetchWithRetry(WEB_APP_URL + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
-                const result = await res.json();
+                const url = WEB_APP_URL + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId);
+                const result = await fetchPDFWithProgressRetry(url, 30000, (pct, indeterminate) => {
+                    if (!indeterminate && pct !== null) {
+                        if (simTimer) { clearInterval(simTimer); simTimer = null; }
+                        updateDrivePullProgress('proc', pct * 0.85, `Mengambil file PDF dari Google Drive... (${Math.round(pct)}%)`);
+                    }
+                });
+                if (simTimer) { clearInterval(simTimer); simTimer = null; }
 
                 if (!result || !result.success || !result.base64) {
                     throw new Error((result && result.message) || 'File tidak ditemukan di Google Drive.');
@@ -15444,8 +15557,11 @@
                         statusEl.textContent = 'Dibatalkan — pilihan No. PO sudah berubah.';
                         statusEl.className = 'text-xs text-gray-400 mt-1';
                     }
+                    hideDrivePullProgress('proc', 0);
                     return;
                 }
+
+                updateDrivePullProgress('proc', 88, 'File diterima — menyiapkan data...');
 
                 // Konversi base64 menjadi objek File agar bisa dipakai pipeline Import PDF yang sudah ada
                 const byteChars = atob(result.base64);
@@ -15462,13 +15578,21 @@
                 showToastAlert('success', 'Berhasil Ditarik', `File Request Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
 
                 sel.dataset.lastPulled = fileId;
-                await handlePDFImport(file, expectedNoPO);
+                updateDrivePullProgress('proc', 90, 'Mengekstrak data dari PDF...');
+                await handlePDFImport(file, expectedNoPO, (curPage, totalPages) => {
+                    const pct = 90 + (curPage / Math.max(totalPages, 1)) * 10;
+                    updateDrivePullProgress('proc', pct, `Mengekstrak halaman ${curPage}/${totalPages}...`);
+                });
+                updateDrivePullProgress('proc', 100, 'Selesai.');
+                hideDrivePullProgress('proc');
             } catch (err) {
+                if (simTimer) clearInterval(simTimer);
+                hideDrivePullProgress('proc', 0);
                 if (statusEl) {
                     statusEl.textContent = '❌ Gagal: ' + err.message;
                     statusEl.className = 'text-xs text-red-500 mt-1';
                 }
-                showAlert('error', 'Gagal Menarik File', 'Terjadi kesalahan saat menarik file dari Google Drive: ' + err.message);
+                showToastAlert('error', 'Gagal Menarik File', 'Terjadi kesalahan saat menarik file dari Google Drive: ' + err.message);
             } finally {
                 btnPull.disabled = false;
                 btnPull.innerHTML = originalHtml;
@@ -18681,6 +18805,15 @@
                 </button>
             </div>
             <p id="recv-po-list-status" class="text-xs text-gray-400 mt-1"></p>
+            <div id="recv-drive-pull-progress-wrap" class="hidden mt-2">
+                <div class="flex items-center justify-between mb-1 gap-2">
+                    <span id="recv-drive-pull-label" class="text-xs text-blue-600 font-medium truncate">Menarik file dari Google Drive...</span>
+                    <span id="recv-drive-pull-pct" class="text-xs text-blue-600 font-bold flex-shrink-0">0%</span>
+                </div>
+                <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div id="recv-drive-pull-bar" class="h-full bg-blue-500 rounded-full transition-all duration-200" style="width:0%"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Baris: Tanggal Terima + No PO -->
@@ -18846,7 +18979,10 @@
         // ─── Ekstrak Teks PDF Delivery Order (tanpa QR Code) ───────────────────
         // Membaca konten teks PDF langsung via pdf.js getTextContent(), lalu
         // mem-parse metadata + tabel item berdasarkan posisi koordinat token.
-        async function handleReceivePDFTextExtract(fileOverride) {
+        // onPageProgress opsional — dipanggil setelah tiap halaman selesai
+        // diproses, dipakai oleh alur "Tarik & Ekstrak" dari Google Drive untuk
+        // progress bar persen.
+        async function handleReceivePDFTextExtract(fileOverride, onPageProgress) {
             const fileInput = document.getElementById('recv-pdfFile');
             const statusEl = document.getElementById('recv-import-status');
             const btnExtract = document.getElementById('btn-recv-extract');
@@ -18882,6 +19018,7 @@
                             page: p
                         });
                     }
+                    if (typeof onPageProgress === 'function') onPageProgress(p, pdf.numPages);
                 }
 
                 if (allTokens.length === 0) {
@@ -18911,7 +19048,7 @@
             } catch (err) {
                 statusEl.textContent = '❌ Gagal: ' + err.message;
                 statusEl.className = 'text-xs text-red-500 mt-1';
-                showAlert('error', 'Gagal Ekstrak PDF', 'Terjadi kesalahan saat mengekstrak PDF: ' + err.message);
+                showToastAlert('error', 'Gagal Ekstrak PDF', 'Terjadi kesalahan saat mengekstrak PDF: ' + err.message);
             } finally {
                 btnExtract.disabled = false;
                 btnExtract.innerHTML = originalBtnHtml;
@@ -18990,13 +19127,26 @@
                 statusEl.className = 'text-xs text-blue-500 mt-1';
             }
 
+            // ── Progress bar persen: 0-85% penarikan file dari Drive, 85-90% ────
+            // menyiapkan data, 90-100% ekstraksi PDF (per halaman).
+            showDrivePullProgress('recv', 'Mengambil file PDF dari Google Drive...');
+            let simTimer = _startIndeterminateProgressSim('recv', 'Mengambil file PDF dari Google Drive...', 85);
+
             try {
-                const res = await fetchWithRetry(RECEIVE_GAS_URL + '?action=getDeliveryOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
-                const result = await res.json();
+                const url = RECEIVE_GAS_URL + '?action=getDeliveryOrderPDF&fileId=' + encodeURIComponent(fileId);
+                const result = await fetchPDFWithProgressRetry(url, 30000, (pct, indeterminate) => {
+                    if (!indeterminate && pct !== null) {
+                        if (simTimer) { clearInterval(simTimer); simTimer = null; }
+                        updateDrivePullProgress('recv', pct * 0.85, `Mengambil file PDF dari Google Drive... (${Math.round(pct)}%)`);
+                    }
+                });
+                if (simTimer) { clearInterval(simTimer); simTimer = null; }
 
                 if (!result || !result.success || !result.base64) {
                     throw new Error((result && result.message) || 'File tidak ditemukan di Google Drive.');
                 }
+
+                updateDrivePullProgress('recv', 88, 'File diterima — menyiapkan data...');
 
                 // Konversi base64 menjadi objek File agar bisa dipakai pipeline ekstrak PDF yang sudah ada
                 const byteChars = atob(result.base64);
@@ -19013,13 +19163,21 @@
                 showToastAlert('success', 'Berhasil Ditarik', `File Delivery Order "${result.fileName || ''}" berhasil ditarik dari Google Drive dan sedang diekstrak.`);
 
                 sel.dataset.lastPulled = fileId;
-                await handleReceivePDFTextExtract(file);
+                updateDrivePullProgress('recv', 90, 'Mengekstrak data dari PDF...');
+                await handleReceivePDFTextExtract(file, (curPage, totalPages) => {
+                    const pct = 90 + (curPage / Math.max(totalPages, 1)) * 10;
+                    updateDrivePullProgress('recv', pct, `Mengekstrak halaman ${curPage}/${totalPages}...`);
+                });
+                updateDrivePullProgress('recv', 100, 'Selesai.');
+                hideDrivePullProgress('recv');
             } catch (err) {
+                if (simTimer) clearInterval(simTimer);
+                hideDrivePullProgress('recv', 0);
                 if (statusEl) {
                     statusEl.textContent = '❌ Gagal: ' + err.message;
                     statusEl.className = 'text-xs text-red-500 mt-1';
                 }
-                showAlert('error', 'Gagal Menarik File', 'Terjadi kesalahan saat menarik file dari Google Drive: ' + err.message);
+                showToastAlert('error', 'Gagal Menarik File', 'Terjadi kesalahan saat menarik file dari Google Drive: ' + err.message);
             } finally {
                 btnPull.disabled = false;
                 btnPull.innerHTML = originalHtml;
