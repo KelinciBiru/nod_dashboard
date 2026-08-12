@@ -956,6 +956,37 @@
         // =========================================================================
         const PO_GAS_URL = 'https://script.google.com/macros/s/AKfycbx1kCct_cErpP7JmBdWLYzdSbYYtKtqhNMxYKjXy_4EI3Q6voI2og8y926NXpj4TEEC/exec';
 
+        // =========================================================================
+        // [OPTIMASI LOGIN] "Bangunkan" GAS lebih awal (warm-up) di background
+        // =========================================================================
+        // Root cause utama proses "Memeriksa..." di halaman login sering terasa
+        // gagal/berat: Google Apps Script Web App butuh waktu cold-start (kadang
+        // 15-25 detik) kalau belum ada eksekusi baru-baru ini. Kalau warm-up ini
+        // ditembak SEDINI MUNGKIN saat halaman login tampil (sebelum user selesai
+        // mengetik password), maka begitu user menekan "Masuk", request login
+        // yang sesungguhnya kemungkinan besar sudah kena GAS yang sudah "warm" →
+        // jauh lebih cepat & jarang timeout.
+        // - Fire-and-forget: hasil & error-nya SENGAJA diabaikan total (.catch
+        //   kosong), tidak pernah ditampilkan ke user, dan tidak pernah dianggap
+        //   sebagai tanda gagal/berhasil apapun.
+        // - Tidak dikirim kalau user sudah punya sesi tersimpan (sudah login),
+        //   supaya tidak ada request GAS yang sia-sia.
+        // - Action 'ping' TIDAK WAJIB dikenali backend: kalau Code.gs belum
+        //   mengenali action ini, dia cukup jatuh ke balasan default/else yang
+        //   sudah ada (tidak menulis apapun ke Sheet) — efek sampingnya nol,
+        //   yang penting proses GAS-nya sempat "bangun".
+        (function warmupGasForLogin() {
+            try {
+                if (sessionStorage.getItem('sessionToken')) return; // sudah login, tak perlu warm-up
+                fetch(PO_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'ping' })
+                }).catch(() => { /* abaikan total, ini cuma pemanasan */ });
+            } catch (e) { /* abaikan total */ }
+        })();
+
         // TODO: Ganti dengan URL Google Apps Script Web App khusus Dashboard Log (deployment terpisah, lihat DashboardLog.gs)
         const DASHBOARD_LOG_GAS_URL = 'https://script.google.com/macros/s/AKfycbxGTv8c9x0cv-qb5Dy_NokDKI3BrYcF_8AURc21o0lvSION-g83FuMaMHqTaPopEZJhMQ/exec';
 
@@ -1587,33 +1618,48 @@
             if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = 'Memeriksa...'; }
             error.classList.add('hidden');
 
+            // [OPTIMASI] Kalau permintaan pertama belum selesai setelah beberapa detik,
+            // ganti teks tombol supaya jelas ini masih JALAN (bukan macet) -- biasanya
+            // artinya GAS baru "bangun" dari cold-start, bukan koneksi user yang jelek.
+            const slowHintTimer = setTimeout(() => {
+                if (loginBtn && !loginBtn.classList.contains('hidden')) {
+                    loginBtn.textContent = 'Menyiapkan server...';
+                }
+            }, 6000);
+
+            const doLoginRequest = (timeoutMs) => fetchWriteWithRetry(PO_GAS_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'login', password: pass })
+            }, timeoutMs);
+
             try {
                 // [FIX BUG "login selalu gagal"] Login BEDA dari aksi submit PO/RO/dll:
                 // login tidak menulis/mengubah data apa pun di server (hanya membaca &
-                // validasi password), jadi AMAN untuk di-retry otomatis walau percobaan
-                // pertama timeout (beda dengan fetchWriteWithRetry biasa yang sengaja TIDAK
-                // retry saat timeout demi menghindari data dobel). Sebelumnya, kalau GAS
-                // sedang lambat/cold-start dan percobaan pertama timeout di 20 detik, user
-                // langsung lihat "Gagal terhubung ke server" tanpa percobaan ulang sama
-                // sekali -- untuk user dengan koneksi yang memang konsisten lambat, ini
-                // membuat login "selalu gagal" walau password benar.
+                // validasi password), jadi AMAN untuk di-retry otomatis. Sebelumnya kode
+                // ini HANYA retry kalau error-nya persis timeout (isGasTimeout), padahal
+                // penyebab "sering gagal" yang paling umum justru dua hal lain yang TIDAK
+                // pernah kena retry sama sekali:
+                //   1) GAS balas halaman HTML karena sibuk/cold-start (isGasParseError)
+                //   2) Request bahkan gagal terkirim (mis. GAS baru redirect/restart) yang
+                //      muncul sebagai TypeError biasa, bukan isGasTimeout
+                // Percobaan pertama diberi waktu lebih longgar (28 detik, GAS cold-start
+                // bisa makan waktu segitu), lalu KALAU MASIH gagal karena hal di atas --
+                // dan browser memang mendeteksi masih online -- baru coba SEKALI lagi
+                // dengan jeda singkat (biasanya sudah lebih cepat karena GAS sudah warm).
+                // Kalau browser sudah pasti offline, langsung gagal tanpa buang waktu
+                // menunggu percobaan kedua yang pasti sia-sia juga.
                 let data;
                 try {
-                    data = await fetchWriteWithRetry(PO_GAS_URL, {
-                        method: 'POST',
-                        redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify({ action: 'login', password: pass })
-                    }, 20000);
+                    data = await doLoginRequest(28000);
                 } catch (firstErr) {
-                    if (firstErr && firstErr.isGasTimeout) {
-                        console.warn('[checkLogin] percobaan pertama timeout, mencoba ulang sekali sebelum menyerah');
-                        data = await fetchWriteWithRetry(PO_GAS_URL, {
-                            method: 'POST',
-                            redirect: 'follow',
-                            headers: { 'Content-Type': 'text/plain' },
-                            body: JSON.stringify({ action: 'login', password: pass })
-                        }, 20000);
+                    const worthRetry = firstErr && (firstErr.isGasTimeout || firstErr.isGasParseError || firstErr.name === 'TypeError');
+                    if (worthRetry && navigator.onLine !== false) {
+                        console.warn('[checkLogin] percobaan pertama gagal (' + (firstErr && firstErr.message) + '), mencoba ulang sekali');
+                        if (loginBtn) loginBtn.textContent = 'Mencoba lagi...';
+                        await new Promise(r => setTimeout(r, 1200));
+                        data = await doLoginRequest(20000);
                     } else {
                         throw firstErr;
                     }
@@ -1650,9 +1696,19 @@
                     error.classList.remove('hidden');
                 }
             } catch (e) {
-                error.textContent = 'Gagal terhubung ke server. Cek koneksi internet Anda.';
+                // [FIX] Pesan sebelumnya SELALU menuduh "koneksi internet Anda", padahal
+                // penyebab tersering justru GAS yang lambat/cold-start/sibuk -- bukan
+                // koneksi user. Bedakan pesannya supaya tidak menyesatkan:
+                if (navigator.onLine === false) {
+                    error.textContent = 'Perangkat Anda sedang tidak terhubung ke internet. Periksa jaringan lalu coba lagi.';
+                } else if (e && (e.isGasTimeout || e.isGasParseError)) {
+                    error.textContent = 'Server sedang lambat merespon (baru "bangun" dari idle). Koneksi Anda tidak masalah -- silakan tekan Masuk sekali lagi.';
+                } else {
+                    error.textContent = 'Gagal terhubung ke server. Silakan coba lagi dalam beberapa saat.';
+                }
                 error.classList.remove('hidden');
             } finally {
+                clearTimeout(slowHintTimer);
                 _isLoggingIn = false;
                 if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'Masuk'; }
             }
