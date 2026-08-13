@@ -2450,6 +2450,70 @@
         }
 
         /**
+         * Overlay progress bar persen — dipakai saat tombol proses/kirim (Process PO,
+         * Process Inbound, Kirim PO, Kirim Retur, Kirim Form Service) diklik, supaya
+         * user tahu progres berjalan (bukan cuma spinner tanpa info) selama proses
+         * generate PDF + kirim ke server GAS berlangsung.
+         * - showProgressOverlay(message): tampilkan overlay mulai dari 0%, lalu
+         *   "merayap" otomatis mendekati 90% (melambat) selama menunggu, supaya
+         *   terlihat tetap berjalan walau tahap sebenarnya (mis. request ke GAS)
+         *   tidak melaporkan persentase asli.
+         * - setProgressOverlay(percent, message?): set persen manual di titik-titik
+         *   tahap yang diketahui (mis. selesai generate PDF, sebelum kirim ke server).
+         * - hideProgressOverlay(success): animasikan ke 100% dulu kalau success lalu
+         *   fade-out & sembunyikan; kalau gagal, langsung sembunyi.
+         */
+        function showProgressOverlay(message = 'Memproses...') {
+            let overlay = document.getElementById('progress-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'progress-overlay';
+                overlay.className = 'fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center px-4';
+                overlay.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs text-center">
+                    <p id="progress-overlay-message" class="text-sm font-semibold text-gray-700 mb-3">Memproses...</p>
+                    <div class="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                        <div id="progress-overlay-bar" class="h-full bg-amber-500 rounded-full transition-all duration-300 ease-out" style="width:0%"></div>
+                    </div>
+                    <p id="progress-overlay-percent" class="text-xs text-gray-400 mt-2 font-mono">0%</p>
+                </div>`;
+                document.body.appendChild(overlay);
+            }
+            overlay.style.display = 'flex';
+            setProgressOverlay(0, message);
+            if (overlay._creepInterval) clearInterval(overlay._creepInterval);
+            overlay._creepInterval = setInterval(() => {
+                const bar = document.getElementById('progress-overlay-bar');
+                if (!bar) return;
+                const current = parseFloat(bar.style.width) || 0;
+                if (current < 90) setProgressOverlay(current + (90 - current) * 0.08);
+            }, 350);
+            return overlay;
+        }
+
+        function setProgressOverlay(percent, message) {
+            const bar = document.getElementById('progress-overlay-bar');
+            const pct = document.getElementById('progress-overlay-percent');
+            const msg = document.getElementById('progress-overlay-message');
+            const clamped = Math.max(0, Math.min(100, percent));
+            if (bar) bar.style.width = clamped + '%';
+            if (pct) pct.textContent = Math.round(clamped) + '%';
+            if (msg && message) msg.textContent = message;
+        }
+
+        function hideProgressOverlay(success = true) {
+            const overlay = document.getElementById('progress-overlay');
+            if (!overlay) return;
+            if (overlay._creepInterval) { clearInterval(overlay._creepInterval); overlay._creepInterval = null; }
+            if (success) {
+                setProgressOverlay(100);
+                setTimeout(() => { overlay.style.display = 'none'; }, 250);
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
+
+        /**
          * Skeleton halaman berbentuk tabel (judul + beberapa baris shimmer) — dipakai
          * menggantikan setLoading() polos di menu yang hasil akhirnya berbentuk tabel,
          * supaya user langsung lihat struktur yang akan muncul (dan tidak menyangka
@@ -6055,6 +6119,7 @@
             };
 
             setSubmitLoading(true);
+            showProgressOverlay('Membuat PDF Form Service...');
             try {
                 // ── Generate PDF Form Service dari isi form (menggantikan tombol Download PDF terpisah) ──
                 const pdfResult = await buildServiceOrderPDF();
@@ -6062,6 +6127,7 @@
                 const { doc, fileName } = pdfResult;
                 const pdfBlob = doc.output('blob');
                 const fileData = doc.output('datauristring').split(',')[1];
+                setProgressOverlay(45, 'Mengirim Form Service ke server...');
 
                 const payload = {
                     action: 'submitFormService',
@@ -6092,6 +6158,7 @@
                     body: JSON.stringify(payload)
                 });
                 if (!result.success) { throw new Error(result.message || 'Gagal mengirim Form Service.'); }
+                setProgressOverlay(100, 'Selesai!');
                 const noTiketFinal = result.noTiket || result.ticket || payload.noTiket;
                 resetFormService();
                 showPdfPreviewModal(
@@ -6101,9 +6168,11 @@
                     { blob: pdfBlob, fileName }
                 );
             } catch (err) {
+                hideProgressOverlay(false);
                 showAlert('error', 'Gagal Mengirim Form Service', err.message);
             } finally {
                 setSubmitLoading(false);
+                hideProgressOverlay(true);
             }
         }
 
@@ -12850,6 +12919,7 @@
             };
 
             setSubmitLoading(true);
+            showProgressOverlay('Membuat PDF PO...');
             try {
                 // ── Generate PDF Request Order dari isi form (menggantikan tombol Download PDF terpisah) ──
                 const pdfResult = await buildRequestOrderPDF();
@@ -12857,6 +12927,7 @@
                 const { doc, fileName } = pdfResult;
                 const pdfBlob = doc.output('blob');
                 const fileData = doc.output('datauristring').split(',')[1];
+                setProgressOverlay(45, 'Mengirim PO ke server...');
 
                 const payload = {
                     action: 'submitPO',
@@ -12883,6 +12954,7 @@
                     body: JSON.stringify(payload)
                 });
                 if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim PO.');
+                setProgressOverlay(100, 'Selesai!');
                 const statusNote = result.status === 'Pre-Order'
                     ? ' (status: Pre-Order)'
                     : result.status === 'Need Approval'
@@ -12897,9 +12969,11 @@
                     { blob: pdfBlob, fileName }
                 );
             } catch (err) {
+                hideProgressOverlay(false);
                 showAlert('error', 'Gagal Mengirim PO', err.message);
             } finally {
                 setSubmitLoading(false);
+                hideProgressOverlay(true);
             }
         }
 
@@ -13431,6 +13505,7 @@
             };
 
             setSubmitLoading(true);
+            showProgressOverlay('Membuat PDF Retur...');
             try {
                 // ── Generate PDF Return Order dari isi form (menggantikan tombol Download PDF terpisah) ──
                 const pdfResult = await buildReturPDF();
@@ -13438,6 +13513,7 @@
                 const { doc, fileName } = pdfResult;
                 const pdfBlob = doc.output('blob');
                 const fileData = doc.output('datauristring').split(',')[1];
+                setProgressOverlay(45, 'Mengirim Retur ke server...');
 
                 const payload = {
                     action: 'submitRetur',
@@ -13465,6 +13541,7 @@
                     body: JSON.stringify(payload)
                 });
                 if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim Retur.');
+                setProgressOverlay(100, 'Selesai!');
                 resetFormRetur();
                 _clearDraft(DRAFT_KEYS.formRetur);
                 showPdfPreviewModal(
@@ -13474,9 +13551,11 @@
                     { blob: pdfBlob, fileName }
                 );
             } catch (err) {
+                hideProgressOverlay(false);
                 showAlert('error', 'Gagal Mengirim Retur', err.message);
             } finally {
                 setSubmitLoading(false);
+                hideProgressOverlay(true);
             }
         }
 
@@ -17108,6 +17187,7 @@
                 btn.disabled = true;
                 btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Menyimpan...`;
             }
+            showProgressOverlay('Menyimpan data inbound ke server...');
 
             const payload = {
                 action: 'simpanInbound',
@@ -17128,6 +17208,7 @@
                 }, 25000);
 
                 if (result.success) {
+                    setProgressOverlay(100, 'Selesai!');
                     showToastAlert('success', '✅ Berhasil Diproses!', `Data inbound (${items.length} item) tersimpan ke spreadsheet.`);
                     // Reset form
                     document.getElementById('inb-ex-lokasi').value = '';
@@ -17144,6 +17225,7 @@
                 showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
             } finally {
                 if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
+                hideProgressOverlay(true);
             }
         }
 
@@ -18666,6 +18748,7 @@
                 saveBtn.disabled = true;
                 saveBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Memproses...`;
             }
+            showProgressOverlay('Membuat PDF Delivery Order...');
 
             const payload = {
                 action: 'simpanOutbound',
@@ -18695,8 +18778,10 @@
                 if (!pdfBuild) {
                     // Validasi field PDF (Tanggal/No. PO/Crew Packing) gagal — alert sudah
                     // ditampilkan di dalam _buildProcessPOPDF, hentikan proses di sini.
+                    hideProgressOverlay(false);
                     return;
                 }
+                setProgressOverlay(40, 'Menyimpan data & mengunggah PDF...');
 
                 // ── 2) & 3) Simpan data ke Outbound_Log (KRITIS — status PO ikut
                 //      berubah) dan simpan salinan PDF ke Drive (PENDUKUNG saja,
@@ -18728,6 +18813,7 @@
                 }, 45000);
 
                 if (result.success) {
+                    setProgressOverlay(100, 'Selesai!');
 
                     // ── Status PO sudah diupdate oleh GAS Outbound sekaligus ──
                     const statusUpdated = result.statusUpdated === true;
@@ -18817,6 +18903,7 @@
                     saveBtn.disabled = false;
                     saveBtn.innerHTML = originalBtnHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Proses`;
                 }
+                hideProgressOverlay(true);
             }
         }
         // =========================================================================
