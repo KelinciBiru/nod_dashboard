@@ -4803,7 +4803,11 @@
                 if (!result.success) throw new Error(result.message || 'Gagal menyimpan data.');
 
                 onSuccessCloseModal();
-                showToastAlert('success', 'Berhasil Disimpan', `Data Task Technician untuk Serial Number "${payload.serial}" berhasil disimpan (${payload.status}).`);
+                if (payload.status === 'Done Repair') {
+                    showToastAlert('success', 'Sukses', `Data Done Repair untuk Serial Number "${payload.serial}" berhasil diperbarui.`);
+                } else {
+                    showToastAlert('success', 'Berhasil Disimpan', `Data Task Technician untuk Serial Number "${payload.serial}" berhasil disimpan (${payload.status}).`);
+                }
 
                 // Reset form ke kondisi awal
                 document.getElementById('tt-serial').value = '';
