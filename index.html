@@ -6243,13 +6243,16 @@
                 const list = Array.isArray(raw) ? raw : [];
                 _fsRevisiListCache = list;
                 let options = '<option value="">— Buat Form Service baru —</option>';
+                let shownCount = 0;
                 list.forEach((item, idx) => {
                     const noTiket = item.noTiket || item.no_tiket || item.ticket || '';
                     if (!noTiket) return;
+                    if (!_isRevisiMasihDiizinkan(noTiket)) return;
+                    shownCount++;
                     options += `<option value="${idx}">${escapeHtml(noTiket)}</option>`;
                 });
                 sel.innerHTML = options;
-                if (status) status.textContent = list.length ? '' : 'Belum ada tiket bulan ini.';
+                if (status) status.textContent = shownCount ? `Maks. ${REVISI_MAX_HARI} hari setelah pembuatan tiket.` : 'Tidak ada tiket yang masih bisa direvisi (batas revisi: ' + REVISI_MAX_HARI + ' hari setelah pembuatan).';
             } catch (err) {
                 sel.innerHTML = '<option value="">— Gagal memuat daftar tiket —</option>';
                 if (status) status.textContent = 'Gagal memuat daftar No. Tiket.';
@@ -6263,6 +6266,13 @@
             if (!item) { _exitRevisiFormServiceMode(); return; }
 
             const noTiket = item.noTiket || item.no_tiket || item.ticket || '';
+
+            if (!_isRevisiMasihDiizinkan(noTiket)) {
+                showAlert('error', 'Revisi Tidak Diizinkan', `Tiket "${noTiket}" sudah lebih dari ${REVISI_MAX_HARI} hari sejak dibuat, tidak bisa direvisi lagi.`);
+                _exitRevisiFormServiceMode();
+                return;
+            }
+
             window._revisiFormServiceActive = noTiket;
 
             const namaEl = document.getElementById('fs-nama');
@@ -12636,6 +12646,31 @@
             return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
         }
 
+        /** Batas maksimal revisi PO/RO/Form Service: 3 hari setelah tanggal pembuatan (embedded di nomor dokumen) */
+        const REVISI_MAX_HARI = 3;
+
+        /** Ekstrak tanggal pembuatan dari No. PO/RO/Tiket berformat "...-DDMMYYYY-00X" (mis. "OT-06072026-004").
+         *  Return objek Date (jam 00:00) atau null kalau pola tanggal tidak dikenali. */
+        function _extractDateFromDocNumber(str) {
+            const m = String(str || '').match(/-(\d{2})(\d{2})(\d{4})-/);
+            if (!m) return null;
+            const [, dd, mm, yyyy] = m;
+            const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+            if (isNaN(d.getTime())) return null;
+            return d;
+        }
+
+        /** Cek apakah dokumen dengan No. PO/RO/Tiket tertentu masih boleh direvisi (≤ 3 hari sejak pembuatan).
+         *  Kalau tanggal tidak bisa diekstrak dari nomor, dianggap boleh direvisi (fallback aman). */
+        function _isRevisiMasihDiizinkan(docNumber) {
+            const created = _extractDateFromDocNumber(docNumber);
+            if (!created) return true;
+            const today = new Date();
+            const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const diffDays = Math.round((todayOnly - created) / 86400000);
+            return diffDays <= REVISI_MAX_HARI;
+        }
+
         /** Isi baris-baris tabel item Form PO/RO dari hasil parsePOData().items */
         function _fillItemRowsFromParsed(items, addRowFn, tbodyId) {
             const tbody = document.getElementById(tbodyId);
@@ -12681,13 +12716,15 @@
                     sel.innerHTML = `<option value="">Gagal memuat daftar No. PO (Code.gs belum di-deploy ulang?)</option>`;
                     return;
                 }
-                const files = (Array.isArray(result.files) ? result.files : []).filter(f => f.type !== 'RO');
+                const files = (Array.isArray(result.files) ? result.files : [])
+                    .filter(f => f.type !== 'RO')
+                    .filter(f => _isRevisiMasihDiizinkan(f.noPO || f.fileName));
                 files.sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
                 if (files.length === 0) {
-                    sel.innerHTML = `<option value="">Belum ada No. PO bulan ini di Google Drive</option>`;
+                    sel.innerHTML = `<option value="">Tidak ada No. PO yang masih bisa direvisi (batas revisi: ${REVISI_MAX_HARI} hari setelah pembuatan)</option>`;
                     return;
                 }
-                sel.innerHTML = `<option value="">— Pilih No. PO untuk direvisi (opsional) —</option>` +
+                sel.innerHTML = `<option value="">— Pilih No. PO untuk direvisi (opsional, maks. ${REVISI_MAX_HARI} hari setelah pembuatan) —</option>` +
                     files.map(f => `<option value="${f.fileId}" data-no-po="${escapeHtml(f.noPO || '')}">${escapeHtml(f.noPO || f.fileName)}</option>`).join('');
             } catch (err) {
                 sel.innerHTML = `<option value="">Gagal memuat daftar (${err.message})</option>`;
@@ -12701,7 +12738,15 @@
             if (!fileId) { _exitRevisiPOMode(); return; }
 
             const noPO = sel?.selectedOptions?.[0]?.dataset?.noPo || '';
+
+            if (!_isRevisiMasihDiizinkan(noPO)) {
+                showAlert('error', 'Revisi Tidak Diizinkan', `PO "${noPO}" sudah lebih dari ${REVISI_MAX_HARI} hari sejak dibuat, tidak bisa direvisi lagi.`);
+                if (sel) sel.value = '';
+                return;
+            }
+
             if (statusEl) { statusEl.textContent = 'Menarik data PO "' + noPO + '" dari Google Drive...'; statusEl.className = 'text-xs text-blue-500 mt-1'; }
+            showProgressOverlay('Menarik data PO dari Google Drive...');
 
             try {
                 // 1. Ambil metadata header dari sheet PO_Data (lebih akurat daripada hasil ekstraksi PDF)
@@ -12710,16 +12755,19 @@
                 const row = Array.isArray(poRows) ? poRows.slice(1).find(r => String(r[1] || '').trim() === noPO) : null;
 
                 // 2. Ambil file PDF Request Order & ekstrak tabel item
+                setProgressOverlay(30, 'Mengunduh file PDF...');
                 const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const pdfResult = await pdfRes.json();
                 if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
 
+                setProgressOverlay(60, 'Membaca isi PDF...');
                 const byteChars = atob(pdfResult.base64);
                 const byteArray = new Uint8Array(byteChars.length);
                 for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
                 const blob = new Blob([byteArray], { type: 'application/pdf' });
                 const { text: rawText, pageData } = await extractTextFromPDF(new File([blob], pdfResult.fileName || 'Request_Order.pdf', { type: 'application/pdf' }));
                 const parsed = parsePOData(pageData, rawText);
+                setProgressOverlay(85, 'Mengisi form...');
 
                 // 3. Isi field header — utamakan data dari sheet PO_Data, fallback ke hasil parsing PDF
                 const namaEl = document.getElementById('nama');
@@ -12762,8 +12810,10 @@
                 _showBatalRevisiButton('po');
 
                 if (statusEl) { statusEl.textContent = '✅ Data PO "' + noPO + '" berhasil ditarik. Form siap diedit — mengisi file PDF baru bersifat opsional.'; statusEl.className = 'text-xs text-green-600 mt-1 font-semibold'; }
+                hideProgressOverlay(true);
             } catch (err) {
                 if (statusEl) { statusEl.textContent = '❌ Gagal menarik data: ' + err.message; statusEl.className = 'text-xs text-red-500 mt-1'; }
+                hideProgressOverlay(false);
                 showAlert('error', 'Gagal Menarik Data Revisi', err.message);
                 if (sel) sel.value = '';
             }
@@ -13298,13 +13348,15 @@
                     sel.innerHTML = `<option value="">Gagal memuat daftar No. RO (Code.gs belum di-deploy ulang?)</option>`;
                     return;
                 }
-                const files = (Array.isArray(result.files) ? result.files : []).filter(f => f.type === 'RO');
+                const files = (Array.isArray(result.files) ? result.files : [])
+                    .filter(f => f.type === 'RO')
+                    .filter(f => _isRevisiMasihDiizinkan(f.noPO || f.fileName));
                 files.sort((a, b) => new Date(b.createdDate || 0) - new Date(a.createdDate || 0));
                 if (files.length === 0) {
-                    sel.innerHTML = `<option value="">Belum ada No. RO bulan ini di Google Drive</option>`;
+                    sel.innerHTML = `<option value="">Tidak ada No. RO yang masih bisa direvisi (batas revisi: ${REVISI_MAX_HARI} hari setelah pembuatan)</option>`;
                     return;
                 }
-                sel.innerHTML = `<option value="">— Pilih No. RO untuk direvisi (opsional) —</option>` +
+                sel.innerHTML = `<option value="">— Pilih No. RO untuk direvisi (opsional, maks. ${REVISI_MAX_HARI} hari setelah pembuatan) —</option>` +
                     files.map(f => `<option value="${f.fileId}" data-no-po="${escapeHtml(f.noPO || '')}">${escapeHtml(f.noPO || f.fileName)}</option>`).join('');
             } catch (err) {
                 sel.innerHTML = `<option value="">Gagal memuat daftar (${err.message})</option>`;
@@ -13318,7 +13370,15 @@
             if (!fileId) { _exitRevisiROMode(); return; }
 
             const noRO = sel?.selectedOptions?.[0]?.dataset?.noPo || '';
+
+            if (!_isRevisiMasihDiizinkan(noRO)) {
+                showAlert('error', 'Revisi Tidak Diizinkan', `RO "${noRO}" sudah lebih dari ${REVISI_MAX_HARI} hari sejak dibuat, tidak bisa direvisi lagi.`);
+                if (sel) sel.value = '';
+                return;
+            }
+
             if (statusEl) { statusEl.textContent = 'Menarik data RO "' + noRO + '" dari Google Drive...'; statusEl.className = 'text-xs text-blue-500 mt-1'; }
+            showProgressOverlay('Menarik data RO dari Google Drive...');
 
             try {
                 // 1. Ambil metadata header dari sheet Retur_Data
@@ -13327,16 +13387,19 @@
                 const row = Array.isArray(roRows) ? roRows.slice(1).find(r => String(r[1] || '').trim() === noRO) : null;
 
                 // 2. Ambil file PDF Request Order (RO) & ekstrak tabel item
+                setProgressOverlay(30, 'Mengunduh file PDF...');
                 const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const pdfResult = await pdfRes.json();
                 if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
 
+                setProgressOverlay(60, 'Membaca isi PDF...');
                 const byteChars = atob(pdfResult.base64);
                 const byteArray = new Uint8Array(byteChars.length);
                 for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
                 const blob = new Blob([byteArray], { type: 'application/pdf' });
                 const { text: rawText, pageData } = await extractTextFromPDF(new File([blob], pdfResult.fileName || 'Request_Order.pdf', { type: 'application/pdf' }));
                 const parsed = parsePOData(pageData, rawText);
+                setProgressOverlay(85, 'Mengisi form...');
 
                 // 3. Isi field header — utamakan data dari sheet Retur_Data, fallback ke hasil parsing PDF
                 const namaEl = document.getElementById('retur-nama');
@@ -13380,8 +13443,10 @@
                 _showBatalRevisiButton('ro');
 
                 if (statusEl) { statusEl.textContent = '✅ Data RO "' + noRO + '" berhasil ditarik. Form siap diedit — mengisi file PDF baru bersifat opsional.'; statusEl.className = 'text-xs text-green-600 mt-1 font-semibold'; }
+                hideProgressOverlay(true);
             } catch (err) {
                 if (statusEl) { statusEl.textContent = '❌ Gagal menarik data: ' + err.message; statusEl.className = 'text-xs text-red-500 mt-1'; }
+                hideProgressOverlay(false);
                 showAlert('error', 'Gagal Menarik Data Revisi', err.message);
                 if (sel) sel.value = '';
             }
