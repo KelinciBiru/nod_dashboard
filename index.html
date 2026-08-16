@@ -261,7 +261,9 @@
     ====================================================================== -->
     <div id="modal-overlay" class="hidden fixed inset-0 bg-black/40 z-[999999] flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center transform transition-all">
-            <div id="modal-icon" class="text-5xl mb-3"></div>
+            <div id="modal-icon-wrapper" class="mx-auto mb-4 w-16 h-16 rounded-full flex items-center justify-center text-3xl bg-gray-100">
+                <div id="modal-icon"></div>
+            </div>
             <h3 id="modal-title" class="text-lg font-bold text-gray-800 mb-1"></h3>
             <p id="modal-message" class="text-sm text-gray-500 mb-5"></p>
             <button onclick="closeModal()" class="w-full py-2 rounded-xl font-bold text-white transition"
@@ -274,7 +276,7 @@
     ====================================================================== -->
     <div id="confirm-overlay" class="hidden fixed inset-0 bg-black/40 z-[999999] flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-            <div class="text-5xl mb-3">⚠️</div>
+            <div class="mx-auto mb-4 w-16 h-16 rounded-full flex items-center justify-center text-3xl" style="background:#fef3c7">⚠️</div>
             <h3 id="confirm-title" class="text-lg font-bold text-gray-800 mb-1"></h3>
             <p id="confirm-message" class="text-sm text-gray-500 mb-5"></p>
             <div class="flex gap-3">
@@ -566,7 +568,7 @@
             class="flex-shrink-0 bg-white border-b border-gray-200 px-4 h-14 flex items-center justify-between z-40 shadow-sm">
             <!-- Kiri: tombol toggle sidebar + nama halaman -->
             <div class="flex items-center gap-3">
-                <button id="sidebar-toggle" onclick="toggleSidebar()"
+                <button id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Buka/tutup menu"
                     class="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
@@ -578,7 +580,7 @@
             </div>
             <!-- Kanan: role badge + logout -->
             <div class="flex items-center gap-3 relative">
-                <button id="notif-bell-btn" onclick="toggleNotifPopup()"
+                <button id="notif-bell-btn" onclick="toggleNotifPopup()" aria-label="Notifikasi"
                     class="hidden relative p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
@@ -1516,23 +1518,32 @@
             document.body.appendChild(container);
 
             const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
-            const colors = {
-                success: 'bg-green-600',
-                error: 'bg-red-600',
-                info: 'bg-blue-600',
-                warning: 'bg-amber-600',
+            const accents = {
+                success: { bar: '#16a34a', badge: '#dcfce7' },
+                error: { bar: '#ef4444', badge: '#fee2e2' },
+                info: { bar: '#3b82f6', badge: '#dbeafe' },
+                warning: { bar: '#f59e0b', badge: '#fef3c7' },
             };
+            const accent = accents[type] || accents.info;
             const toast = document.createElement('div');
-            toast.className = `pointer-events-auto max-w-xs w-full ${colors[type] || colors.info} text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-lg flex items-start gap-2 opacity-0 translate-y-2 transition-all duration-300`;
-            toast.innerHTML = `<span>${icons[type] || icons.info}</span><span class="flex-1">${message}</span>`;
-            container.appendChild(toast);
-            requestAnimationFrame(() => {
-                toast.classList.remove('opacity-0', 'translate-y-2');
-            });
-            setTimeout(() => {
+            toast.className = `pointer-events-auto relative max-w-xs w-full bg-white text-gray-800 text-xs px-3 py-2.5 pl-3 rounded-xl shadow-lg border border-gray-100 flex items-start gap-2.5 opacity-0 translate-y-2 translate-x-1 transition-all duration-300 overflow-hidden`;
+            toast.style.borderLeft = `3px solid ${accent.bar}`;
+            toast.innerHTML = `
+                <span class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm" style="background:${accent.badge}">${icons[type] || icons.info}</span>
+                <span class="flex-1 font-semibold leading-snug pt-0.5">${message}</span>
+                <button type="button" aria-label="Tutup notifikasi" class="flex-shrink-0 text-gray-300 hover:text-gray-500 transition-colors text-sm leading-none pt-0.5">✕</button>
+                <span class="absolute left-0 bottom-0 h-0.5" style="background:${accent.bar}; width:100%; animation: nod-toast-countdown ${durationMs}ms linear forwards;"></span>
+            `;
+            const dismiss = () => {
                 toast.classList.add('opacity-0', 'translate-y-2');
                 setTimeout(() => toast.remove(), 300);
-            }, durationMs);
+            };
+            toast.querySelector('button').addEventListener('click', dismiss);
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2', 'translate-x-1');
+            });
+            setTimeout(dismiss, durationMs);
         }
 
         /**
@@ -2591,6 +2602,24 @@
         // =========================================================================
         // MODAL ALERT & CONFIRM (pengganti browser alert/confirm)
         // =========================================================================
+        /**
+         * Baris placeholder standar untuk tabel yang datanya kosong — dipakai di
+         * banyak menu (Report Status, List Paket, dst) supaya tampilan "tidak ada
+         * data" seragam (ikon + teks utama + teks kecil opsional), bukan teks
+         * abu-abu polos yang beda-beda gaya di tiap fungsi.
+         */
+        function nodEmptyRow(colspan, text, hint) {
+            return `<tr><td colspan="${colspan}" class="px-4 py-10 text-center text-gray-400 text-sm">
+                <div class="flex flex-col items-center justify-center gap-1.5">
+                    <svg class="w-8 h-8 opacity-50" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                    </svg>
+                    <span>${text}</span>
+                    ${hint ? `<span class="text-xs text-gray-300">${hint}</span>` : ''}
+                </div>
+            </td></tr>`;
+        }
+
         function showAlert(type, title, message) {
             const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
             const colors = {
@@ -2599,7 +2628,15 @@
                 info: 'bg-blue-500 hover:bg-blue-600',
                 warning: 'bg-amber-500 hover:bg-amber-600',
             };
+            const badgeBg = {
+                success: '#dcfce7',
+                error: '#fee2e2',
+                info: '#dbeafe',
+                warning: '#fef3c7',
+            };
             document.getElementById('modal-icon').textContent = icons[type] || icons.info;
+            const iconWrapper = document.getElementById('modal-icon-wrapper');
+            if (iconWrapper) iconWrapper.style.background = badgeBg[type] || badgeBg.info;
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-message').textContent = message;
             document.getElementById('modal-btn').className =
@@ -3969,7 +4006,7 @@
 
             if (solvedTbody) {
                 solvedTbody.innerHTML = rsrSolvedAllRows.length === 0
-                    ? `<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                    ? nodEmptyRow(5, 'Tidak ada data untuk ditampilkan')
                     : rsrSolvedAllRows.map(row => renderReportStatusRepairRow(row, false)).join('');
             }
         }
@@ -4007,7 +4044,7 @@
             const pageRows = rsrOngoingAllRows.slice(startIdx, startIdx + RSR_ONGOING_PAGE_SIZE);
 
             ongoingTbody.innerHTML = pageRows.length === 0
-                ? `<tr><td colspan="6" class="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada data untuk ditampilkan.</td></tr>`
+                ? nodEmptyRow(6, 'Tidak ada data untuk ditampilkan')
                 : pageRows.map(row => renderReportStatusRepairRow(row, true)).join('');
 
             if (paginationEl) {
@@ -4127,7 +4164,7 @@
                         <p class="font-bold text-gray-800 text-base">Detail Repair (Solved)</p>
                         <p class="text-xs text-gray-400 font-mono">${escapeHtml(serial)}</p>
                     </div>
-                    <button onclick="document.getElementById('teknisi-log-detail-modal').remove()"
+                    <button onclick="document.getElementById('teknisi-log-detail-modal').remove()" aria-label="Tutup"
                         class="text-gray-400 hover:text-gray-600 transition flex-shrink-0">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -4256,7 +4293,7 @@
                         <p class="font-bold text-gray-800 text-base">Service &amp; Kelengkapan Mesin</p>
                         <p class="text-xs text-gray-400 font-mono">${escapeHtml(serial)}</p>
                     </div>
-                    <button onclick="document.getElementById('service-retur-popup-modal').remove()"
+                    <button onclick="document.getElementById('service-retur-popup-modal').remove()" aria-label="Tutup"
                         class="text-gray-400 hover:text-gray-600 transition flex-shrink-0">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -5270,10 +5307,10 @@
 
             courierTbody.innerHTML = filteredCourier.length
                 ? filteredCourier.map(_renderListPaketCourierRow).join('')
-                : `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400 italic text-sm">${keyword ? 'Tidak ada paket yang cocok dengan pencarian.' : 'Belum ada data.'}</td></tr>`;
+                : nodEmptyRow(7, keyword ? 'Tidak ada paket yang cocok dengan pencarian' : 'Belum ada data');
             internalTbody.innerHTML = filteredInternal.length
                 ? filteredInternal.map(_renderListPaketInternalRow).join('')
-                : `<tr><td colspan="10" class="px-4 py-8 text-center text-gray-400 italic text-sm">${keyword ? 'Tidak ada paket yang cocok dengan pencarian.' : 'Belum ada data.'}</td></tr>`;
+                : nodEmptyRow(10, keyword ? 'Tidak ada paket yang cocok dengan pencarian' : 'Belum ada data');
 
             if (courierCountEl) courierCountEl.textContent = `${filteredCourier.length} paket`;
             if (internalCountEl) internalCountEl.textContent = `${filteredInternal.length} paket`;
@@ -5314,7 +5351,7 @@
                     countEl.textContent = `${remaining} paket`;
                     if (remaining === 0) {
                         const colspan = sheetType === 'courier' ? 7 : 10;
-                        tbody.innerHTML = `<tr><td colspan="${colspan}" class="px-4 py-8 text-center text-gray-400 italic text-sm">Belum ada data.</td></tr>`;
+                        tbody.innerHTML = nodEmptyRow(colspan, 'Belum ada data');
                     }
                 }
             } catch (err) {
@@ -9367,7 +9404,7 @@
                             <p class="text-sm font-bold text-gray-700 truncate">🧭 Navigasi ke ${escapeHtml(customer)}</p>
                             <p class="text-xs text-gray-400 truncate">${escapeHtml(alamat)}</p>
                         </div>
-                        <button onclick="_routeNavCloseModal()" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+                        <button onclick="_routeNavCloseModal()" aria-label="Tutup" class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>
@@ -11113,7 +11150,13 @@
                             Tambah Produk
                         </button>
                     </div>
-                    <p class="text-gray-500">Belum ada data catalogue di sheet.</p>
+                    <div class="nod-empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                        </svg>
+                        <p class="font-semibold text-gray-500">Belum ada data catalogue</p>
+                        <p class="text-xs">Klik "Tambah Produk" untuk menambahkan item pertama.</p>
+                    </div>
                 </div>`;
                 return;
             }
@@ -11494,7 +11537,7 @@
                         <p class="font-bold text-gray-800 text-base">Barang Tercentang</p>
                         <p class="text-xs text-gray-400">${items.length} barang siap dikirim</p>
                     </div>
-                    <button onclick="document.getElementById('catalogue-check-modal').remove()"
+                    <button onclick="document.getElementById('catalogue-check-modal').remove()" aria-label="Tutup"
                         class="text-gray-400 hover:text-gray-600 transition flex-shrink-0">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -18326,7 +18369,7 @@
                 <img src="${url}" alt="Foto Bukti"
                      class="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
                      onclick="event.stopPropagation()">
-                <button onclick="document.getElementById('photo-lightbox-modal').remove()"
+                <button onclick="document.getElementById('photo-lightbox-modal').remove()" aria-label="Tutup"
                     class="absolute top-4 right-4 text-white/80 hover:text-white transition">
                     <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -18350,7 +18393,7 @@
                         <p class="font-bold text-gray-800 text-base">Detail Pengiriman</p>
                         <p class="text-xs text-gray-400 font-mono">${escapeHtml(noPO)}</p>
                     </div>
-                    <button onclick="document.getElementById('delivery-log-detail-modal').remove()"
+                    <button onclick="document.getElementById('delivery-log-detail-modal').remove()" aria-label="Tutup"
                         class="text-gray-400 hover:text-gray-600 transition flex-shrink-0">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -21428,6 +21471,412 @@
             100% {
                 top: 4px;
                 opacity: 1;
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           UI/UX POLISH LAYER — sistem desain global untuk seluruh aplikasi
+           ---------------------------------------------------------------
+           Ditulis di paling akhir <style> supaya rule di sini menang di atas
+           utility Tailwind hasil compile (#tailwind-compiled) tanpa perlu
+           mengubah class di HTML/JS satu per satu. Murni CSS — tidak ada
+           id/class yang dihapus/di-rename, sehingga tidak menyentuh logic JS
+           yang sudah ada (semua toggle .hidden, getElementById, dst tetap
+           berjalan seperti biasa).
+           ═══════════════════════════════════════════════════════════════════ */
+
+        :root {
+            /* Palet inti — dasarnya warna yang sudah dipakai brand (gold #f59e0b
+               dari theme-color & bronze #a1804f dari border login, plus ink
+               #14141e dari tombol utama), dirapikan jadi satu sumber kebenaran. */
+            --nod-ink: #14141e;
+            --nod-ink-soft: #24242f;
+            --nod-gold-50: #fffbeb;
+            --nod-gold-100: #fef3c7;
+            --nod-gold-200: #fde68a;
+            --nod-gold-300: #fcd34d;
+            --nod-gold-400: #fbbf24;
+            --nod-gold-500: #f59e0b;
+            --nod-gold-600: #d97706;
+            --nod-gold-700: #b45309;
+            --nod-bronze: #a1804f;
+            --nod-success: #16a34a;
+            --nod-warning: #f59e0b;
+            --nod-danger: #ef4444;
+            --nod-info: #3b82f6;
+
+            /* Skala radius & bayangan yang konsisten (mengikuti nilai yang
+               paling sering dipakai di file ini: rounded-lg/xl/2xl, shadow-sm/lg) */
+            --nod-radius-sm: 0.5rem;
+            --nod-radius-md: 0.75rem;
+            --nod-radius-lg: 1rem;
+            --nod-shadow-sm: 0 1px 2px 0 rgba(20, 20, 30, 0.05);
+            --nod-shadow-md: 0 4px 14px -2px rgba(20, 20, 30, 0.10), 0 2px 6px -2px rgba(20, 20, 30, 0.06);
+            --nod-shadow-lg: 0 12px 32px -8px rgba(20, 20, 30, 0.18), 0 4px 10px -4px rgba(20, 20, 30, 0.08);
+            --nod-ease: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Hormati preferensi user yang mematikan animasi */
+        @media (prefers-reduced-motion: reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        /* ---------- Tipografi & rendering dasar ---------- */
+        html {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+
+        body {
+            font-feature-settings: "kern" 1, "liga" 1;
+        }
+
+        /* ---------- Fokus keyboard yang jelas (aksesibilitas) tanpa
+             mengganggu klik mouse/tap biasa ---------- */
+        :focus-visible {
+            outline: 2px solid var(--nod-gold-500);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        button,
+        a,
+        [role="button"] {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* ---------- Scrollbar bermerek — tipis & konsisten di semua panel ---------- */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #d4d4d8 transparent;
+        }
+
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background-color: #d4d4d8;
+            border-radius: 999px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+
+        *::-webkit-scrollbar-thumb:hover {
+            background-color: var(--nod-gold-400);
+        }
+
+        /* ---------- Selarasan warna aksen: rapikan sisa pemakaian indigo
+             (peninggalan lama) supaya konsisten dengan aksen emas brand ---------- */
+        .text-indigo-600,
+        .hover\:text-indigo-600:hover,
+        .text-indigo-700 {
+            color: var(--nod-gold-600) !important;
+        }
+
+        .bg-indigo-600 {
+            background-color: var(--nod-gold-600) !important;
+        }
+
+        .hover\:bg-indigo-600:hover,
+        .hover\:bg-indigo-700:hover {
+            background-color: var(--nod-gold-700) !important;
+        }
+
+        .bg-indigo-50 {
+            background-color: var(--nod-gold-50) !important;
+        }
+
+        .border-indigo-200,
+        .border-indigo-300 {
+            border-color: var(--nod-gold-300) !important;
+        }
+
+        .ring-indigo-500,
+        .ring-indigo-600,
+        .focus\:ring-indigo-500:focus,
+        .focus\:ring-indigo-600:focus {
+            --tw-ring-color: var(--nod-gold-400) !important;
+        }
+
+        /* ---------- Kartu, panel, dan modal: kedalaman visual yang lebih
+             hidup + sudut konsisten, tanpa mengganti struktur elemen ---------- */
+        .rounded-2xl {
+            border-radius: var(--nod-radius-lg) !important;
+        }
+
+        .rounded-xl {
+            border-radius: var(--nod-radius-md) !important;
+        }
+
+        .shadow-2xl,
+        .shadow-xl {
+            box-shadow: var(--nod-shadow-lg) !important;
+        }
+
+        .shadow-lg {
+            box-shadow: var(--nod-shadow-md) !important;
+        }
+
+        /* Modal/overlay: transisi masuk yang halus daripada muncul mendadak */
+        [id$="-modal"],
+        [id$="-modal-overlay"],
+        [id$="-overlay"] {
+            transition: opacity 0.18s var(--nod-ease);
+        }
+
+        [id$="-modal"]:not(.hidden) > div,
+        [id$="-modal-overlay"]:not(.hidden) > div,
+        [id$="-overlay"]:not(.hidden) > div {
+            animation: nod-modal-in 0.2s var(--nod-ease);
+        }
+
+        @keyframes nod-modal-in {
+            from {
+                opacity: 0;
+                transform: translateY(6px) scale(0.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ---------- Tombol: micro-interaction ringan + area sentuh yang
+             lebih nyaman di HP tanpa mengubah ukuran layout desktop ---------- */
+        button:not(:disabled),
+        [role="button"] {
+            transition: transform 0.12s var(--nod-ease), box-shadow 0.12s var(--nod-ease), filter 0.12s var(--nod-ease), background-color 0.15s var(--nod-ease);
+        }
+
+        button:not(:disabled):active,
+        [role="button"]:active {
+            transform: scale(0.97);
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        /* Tombol solid gaya utama (mis. tombol Simpan/Submit ber-background
+             warna) diberi sedikit shadow supaya terasa "menekan" saat hover */
+        button.bg-amber-500:hover,
+        button.bg-amber-600:hover,
+        button.bg-green-600:hover,
+        button.bg-red-600:hover,
+        button.bg-red-500:hover {
+            filter: brightness(1.05);
+            box-shadow: var(--nod-shadow-sm);
+        }
+
+        /* ---------- Input & select: state fokus & disabled yang konsisten ---------- */
+        input:not([type="checkbox"]):not([type="radio"]),
+        select,
+        textarea {
+            transition: border-color 0.15s var(--nod-ease), box-shadow 0.15s var(--nod-ease), background-color 0.15s var(--nod-ease);
+        }
+
+        input:disabled,
+        select:disabled,
+        textarea:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+            color: #9ca3af;
+        }
+
+        /* ---------- Tabel: baris selang-seling + header lengket + hover jelas
+             (banyak menu di sini pakai tabel panjang — Report Status, List
+             Paket, dsb — supaya lebih mudah dibaca saat scroll) ---------- */
+        table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            backdrop-filter: saturate(1.2);
+        }
+
+        table tbody tr {
+            transition: background-color 0.1s var(--nod-ease);
+        }
+
+        table tbody tr:hover {
+            background-color: var(--nod-gold-50);
+        }
+
+        table tbody tr:nth-child(even):not(:hover) {
+            background-color: rgba(0, 0, 0, 0.015);
+        }
+
+        /* ---------- Badge/status pill: pastikan kontras & keterbacaan
+             seragam untuk semua badge status (Ready/On Delivery/Closed/dst) ---------- */
+        .rounded-full.text-xs.font-semibold,
+        .rounded-full.text-xs.font-bold {
+            letter-spacing: 0.01em;
+            white-space: nowrap;
+        }
+
+        /* ---------- Sidebar & topbar: penekanan menu aktif lebih jelas ---------- */
+        #app-container header {
+            backdrop-filter: saturate(1.1) blur(2px);
+        }
+
+        /* Item sidebar yang aktif biasanya diberi class bg-amber-* oleh JS;
+             tambahkan indikator garis kiri supaya status aktif tidak hanya
+             mengandalkan warna (lebih ramah untuk semua kondisi pencahayaan) */
+        aside a.bg-amber-50,
+        aside button.bg-amber-50,
+        aside .bg-amber-100 {
+            box-shadow: inset 3px 0 0 0 var(--nod-gold-500);
+        }
+
+        /* ---------- Login: selaraskan dengan token warna baru tanpa
+             mengubah tata letak/animasi mascot yang sudah ada ---------- */
+        #login-page #loginBtn,
+        #login-page #driverLoginBtn {
+            box-shadow: 0 8px 20px -6px rgba(20, 20, 30, 0.45);
+        }
+
+        #login-page #passwordInput:focus,
+        #login-page #driverNameInput:focus {
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+        }
+
+        /* ---------- Empty state generik: dipakai untuk seragamkan tampilan
+             "belum ada data" di berbagai tabel/list (opsional, aman kalau
+             tidak dipakai di HTML manapun) ---------- */
+        .nod-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 2.5rem 1rem;
+            color: #9ca3af;
+            text-align: center;
+        }
+
+        .nod-empty-state svg {
+            width: 2.5rem;
+            height: 2.5rem;
+            opacity: 0.6;
+        }
+
+        /* ---------- Skeleton loading generik (opsional, aman kalau tidak
+             dipakai) — pengganti spinner polos untuk kesan lebih modern ---------- */
+        .nod-skeleton {
+            position: relative;
+            overflow: hidden;
+            background-color: #e5e7eb;
+            border-radius: var(--nod-radius-sm);
+        }
+
+        .nod-skeleton::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            transform: translateX(-100%);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+            animation: nod-shimmer 1.4s infinite;
+        }
+
+        @keyframes nod-shimmer {
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        @keyframes nod-toast-countdown {
+            from {
+                width: 100%;
+            }
+
+            to {
+                width: 0%;
+            }
+        }
+
+        /* ---------- Judul halaman (<h1>) seragam di seluruh menu ----------
+             Sebelumnya tiap halaman punya kombinasi class berbeda-beda
+             (campuran text-2xl/text-3xl, font-bold/font-semibold,
+             gray-700/gray-800, margin-bottom 1/4/6) — kini disatukan lewat
+             satu rule bertarget #content-area supaya tiap pindah menu
+             terasa konsisten, tanpa perlu mengubah class di 39 tempat. */
+        #content-area h1 {
+            font-size: 1.875rem !important;
+            line-height: 2.25rem !important;
+            font-weight: 600 !important;
+            color: #374151 !important;
+            margin-bottom: 0.5rem !important;
+            letter-spacing: -0.01em;
+        }
+
+        @media (max-width: 640px) {
+            #content-area h1 {
+                font-size: 1.375rem !important;
+                line-height: 1.75rem !important;
+            }
+        }
+
+        /* ---------- Ikon untuk baris placeholder tabel item kosong ----------
+             Dipakai di banyak tabel item (Form PO, Form RO, Form Service,
+             Receive PO, dst — ditandai atribut data-placeholder oleh JS untuk
+             logic "apakah tabel masih kosong"). Daripada mengubah belasan
+             tempat yang generate teks placeholder ini (berisiko salah ketik
+             jadi merusak logic data-placeholder), cukup satu rule CSS di sini
+             yang menambahkan ikon kecil di atas teksnya — teks & atribut asli
+             tidak disentuh sama sekali. */
+        tr[data-placeholder] td {
+            position: relative;
+            padding-top: 2.5rem !important;
+        }
+
+        tr[data-placeholder] td::before {
+            content: '';
+            display: block;
+            position: absolute;
+            top: 0.65rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 26px;
+            height: 26px;
+            opacity: 0.4;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z'/%3E%3C/svg%3E");
+        }
+
+        /* ---------- Mobile: target sentuh minimum 44px untuk tombol kecil,
+             supaya lebih nyaman dipakai petugas gudang/driver di HP ---------- */
+        @media (max-width: 640px) {
+
+            button,
+            select,
+            [role="button"] {
+                min-height: 40px;
+            }
+
+            table {
+                font-size: 0.8125rem;
             }
         }
     </style>
