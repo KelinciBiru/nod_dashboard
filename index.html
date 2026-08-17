@@ -11236,7 +11236,7 @@
                 const itemCategory = item.category || _catalogueActiveCategory;
                 const itemKey = `${itemCategory}|${item.id}|${item.name}`;
                 const isChecked = _catalogueSelection.has(itemKey);
-                const existingQty = isChecked ? (_catalogueSelection.get(itemKey).qty || 1) : 1;
+                const existingQty = isChecked ? (_catalogueSelection.get(itemKey).qty ?? 0) : 0;
                 const checkboxHtml = isSelecting ? `
                     <input type="checkbox" class="cat-select-checkbox absolute top-2 left-2 z-10 h-4 w-4 accent-indigo-600 cursor-pointer bg-white rounded shadow"
                         data-key="${escapeHtml(itemKey)}"
@@ -11253,7 +11253,7 @@
                 const qtyHtml = isSelecting ? `
                     <div class="flex items-center gap-1.5 mt-1.5 ${isChecked ? '' : 'hidden'} cat-select-qty-wrap">
                         <label class="text-[10px] text-gray-400 font-semibold">Qty</label>
-                        <input type="number" min="1" value="${existingQty}"
+                        <input type="number" min="0" value="${existingQty}"
                             class="cat-select-qty w-14 text-xs text-center border border-gray-300 rounded shadow-sm bg-white py-0.5 focus:ring-1 focus:ring-indigo-400 outline-none"
                             data-key="${escapeHtml(itemKey)}"
                             onclick="event.stopPropagation()"
@@ -11392,8 +11392,8 @@
             const qtyWrap = card ? card.querySelector('.cat-select-qty-wrap') : null;
 
             if (checkboxEl.checked) {
-                let qty = qtyInput ? parseInt(qtyInput.value, 10) : 1;
-                if (!qty || qty < 1) qty = 1;
+                let qty = qtyInput ? parseInt(qtyInput.value, 10) : 0;
+                if (isNaN(qty) || qty < 0) qty = 0;
                 _catalogueSelection.set(key, { id, name, uom, category, qty });
                 if (qtyInput) qtyInput.value = qty;
                 if (qtyWrap) qtyWrap.classList.remove('hidden');
@@ -11408,7 +11408,7 @@
         function updateCatalogueItemQty(qtyInput) {
             const key = qtyInput.dataset.key;
             let qty = parseInt(qtyInput.value, 10);
-            if (!qty || qty < 1) qty = 1;
+            if (isNaN(qty) || qty < 0) qty = 0;
             qtyInput.value = qty;
             if (_catalogueSelection.has(key)) {
                 const entry = _catalogueSelection.get(key);
