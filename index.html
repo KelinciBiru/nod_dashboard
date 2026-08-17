@@ -615,7 +615,7 @@
         </header>
 
         <!-- BODY: sidebar + konten -->
-        <div class="flex flex-1 overflow-y-auto relative">
+        <div id="main-scroll-area" class="flex flex-1 overflow-y-auto relative">
 
             <!-- OVERLAY (klik untuk tutup sidebar di mobile) -->
             <div id="sidebar-overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/30 z-20 md:hidden">
@@ -3278,6 +3278,108 @@
                 LiveSync.start(pageName);
             }
         }
+
+        // =========================================================================
+        // PULL-TO-REFRESH — khusus menu "Report Status" saat dibuka lewat HP
+        // =========================================================================
+        // Cara kerja: pantau gesture sentuh (touchstart/touchmove/touchend) di
+        // area scroll utama (#main-scroll-area). Kalau user menarik layar ke bawah
+        // saat sudah berada di paling atas halaman DAN sedang di menu "Report
+        // Status", tampilkan indikator lingkaran, lalu kalau tarikannya cukup jauh
+        // (>= PULL_THRESHOLD) paksa ambil ulang data getPOData/getReturData dari
+        // server (bypass cache) dan render ulang tabel. Di desktop (non-touch)
+        // fitur ini otomatis tidak pernah aktif karena event 'touchstart' tidak
+        // pernah terpicu oleh mouse.
+        (function initReportStatusPullToRefresh() {
+            const scrollEl = document.getElementById('main-scroll-area');
+            if (!scrollEl) return;
+
+            const PULL_THRESHOLD = 70;  // px tarikan minimum supaya refresh terpicu
+            const MAX_PULL = 100;       // batas visual tarikan indikator
+            let startY = 0;
+            let pulling = false;
+            let refreshing = false;
+
+            // Indikator visual (dibuat sekali, mengambang di atas #content-area)
+            const indicator = document.createElement('div');
+            indicator.id = 'ptr-indicator';
+            indicator.className = 'fixed left-1/2 z-40 flex items-center justify-center w-10 h-10 bg-white rounded-full shadow-lg border border-gray-100 pointer-events-none';
+            indicator.style.top = '64px';
+            indicator.style.opacity = '0';
+            indicator.style.transform = 'translate(-50%, -20px)';
+            indicator.style.transition = 'opacity 0.15s ease-out';
+            indicator.innerHTML = `<svg id="ptr-indicator-icon" class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>`;
+            document.body.appendChild(indicator);
+
+            function isReportStatusActive() {
+                return sessionStorage.getItem('currentPage') === 'Report Status';
+            }
+
+            function resetIndicator() {
+                indicator.style.transition = 'opacity 0.15s ease-out, transform 0.2s ease-out';
+                indicator.style.opacity = '0';
+                indicator.style.transform = 'translate(-50%, -20px)';
+                const icon = document.getElementById('ptr-indicator-icon');
+                if (icon) icon.classList.remove('animate-spin');
+            }
+
+            scrollEl.addEventListener('touchstart', (e) => {
+                if (refreshing || !isReportStatusActive() || scrollEl.scrollTop > 0) { pulling = false; return; }
+                // Hindari konflik kalau jari mulai dari dalam modal/popup (mis. detail
+                // pengiriman) yang biasanya berupa elemen fixed di atas konten.
+                if (e.target.closest('.fixed')) { pulling = false; return; }
+                startY = e.touches[0].clientY;
+                pulling = true;
+                indicator.style.transition = 'none';
+            }, { passive: true });
+
+            scrollEl.addEventListener('touchmove', (e) => {
+                if (!pulling || refreshing) return;
+                const diff = e.touches[0].clientY - startY;
+                if (diff <= 0) { pulling = false; resetIndicator(); return; }
+                if (scrollEl.scrollTop > 0) { pulling = false; resetIndicator(); return; }
+                // Cegah efek "bounce" bawaan browser supaya indikator custom terlihat jelas
+                e.preventDefault();
+                const pull = Math.min(diff * 0.5, MAX_PULL);
+                indicator.style.opacity = String(Math.min(pull / PULL_THRESHOLD, 1));
+                indicator.style.transform = `translate(-50%, ${pull - 20}px) rotate(${pull * 3}deg)`;
+            }, { passive: false });
+
+            scrollEl.addEventListener('touchend', async (e) => {
+                if (!pulling || refreshing) { pulling = false; return; }
+                pulling = false;
+                const diff = (e.changedTouches[0].clientY - startY) * 0.5;
+                if (diff < PULL_THRESHOLD) { resetIndicator(); return; }
+
+                refreshing = true;
+                indicator.style.transition = 'transform 0.15s ease-out';
+                indicator.style.transform = 'translate(-50%, 40px)';
+                indicator.style.opacity = '1';
+                const icon = document.getElementById('ptr-indicator-icon');
+                if (icon) icon.classList.add('animate-spin');
+                try {
+                    // Paksa ambil data terbaru dari server (bypass cache), bukan data lama
+                    clearCache('getPOData');
+                    clearCache('getReturData');
+                    clearCache('reportStatusFallback');
+                    if (isReportStatusActive()) {
+                        await showReportStatus();
+                    }
+                } catch (_) {
+                    // showReportStatus() sudah menangani error-nya sendiri (tombol "Coba Lagi")
+                } finally {
+                    refreshing = false;
+                    resetIndicator();
+                }
+            }, { passive: true });
+
+            scrollEl.addEventListener('touchcancel', () => {
+                pulling = false;
+                resetIndicator();
+            }, { passive: true });
+        })();
 
         // =========================================================================
         // HALAMAN: DASHBOARD
