@@ -196,7 +196,7 @@
             transform: translateX(-50%) translateY(0) scale(1);
         }
 
-        @media (max-width: 560px) {
+        @media (max-width: 767px) {
 
             .login-mascot,
             .login-mascot-left {
@@ -252,6 +252,460 @@
          on-demand — library baru di-download saat menu yang benar-benar butuh dibuka
          (lihat _loadScriptOnce()/_ensureXxx() di awal blok script utama). Login tidak lagi
          berbagi bandwidth dengan library apa pun. -->
+    <!-- ═══════════════════════════════════════════════════════════════════
+         MOBILE UI/UX OVERHAUL (HP redesign)
+         ---------------------------------------------------------------------
+         Blok tambahan (tidak menghapus/mengubah style lain) yang merapikan
+         tampilan keseluruhan dashboard saat dibuka di HP (<= 768px), meniru
+         pola UI/UX aplikasi mobile profesional: topbar & drawer sidebar yang
+         lebih rapi, target sentuh yang nyaman, form/table/modal yang lebih
+         mudah dipakai satu tangan, serta modal yang berubah jadi "bottom
+         sheet" khas aplikasi HP. Murni CSS non-destruktif — tidak ada HTML
+         atau JS yang diubah, jadi seluruh logic yang sudah ada tetap aman.
+    ====================================================================== -->
+    <style id="mobile-uiux-overhaul">
+        @media (max-width: 767px) {
+
+            /* ---------- Dasar: cegah zoom-in otomatis iOS saat fokus input,
+                 rapikan scroll & tap highlight ---------- */
+            html {
+                -webkit-text-size-adjust: 100%;
+            }
+
+            input,
+            select,
+            textarea {
+                font-size: 16px !important;
+            }
+
+            button,
+            a,
+            [role="button"] {
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            /* ---------- TOPBAR: sticky, sedikit transparan+blur, lebih lega ---------- */
+            #app-container>header {
+                position: sticky !important;
+                top: 0;
+                padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem) !important;
+                height: auto !important;
+                min-height: 3.25rem;
+                background: rgba(255, 255, 255, 0.92) !important;
+                backdrop-filter: saturate(180%) blur(10px);
+                -webkit-backdrop-filter: saturate(180%) blur(10px);
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 10px -6px rgba(15, 23, 42, 0.08);
+            }
+
+            #app-container>header #page-title {
+                font-size: 0.95rem;
+                max-width: 46vw;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #app-container>header button {
+                min-width: 40px;
+                min-height: 40px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #app-container>header button:active {
+                transform: scale(0.94);
+            }
+
+            #notif-popup {
+                position: fixed !important;
+                top: calc(env(safe-area-inset-top, 0px) + 3.75rem) !important;
+                right: 0.5rem !important;
+                left: 0.5rem !important;
+                width: auto !important;
+                max-height: 70vh;
+                border-radius: 1rem !important;
+                box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.28);
+            }
+
+            /* ---------- SIDEBAR DRAWER: TIDAK DIPAKAI LAGI DI HP ----------
+                 Navigasi sekarang menempel langsung di halaman Dashboard
+                 (lihat #mobile-dashboard-nav-slot), jadi drawer sidebar &
+                 overlay-nya disembunyikan total di HP. Tombol hamburger di
+                 topbar (#sidebar-toggle) dialihfungsikan lewat JS jadi
+                 tombol "Home" ke Dashboard (lihat toggleSidebar()). */
+            #sidebar,
+            #sidebar-overlay {
+                display: none !important;
+            }
+
+            /* =====================================================================
+                 NAVIGASI "HOMESCREEN": menu utama ditampilkan sebagai grid ikon
+                 ala home screen HP, bukan daftar memanjang. Selector memakai
+                 #sidebar-nav (id pada elemen <nav>-nya langsung) supaya gaya
+                 ini tetap berlaku di mana pun nav itu dipasang oleh JS — baik
+                 saat masih di dalam sidebar asli, maupun setelah dipindah ke
+                 slot #mobile-dashboard-nav-slot di halaman Dashboard. Item
+                 yang punya sub-menu tetap dibuka lewat toggleSubMenu() yang
+                 sudah ada — begitu terbuka, tile itu otomatis melebar jadi
+                 satu baris penuh supaya daftar sub-menunya nyaman dibaca
+                 (tanpa mengubah JS).
+            ===================================================================== */
+            #sidebar-nav {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.7rem 0.5rem;
+                padding: 1rem 0.85rem 1.5rem !important;
+                align-content: start;
+            }
+
+            /* PENTING: pastikan menu yang memang disembunyikan lewat class
+                 "hidden" (diatur JS sesuai hak akses role di startApp()) TETAP
+                 tersembunyi di grid ini. Selector display:flex/grid di bawah
+                 (mis. "#sidebar-nav>div[id^='menu-']") punya specificity CSS
+                 lebih tinggi dari class ".hidden" bawaan Tailwind, jadi tanpa
+                 !important di sini, menu yang seharusnya disembunyikan malah
+                 tetap muncul terlepas dari status akses rolenya. */
+            #sidebar-nav .hidden {
+                display: none !important;
+            }
+
+            /* reset spacing bawaan (space-y-1) supaya tidak dobel jarak dgn gap grid */
+            #sidebar-nav>* {
+                margin-top: 0 !important;
+            }
+
+            /* --- Tile "app icon": berlaku utk item tanpa sub-menu (button.nav-item)
+                 & tombol pembuka item yang punya sub-menu --- */
+            #sidebar-nav>button.nav-item,
+            #sidebar-nav>div[id^="menu-"]>button {
+                flex-direction: column !important;
+                justify-content: center !important;
+                align-items: center !important;
+                gap: 0.4rem !important;
+                text-align: center !important;
+                padding: 0.7rem 0.3rem 0.6rem !important;
+                border-radius: 1.15rem !important;
+                background: #ffffff;
+                border: 1px solid #f1f3f5;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+                min-height: 78px;
+                font-size: 0.68rem !important;
+                line-height: 1.15 !important;
+                letter-spacing: 0;
+            }
+
+            /* baris "Inventory Machine" dst punya wrapper .flex.items-center.gap-3
+                 di dalam tombol — susun jadi kolom juga supaya ikon di atas label */
+            #sidebar-nav>div[id^="menu-"]>button>.flex.items-center.gap-3 {
+                flex-direction: column !important;
+                gap: 0.4rem !important;
+            }
+
+            /* ikon dibungkus jadi bubble bulat bernuansa amber, khas ikon app */
+            #sidebar-nav>button.nav-item svg,
+            #sidebar-nav>div[id^="menu-"]>button svg {
+                width: 1.15rem !important;
+                height: 1.15rem !important;
+                flex-shrink: 0;
+                padding: 0.6rem;
+                box-sizing: content-box;
+                border-radius: 1rem;
+                background: linear-gradient(135deg, #fef3c7, #fde68a);
+                color: #b45309;
+            }
+
+            /* label: maksimal 2 baris supaya tile tetap rapi & sama tinggi */
+            #sidebar-nav>button.nav-item span,
+            #sidebar-nav>div[id^="menu-"]>button>.flex.items-center.gap-3>span {
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+                font-weight: 700;
+                color: #374151;
+            }
+
+            /* sembunyikan tanda ▼/▲ selagi tampil sebagai ikon (gaya homescreen
+                 tidak pakai chevron) — dikembalikan lagi saat tile dibuka, lihat
+                 blok :has() di bawah */
+            #sidebar-nav [id^="arrow-"] {
+                display: none;
+            }
+
+            /* efek tekan */
+            #sidebar-nav>button.nav-item:active,
+            #sidebar-nav>div[id^="menu-"]>button:active {
+                transform: scale(0.95);
+            }
+
+            /* wrapper div[id^="menu-"] jadi flex-col supaya tombol & sub-list
+                 tersusun vertikal saat melebar */
+            #sidebar-nav>div[id^="menu-"] {
+                display: flex;
+                flex-direction: column;
+            }
+
+            /* --- Saat sub-menu terbuka (class "hidden" dilepas oleh toggleSubMenu):
+                 tile melebar jadi satu baris penuh & tombolnya balik ke gaya
+                 baris biasa (ikon+label sejajar, ada chevron) supaya daftar
+                 sub-menunya nyaman dibaca --- */
+            #sidebar-nav>div[id^="menu-"].nav-expanded {
+                grid-column: 1 / -1;
+            }
+
+            #sidebar-nav>div[id^="menu-"].nav-expanded>button {
+                flex-direction: row !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                text-align: left !important;
+                min-height: 46px;
+                font-size: 0.875rem !important;
+                background: #fffbeb;
+                border-color: #fde68a;
+            }
+
+            #sidebar-nav>div[id^="menu-"].nav-expanded>button>.flex.items-center.gap-3 {
+                flex-direction: row !important;
+                gap: 0.65rem !important;
+            }
+
+            #sidebar-nav>div[id^="menu-"].nav-expanded>button svg {
+                width: 1rem !important;
+                height: 1rem !important;
+                padding: 0;
+                background: transparent;
+                color: #b45309;
+            }
+
+            #sidebar-nav>div[id^="menu-"].nav-expanded>button>.flex.items-center.gap-3>span {
+                -webkit-line-clamp: 1;
+                font-weight: 700;
+                color: #374151;
+            }
+
+            #sidebar-nav>div[id^="menu-"].nav-expanded [id^="arrow-"] {
+                display: inline;
+                color: #b45309;
+            }
+
+            /* daftar sub-menu, full width di bawah tile yang terbuka */
+            #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] {
+                margin-left: 0 !important;
+                border-left: none !important;
+                padding: 0.4rem !important;
+                margin-top: 0.4rem !important;
+                background: #fffdf7;
+                border: 1px solid #fde68a;
+                border-radius: 0.9rem;
+            }
+
+            #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] .sub-item {
+                min-height: 42px;
+                display: flex;
+                align-items: center;
+                border-radius: 0.75rem !important;
+            }
+
+            /* --- Tombol tanpa sub-menu (Dashboard, Process Inbound, dst.) yang
+                 sedang aktif (halaman sekarang) --- */
+            #sidebar-nav>button.nav-item.bg-amber-500,
+            #sidebar-nav>div[id^="menu-"]>button.bg-amber-500 {
+                background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+                border-color: transparent !important;
+                box-shadow: 0 10px 22px -8px rgba(245, 158, 11, 0.55) !important;
+            }
+
+            #sidebar-nav>button.nav-item.bg-amber-500 svg,
+            #sidebar-nav>div[id^="menu-"]>button.bg-amber-500 svg {
+                background: rgba(255, 255, 255, 0.35) !important;
+                color: #ffffff !important;
+            }
+
+            #sidebar-nav>button.nav-item.bg-amber-500 span,
+            #sidebar-nav>div[id^="menu-"]>button.bg-amber-500 span {
+                color: #ffffff !important;
+            }
+
+            /* Sub-item aktif di dalam daftar sub-menu yang terbuka */
+            #sidebar-nav .sub-item.bg-amber-500 {
+                box-shadow: inset 3px 0 0 0 #b45309, 0 4px 10px -4px rgba(245, 158, 11, 0.55);
+            }
+
+            /* ---------- REPORT STATUS PO: kotak pencarian & tombol aksi massal
+                 ("Hapus Terpilih" / "Closed Terpilih") — di HTML kotak
+                 pencarian pakai class Tailwind arbitrary "min-w-[220px]" yang
+                 ternyata tidak ada di bundle CSS terkompilasi ini, jadi tanpa
+                 lebar minimum sama sekali kotak pencarian kalah rebutan
+                 tempat lawan 2 tombol (yang malah melebar penuh gara-gara
+                 aturan flex-1-auto di atas) dan menyusut jadi sekecil ikonnya
+                 saja. Perbaikannya: di HP, kotak pencarian dibuat 1 baris
+                 penuh sendiri, dua tombol aksi di baris berikutnya berbagi
+                 rata kiri-kanan. */
+            div.mb-4.flex.items-center.flex-wrap.gap-2:has(#report-status-search-input) {
+                align-items: stretch;
+            }
+
+            div.mb-4.flex.items-center.flex-wrap.gap-2:has(#report-status-search-input)>div.relative.max-w-sm {
+                flex: 1 1 100% !important;
+                max-width: 100% !important;
+                min-width: 0 !important;
+            }
+
+            div.mb-4.flex.items-center.flex-wrap.gap-2:has(#report-status-search-input)>#po-remove-selected-btn,
+            div.mb-4.flex.items-center.flex-wrap.gap-2:has(#report-status-search-input)>#po-close-selected-btn {
+                flex: 1 1 calc(50% - 0.25rem) !important;
+                justify-content: center;
+            }
+
+            /* Slot navigasi di bawah gambar Dashboard */
+            #mobile-dashboard-nav-slot {
+                margin-top: 1.25rem;
+            }
+
+            #mobile-dashboard-nav-slot:empty {
+                margin-top: 0;
+            }
+
+                        /* ---------- KONTEN: jarak/padding lebih rapi, dasar tipografi lega ---------- */
+            #content-area {
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem) !important;
+            }
+
+            /* Kartu/panel putih umum (bg-white + rounded-*) — samakan sudut &
+                 bayangan supaya konsisten & tidak berat di layar kecil */
+            #content-area .bg-white.rounded-xl,
+            #content-area .bg-white.rounded-2xl {
+                border-radius: 1rem !important;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px -10px rgba(15, 23, 42, 0.12) !important;
+            }
+
+            /* ---------- TOMBOL & FORM: target sentuh nyaman, feedback tekan ---------- */
+            button,
+            select,
+            [role="button"] {
+                min-height: 44px;
+            }
+
+            input[type="text"],
+            input[type="number"],
+            input[type="password"],
+            input[type="date"],
+            input[type="datetime-local"],
+            input[type="tel"],
+            input[type="email"],
+            input[type="search"],
+            textarea {
+                min-height: 44px;
+            }
+
+            button:not([disabled]):active,
+            [role="button"]:not([disabled]):active {
+                transform: scale(0.97);
+            }
+
+            /* Grup tombol yang tadinya berjajar sempit (flex row) jadi lebih
+                 nyaman ditumpuk di layar sempit, KECUALI yang sudah eksplisit
+                 dibuat untuk tetap sejajar (mis. pasangan ikon aksi tabel). */
+            .flex.flex-wrap.gap-2>button,
+            .flex.flex-wrap.gap-3>button {
+                flex: 1 1 auto;
+            }
+
+            /* ---------- TABEL: header sticky, zebra, scroll lebih jelas ---------- */
+            .overflow-x-auto {
+                -webkit-overflow-scrolling: touch;
+                border-radius: 0.75rem;
+                position: relative;
+            }
+
+            table thead tr th {
+                position: sticky;
+                top: 0;
+                z-index: 5;
+                background-color: inherit;
+                box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.08);
+            }
+
+            table tbody tr:nth-child(even) {
+                background-color: #fafafa;
+            }
+
+            table td,
+            table th {
+                white-space: nowrap;
+            }
+
+            /* ---------- MODAL → BOTTOM SHEET: pola khas aplikasi HP ---------- */
+            [class*="fixed inset-0"][class*="flex"][class*="items-center"][class*="justify-center"] {
+                align-items: flex-end !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+                padding-bottom: 0 !important;
+            }
+
+            [class*="fixed inset-0"][class*="flex"][class*="items-center"][class*="justify-center"]>div[class*="rounded"] {
+                width: 100% !important;
+                max-width: 100% !important;
+                border-bottom-left-radius: 0 !important;
+                border-bottom-right-radius: 0 !important;
+                border-top-left-radius: 1.25rem !important;
+                border-top-right-radius: 1.25rem !important;
+                max-height: 88vh !important;
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                animation: mobileSheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+
+            /* Handle bar kecil di atas bottom sheet, mempertegas bahwa ini
+                 elemen yang bisa "ditarik" seperti pola umum di HP */
+            [class*="fixed inset-0"][class*="flex"][class*="items-center"][class*="justify-center"]>div[class*="rounded"]::before {
+                content: "";
+                display: block;
+                width: 40px;
+                height: 4px;
+                border-radius: 9999px;
+                background: #e5e7eb;
+                margin: 0.6rem auto 0.1rem;
+            }
+
+            @keyframes mobileSheetUp {
+                from {
+                    transform: translateY(24px);
+                    opacity: 0.6;
+                }
+
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+
+            /* Beberapa modal khusus (mis. route-nav-modal) sudah pakai
+                 items-end secara eksplisit — jangan dobel handle bar/animasi
+                 supaya tidak bentrok dengan layout internalnya. */
+            #route-nav-modal>div[class*="rounded"]::before {
+                content: none;
+            }
+
+            /* ---------- TOAST: pindah ke tengah-bawah supaya gampang dilihat
+                 & tidak ketiban jari saat mengetik di layar sempit ---------- */
+            #app-container [class*="fixed top-4 right-4"] {
+                top: auto !important;
+                right: 1rem !important;
+                left: 1rem !important;
+                bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem) !important;
+                justify-content: center;
+            }
+        }
+
+        /* ---------- Layar sangat sempit (HP kecil) ---------- */
+        @media (max-width: 380px) {
+            #app-container>header #page-title {
+                max-width: 38vw;
+            }
+        }
+    </style>
+
 </head>
 
 <body class="font-sans text-gray-800 bg-gray-50">
@@ -637,7 +1091,7 @@
                 </div>
 
                 <!-- Nav items -->
-                <nav class="flex-1 overflow-y-auto p-3 space-y-1">
+                <nav id="sidebar-nav" class="flex-1 overflow-y-auto p-3 space-y-1">
 
                     <!-- Dashboard -->
                     <button id="menu-dashboard" onclick="navTo('Dashboard')"
@@ -863,7 +1317,7 @@
                 </nav>
 
                 <!-- Footer sidebar: role info -->
-                <div class="p-4 border-t border-gray-100">
+                <div id="sidebar-footer-box" class="p-4 border-t border-gray-100">
                     <div class="flex items-center gap-2 px-2 py-2 rounded-xl bg-gray-50">
                         <div class="w-7 h-7 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
                             <svg class="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2022,18 +2476,31 @@
             // yang sama, menu Dashboard tetap hidden sampai halaman di-refresh manual.
             document.getElementById('menu-dashboard').classList.remove('hidden');
 
+            // ── Reset SEMUA menu utama ke status "hidden" dulu (deny by default),
+            // baru tiap role di bawah menampilkan (remove('hidden')) menu yang memang
+            // boleh diakses. Sebelumnya beberapa role branch tidak menyebutkan semua
+            // menu secara eksplisit (cuma add('hidden') utk yang mereka larang, tanpa
+            // remove('hidden') utk sisanya) — karena ini SPA (elemen tidak dibuat ulang
+            // saat ganti login), kalau role A menampilkan menu X lalu logout dan role B
+            // login di sesi browser yang sama tapi branch B tidak pernah menyentuh menu
+            // X, menu X ikut "kebawa" tetap kelihatan/ke-klik oleh role B walau
+            // seharusnya tidak boleh. Pola deny-by-default ini menutup celah itu.
+            ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
+                'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket'
+            ].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+
             if (currentUserRole === 'PO_User') {
-                // Staff: hanya bisa akses Purchase Order (termasuk Receive PO), Process PO TERSEMBUNYI
-                document.getElementById('menu-inventory').classList.add('hidden');
-                document.getElementById('menu-plan-task').classList.add('hidden');
-                document.getElementById('menu-maintenance').classList.add('hidden');
-                document.getElementById('menu-process-po').classList.add('hidden');
-                document.getElementById('menu-process-inbound').classList.add('hidden');
-                document.getElementById('menu-team-delivery').classList.add('hidden');
-                // Service Center hanya untuk ADMIN, CS_User, dan Teknisi
-                document.getElementById('menu-service-center').classList.add('hidden');
-                // List Paket hanya untuk ADMIN
-                document.getElementById('menu-list-paket').classList.add('hidden');
+                // Staff: HANYA menu Purchase Order & Catalogue yang ditampilkan
+                // (Dashboard sengaja TIDAK ditampilkan utk role ini — tetap bisa
+                // diakses sbg halaman "home" navigasi di HP lewat tombol
+                // hamburger, tapi tidak muncul sbg tile menu).
+                document.getElementById('menu-po').classList.remove('hidden');
+                // Catalogue untuk ADMIN, PO_User, dan Warehouse
+                document.getElementById('menu-catalogue').classList.remove('hidden');
                 // Tampilkan Receive PO di bawah submenu Purchase Order
                 document.getElementById('sub-receive-po').classList.remove('hidden');
                 // Pastikan Form PO/RO/Report Status kembali tampil (mis. setelah Finance login)
@@ -2051,15 +2518,11 @@
                 loadNotifReadyToShip();
             } else if (currentUserRole === 'WAREHOUSE') {
                 // Team Warehouse: hanya tampilkan menu Process PO & Process Inbound
-                document.getElementById('menu-inventory').classList.add('hidden');
-                document.getElementById('menu-plan-task').classList.add('hidden');
-                document.getElementById('menu-maintenance').classList.add('hidden');
-                document.getElementById('menu-po').classList.add('hidden');
+                document.getElementById('menu-dashboard').classList.remove('hidden');
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
-                document.getElementById('menu-team-delivery').classList.add('hidden');
-                // List Paket hanya untuk ADMIN
-                document.getElementById('menu-list-paket').classList.add('hidden');
+                // Catalogue untuk ADMIN, PO_User, dan Warehouse
+                document.getElementById('menu-catalogue').classList.remove('hidden');
                 navTo(_getRestorePage('Process PO'));
 
                 // Tampilkan tombol notifikasi & load data Open
@@ -2068,23 +2531,12 @@
                 loadNotifReadyToShip();
             } else if (currentUserRole === 'DRIVER') {
                 // Team Delivery (Driver): hanya tampilkan menu Team Delivery
-                document.getElementById('menu-inventory').classList.add('hidden');
-                document.getElementById('menu-plan-task').classList.add('hidden');
-                document.getElementById('menu-maintenance').classList.add('hidden');
-                document.getElementById('menu-po').classList.add('hidden');
-                document.getElementById('menu-process-po').classList.add('hidden');
-                document.getElementById('menu-process-inbound').classList.add('hidden');
+                document.getElementById('menu-dashboard').classList.remove('hidden');
                 document.getElementById('menu-team-delivery').classList.remove('hidden');
                 // Create Task hanya untuk ADMIN — Driver tidak perlu/tidak boleh akses
                 document.getElementById('sub-create-task').classList.add('hidden');
                 // Pool Driver hanya untuk ADMIN — Driver tidak perlu/tidak boleh akses
                 document.getElementById('sub-pool-driver').classList.add('hidden');
-                // Catalogue hanya untuk ADMIN, PO_User, dan Warehouse — Driver tidak perlu akses
-                document.getElementById('menu-catalogue').classList.add('hidden');
-                // Service Center bukan untuk Driver
-                document.getElementById('menu-service-center').classList.add('hidden');
-                // List Paket hanya untuk ADMIN
-                document.getElementById('menu-list-paket').classList.add('hidden');
                 // Buka submenu Team Delivery otomatis
                 document.getElementById('team-delivery-sub').classList.remove('hidden');
                 document.getElementById('arrow-team-delivery').textContent = '▲';
@@ -2092,16 +2544,6 @@
             } else if (currentUserRole === 'CS_User') {
                 // CS_User: tampilkan semua menu Service Center
                 document.getElementById('menu-dashboard').classList.add('hidden');
-                document.getElementById('menu-inventory').classList.add('hidden');
-                document.getElementById('menu-plan-task').classList.add('hidden');
-                document.getElementById('menu-maintenance').classList.add('hidden');
-                document.getElementById('menu-po').classList.add('hidden');
-                document.getElementById('menu-process-po').classList.add('hidden');
-                document.getElementById('menu-process-inbound').classList.add('hidden');
-                document.getElementById('menu-team-delivery').classList.add('hidden');
-                document.getElementById('menu-catalogue').classList.add('hidden');
-                // List Paket hanya untuk ADMIN
-                document.getElementById('menu-list-paket').classList.add('hidden');
                 // Tampilkan Service Center
                 document.getElementById('menu-service-center').classList.remove('hidden');
                 // Buka submenu Service Center otomatis
@@ -2117,16 +2559,6 @@
             } else if (currentUserRole === 'Teknisi') {
                 // Teknisi: HANYA tampilkan "Report Status Repair" dan "Task Technician"
                 document.getElementById('menu-dashboard').classList.add('hidden');
-                document.getElementById('menu-inventory').classList.add('hidden');
-                document.getElementById('menu-plan-task').classList.add('hidden');
-                document.getElementById('menu-maintenance').classList.add('hidden');
-                document.getElementById('menu-po').classList.add('hidden');
-                document.getElementById('menu-process-po').classList.add('hidden');
-                document.getElementById('menu-process-inbound').classList.add('hidden');
-                document.getElementById('menu-team-delivery').classList.add('hidden');
-                document.getElementById('menu-catalogue').classList.add('hidden');
-                // List Paket hanya untuk ADMIN
-                document.getElementById('menu-list-paket').classList.add('hidden');
                 // Tampilkan Service Center
                 document.getElementById('menu-service-center').classList.remove('hidden');
                 // Buka submenu Service Center otomatis
@@ -2142,16 +2574,7 @@
             } else if (currentUserRole === 'Finance') {
                 // [FIX 20] Finance: HANYA bisa akses menu "List PO Pre-Order/Need Approval"
                 document.getElementById('menu-dashboard').classList.add('hidden');
-                document.getElementById('menu-inventory').classList.add('hidden');
-                document.getElementById('menu-plan-task').classList.add('hidden');
-                document.getElementById('menu-maintenance').classList.add('hidden');
-                document.getElementById('menu-process-po').classList.add('hidden');
-                document.getElementById('menu-process-inbound').classList.add('hidden');
-                document.getElementById('menu-team-delivery').classList.add('hidden');
-                document.getElementById('menu-catalogue').classList.add('hidden');
-                document.getElementById('menu-service-center').classList.add('hidden');
-                // List Paket hanya untuk ADMIN
-                document.getElementById('menu-list-paket').classList.add('hidden');
+                document.getElementById('menu-po').classList.remove('hidden');
                 // Sembunyikan semua sub-item Purchase Order kecuali List PO Pre-Order/Need Approval
                 document.getElementById('sub-form-po').classList.add('hidden');
                 document.getElementById('sub-form-ro').classList.add('hidden');
@@ -2165,8 +2588,14 @@
                 navTo('PO PreOrder Approval');
             } else {
                 // ADMIN: semua menu tampil termasuk Process PO & Team Delivery
+                document.getElementById('menu-dashboard').classList.remove('hidden');
+                document.getElementById('menu-inventory').classList.remove('hidden');
+                document.getElementById('menu-plan-task').classList.remove('hidden');
+                document.getElementById('menu-maintenance').classList.remove('hidden');
+                document.getElementById('menu-po').classList.remove('hidden');
                 document.getElementById('menu-process-po').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
+                document.getElementById('menu-catalogue').classList.remove('hidden');
                 // Tampilkan Receive PO di bawah submenu Purchase Order
                 document.getElementById('sub-receive-po').classList.remove('hidden');
                 // Tampilkan Warranty Registration di bawah submenu Purchase Order
@@ -2304,14 +2733,17 @@
             document.getElementById('login-page').classList.remove('hidden');
             resetLoginCover();
 
-            // Reset visibilitas menu
-            document.getElementById('menu-inventory').classList.remove('hidden');
-            document.getElementById('menu-plan-task').classList.remove('hidden');
-            document.getElementById('menu-maintenance').classList.remove('hidden');
-            document.getElementById('menu-po').classList.remove('hidden');
-            document.getElementById('menu-process-po').classList.remove('hidden');
-            document.getElementById('menu-process-inbound').classList.remove('hidden');
-            document.getElementById('menu-team-delivery').classList.remove('hidden');
+            // Reset visibilitas menu ke status "hidden" semua (deny by default) —
+            // dibiarkan konsisten dengan pola yang sama dipakai startApp(), supaya
+            // TIDAK ADA menu yang nyangkut kelihatan di antara logout dan login
+            // berikutnya (mis. sekilas ke-flash sebelum startApp() menata ulang).
+            ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
+                'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket'
+            ].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
             const subPreOrderReset = document.getElementById('sub-po-preorder-approval');
             if (subPreOrderReset) subPreOrderReset.classList.add('hidden');
             const subFormPOReset = document.getElementById('sub-form-po');
@@ -2344,6 +2776,14 @@
             // Reset team-delivery-sub
             document.getElementById('team-delivery-sub').classList.add('hidden');
             document.getElementById('arrow-team-delivery').textContent = '▼';
+
+            // Pastikan menu navigasi (nav#sidebar-nav) balik dulu ke sidebar asli
+            // sebelum #content-area di-reset di bawah — kalau tidak, dan nav sedang
+            // "menempel" di halaman home (Dashboard/Check Machine/dst di HP), nav
+            // beserta semua menu di dalamnya (menu-inventory, menu-po, dst) akan ikut
+            // terhapus permanen oleh innerHTML reset ini, menyebabkan menu jadi kosong
+            // setelah login berikutnya.
+            restoreSidebarNav();
 
             // Reset konten area
             document.getElementById('content-area').innerHTML =
@@ -3055,7 +3495,27 @@
         // =========================================================================
         let sidebarOpen = false;
 
+        /** Halaman "Home" navigasi mobile per role — dipakai supaya tombol
+         *  hamburger & grid ikon berlaku untuk SEMUA role, bukan cuma role
+         *  yang landing page defaultnya Dashboard. Role dengan akses terbatas
+         *  (CS_User/Teknisi/Finance) memang sengaja diblokir dari 'Dashboard'
+         *  oleh navTo() — jadi "home" mereka diarahkan ke halaman utama yang
+         *  memang boleh mereka akses. */
+        function getMobileHomePage() {
+            if (currentUserRole === 'CS_User') return 'Check Machine';
+            if (currentUserRole === 'Teknisi') return 'Report Status Repair';
+            if (currentUserRole === 'Finance') return 'PO PreOrder Approval';
+            return 'Dashboard';
+        }
+
         function toggleSidebar() {
+            // Di HP, sidebar drawer sudah tidak dipakai lagi (navigasi ikon
+            // sekarang menempel di halaman "home" masing-masing role) —
+            // tombol ini jadi tombol "Home".
+            if (window.innerWidth < 768) {
+                navTo(getMobileHomePage());
+                return;
+            }
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
             sidebarOpen = !sidebarOpen;
@@ -3074,13 +3534,69 @@
             if (window.innerWidth >= 768 && sidebarOpen) {
                 document.getElementById('sidebar-overlay').classList.add('hidden');
             }
+            // Jaga menu navigasi berada di tempat yang benar sesuai lebar layar:
+            // di sidebar untuk desktop, atau menempel di halaman home untuk HP.
+            syncSidebarNavPlacement();
         });
+
+        /** Pindahkan menu navigasi (nav#sidebar-nav) balik ke dalam sidebar asli.
+         *  Dipanggil sebelum pindah halaman, supaya nav tidak ikut terhapus saat
+         *  konten halaman home di-render ulang oleh halaman lain. */
+        function restoreSidebarNav() {
+            const nav = document.getElementById('sidebar-nav');
+            const sidebarAside = document.getElementById('sidebar');
+            const footerBox = document.getElementById('sidebar-footer-box');
+            if (nav && sidebarAside && footerBox && nav.parentElement !== sidebarAside) {
+                sidebarAside.insertBefore(nav, footerBox);
+            }
+        }
+
+        /** Di HP: kalau halaman yang baru dirender (pageName) adalah halaman
+         *  "home" untuk role yang sedang login, pindahkan menu navigasi
+         *  (nav#sidebar-nav) ke slot #mobile-dashboard-nav-slot di halaman
+         *  itu. Berlaku untuk SEMUA role — bukan cuma yang home-nya Dashboard.
+         *  Di desktop, nav tetap di sidebar seperti biasa (tidak dipindah). */
+        function mountMobileDashboardNav(pageName) {
+            if (window.innerWidth >= 768) return;
+            if (pageName && pageName !== getMobileHomePage()) return;
+            syncNavExpandedClasses();
+            const nav = document.getElementById('sidebar-nav');
+            const slot = document.getElementById('mobile-dashboard-nav-slot');
+            if (nav && slot) slot.appendChild(nav);
+        }
+
+        /** Sinkronkan posisi nav sesuai lebar layar & halaman yang sedang aktif
+         *  (dipanggil saat resize, misal HP diputar ke landscape/tablet). */
+        function syncSidebarNavPlacement() {
+            if (window.innerWidth >= 768) {
+                restoreSidebarNav();
+            } else if (sessionStorage.getItem('currentPage') === getMobileHomePage()) {
+                mountMobileDashboardNav(getMobileHomePage());
+            }
+        }
 
         function toggleSubMenu(menuId, arrowId) {
             const subMenu = document.getElementById(menuId);
             const arrow = document.getElementById(arrowId);
             subMenu.classList.toggle('hidden');
             arrow.textContent = subMenu.classList.contains('hidden') ? '▼' : '▲';
+            // Sinkronkan class "nav-expanded" di wrapper-nya — dipakai CSS grid ikon
+            // homescreen di HP supaya tile ini melebar penuh saat sub-menunya terbuka
+            // (tanpa mengandalkan selector :has() yang dukungan browsernya bisa beda-beda).
+            const wrapper = subMenu.parentElement;
+            if (wrapper) wrapper.classList.toggle('nav-expanded', !subMenu.classList.contains('hidden'));
+        }
+
+        /** Samakan class "nav-expanded" pada tiap wrapper menu (div[id^="menu-"])
+         *  dengan status hidden/tidaknya sub-menu di dalamnya. Perlu dipanggil ulang
+         *  setiap kali submenu dibuka otomatis lewat kode (bukan lewat klik user),
+         *  misal saat login & role tertentu langsung membuka submenu-nya —
+         *  supaya grid ikon homescreen di HP tetap menampilkan tile yang benar. */
+        function syncNavExpandedClasses() {
+            document.querySelectorAll('#sidebar-nav > div[id^="menu-"]').forEach(wrapper => {
+                const sub = wrapper.querySelector(':scope > div[id$="-sub"]');
+                if (sub) wrapper.classList.toggle('nav-expanded', !sub.classList.contains('hidden'));
+            });
         }
 
         /** Highlight nav item yang aktif */
@@ -3212,6 +3728,10 @@
 
             // Tutup sidebar di mobile setelah klik menu
             if (window.innerWidth < 768 && sidebarOpen) toggleSidebar();
+
+            // Pastikan menu navigasi balik ke sidebar asli dulu sebelum konten
+            // halaman (termasuk slot-nya di Dashboard) dirender ulang/diganti.
+            restoreSidebarNav();
 
             showPage(pageName);
         }
@@ -3389,7 +3909,11 @@
             <h1 class="text-3xl font-semibold text-gray-700 mb-6">Dashboard</h1>
             <img src="https://lh3.googleusercontent.com/d/19epa7IlpjqaS0f7F_WEgDZSwhriLpikp"
                  alt="Dashboard Image"
-                 class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">`;
+                 class="rounded-lg shadow-lg max-w-full h-auto border border-gray-300">
+            <div id="mobile-dashboard-nav-slot"></div>`;
+            // Di HP, sidebar drawer tidak dipakai — kalau role sekarang home-nya
+            // Dashboard, menu navigasi (ikon-ikon) dipindahkan ke sini.
+            mountMobileDashboardNav('Dashboard');
         }
 
         // =========================================================================
@@ -3426,6 +3950,7 @@
             document.getElementById('content-area').innerHTML = `
             <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700 mb-1">Check Machine</h1>
             <p class="text-sm text-gray-500 mb-6">Masukkan Serial Number untuk melihat riwayat service, atau Nama Customer untuk melihat status warranty mesin.</p>
+            <div id="mobile-dashboard-nav-slot"></div>
 
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 mb-6">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -3458,6 +3983,7 @@
             <div id="cm-result"></div>`;
 
             loadCmCustomerList();
+            mountMobileDashboardNav('Check Machine');
         }
 
         /** Muat daftar Nama Customer (untuk dropdown Check Warranty) dari sheet Regis_Log kolom D */
@@ -3900,6 +4426,7 @@
                 </button>
             </div>
             <p class="text-sm text-gray-500 mb-4">Status mesin "On Going" / "Pending" &amp; "Solved" (7 hari terakhir) dari sheet "Repair".</p>
+            <div id="mobile-dashboard-nav-slot"></div>
 
             <div class="relative mb-6">
                 <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3964,6 +4491,7 @@
             rsrSearchTerm = '';
 
             await loadReportStatusRepair();
+            mountMobileDashboardNav('Report Status Repair');
         }
 
         /**
