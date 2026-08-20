@@ -272,6 +272,40 @@
                 -webkit-text-size-adjust: 100%;
             }
 
+            /* Cegah halaman ke-render "dizoom keluar" (perlu dicubit manual utk
+                 menyesuaikan) yang biasanya disebabkan salah satu elemen sedikit
+                 melebihi lebar layar & memicu browser HP memperkecil tampilan
+                 awal supaya semua konten "muat". Dengan overflow-x dikunci,
+                 elemen yang kelebaran akan discroll ke samping (kalau memang
+                 perlu) alih-alih memperkecil seluruh halaman. */
+            html,
+            body {
+                overflow-x: hidden;
+                max-width: 100vw;
+            }
+
+            #app-container {
+                overflow-x: hidden;
+                max-width: 100vw;
+            }
+
+            #login-page {
+                overflow-x: hidden;
+                /* Pakai tinggi viewport yang benar-benar terlihat (bukan
+                     "large viewport" yang ikut menghitung area address bar),
+                     supaya card login tidak ketarik ke bawah saat address bar
+                     browser HP sedang tampil. Browser yang belum kenal dvh
+                     otomatis abaikan baris ini & tetap pakai height bawaan. */
+                height: 100dvh;
+            }
+
+            /* Card login: biarkan lebar menyesuaikan konten (seperti semula)
+                 supaya tetap center lewat flex parent (#login-page) — cukup
+                 pastikan tidak melebihi lebar layar. */
+            .login-card-wrap {
+                max-width: 100%;
+            }
+
             input,
             select,
             textarea {
