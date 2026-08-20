@@ -1137,10 +1137,18 @@
             <div class="flex items-center gap-3">
                 <button id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Buka/tutup menu"
                     class="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    <!-- Ikon hamburger: dipakai di desktop, & di HP saat sedang di halaman home -->
+                    <svg id="sidebar-toggle-icon-menu" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    <!-- Ikon panah kembali: khusus HP, muncul saat sedang di halaman menu
+                         (bukan halaman home) — supaya user gampang balik ke home -->
+                    <svg id="sidebar-toggle-icon-back" xmlns="http://www.w3.org/2000/svg" class="hidden h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                 </button>
                 <span class="font-bold text-gray-700 text-sm md:text-base" id="page-title">Dashboard</span>
@@ -3650,7 +3658,24 @@
             // Jaga menu navigasi berada di tempat yang benar sesuai lebar layar:
             // di sidebar untuk desktop, atau menempel di halaman home untuk HP.
             syncSidebarNavPlacement();
+            updateMobileBackButton(sessionStorage.getItem('currentPage'));
         });
+
+        /** Di HP: ganti ikon tombol pojok kiri atas jadi panah "kembali" saat
+         *  user sedang membuka halaman menu (bukan halaman home), supaya lebih
+         *  jelas & gampang buat balik ke home — tombolnya tetap sama (masih
+         *  toggleSidebar() -> navTo(getMobileHomePage())), cuma ikon & label-nya
+         *  yang menyesuaikan. Di desktop selalu ikon hamburger seperti biasa. */
+        function updateMobileBackButton(pageName) {
+            const menuIcon = document.getElementById('sidebar-toggle-icon-menu');
+            const backIcon = document.getElementById('sidebar-toggle-icon-back');
+            const btn = document.getElementById('sidebar-toggle');
+            if (!menuIcon || !backIcon || !btn) return;
+            const showBack = window.innerWidth < 768 && pageName && pageName !== getMobileHomePage();
+            menuIcon.classList.toggle('hidden', showBack);
+            backIcon.classList.toggle('hidden', !showBack);
+            btn.setAttribute('aria-label', showBack ? 'Kembali ke Home' : 'Buka/tutup menu');
+        }
 
         /** Pindahkan menu navigasi (nav#sidebar-nav) balik ke dalam sidebar asli.
          *  Dipanggil sebelum pindah halaman, supaya nav tidak ikut terhapus saat
@@ -3838,6 +3863,7 @@
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
             sessionStorage.setItem('currentPage', pageName);
+            updateMobileBackButton(pageName);
 
             // Tutup sidebar di mobile setelah klik menu
             if (window.innerWidth < 768 && sidebarOpen) toggleSidebar();
