@@ -387,10 +387,31 @@
             ===================================================================== */
             #sidebar-nav {
                 display: grid;
-                grid-template-columns: repeat(3, 1fr);
+                /* PENTING: minmax(0, 1fr) — bukan cuma "1fr" — supaya kolom grid
+                     BISA menyusut di bawah lebar konten aslinya. Tanpa minmax(0,..),
+                     kolom grid punya lebar minimum implisit "auto" yang mengikuti
+                     konten terlebar di dalamnya (mis. label panjang "List PO
+                     Pre-Order/Need Approval" saat sub-menu Purchase Order terbuka),
+                     dan itu bisa mendorong SELURUH grid (beserta induknya) melebihi
+                     lebar layar HP — persis penyebab tile ter-crop di kiri/kanan. */
+                grid-template-columns: repeat(3, minmax(0, 1fr));
                 gap: 0.7rem 0.5rem;
                 padding: 1rem 0.85rem 1.5rem !important;
                 align-content: start;
+                max-width: 100%;
+            }
+
+            /* Pastikan setiap tile & sub-menu ikut menyusut sesuai kolomnya
+                 (flex/grid item defaultnya menolak menyusut di bawah lebar
+                 konten aslinya kalau min-width tidak dikunci ke 0). */
+            #sidebar-nav>* {
+                min-width: 0;
+            }
+
+            #sidebar-nav .sub-item,
+            #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] {
+                min-width: 0;
+                overflow-wrap: break-word;
             }
 
             /* PENTING: pastikan menu yang memang disembunyikan lewat class
