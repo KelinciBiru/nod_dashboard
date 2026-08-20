@@ -1646,7 +1646,7 @@
         // Backend ini membaca sheet "Repair" pada spreadsheet "Maintenance/Repair NOD" dan sheet
         // "Penukaran Mesin NOD" (kolom L = Alasan Penukaran). Lihat file Code.gs terpisah yang
         // disertakan untuk kode backend-nya, lalu deploy sebagai Web App dan tempel URL-nya di sini.
-        const SERVICE_CENTER_GAS_URL = 'https://script.google.com/macros/s/AKfycbyO333vwMn0nARh-knsP8hSkVT9YOtlwz-5L-PRpyNl9mvOcpkX6TgVnU5GsKxUIb7p/exec';
+        const SERVICE_CENTER_GAS_URL = 'https://script.google.com/macros/s/AKfycbxm2YDlYf_H2x46Pf4hbd003Y_NnLg5ZKt_GUovE0ZjlVFCzTORTo3ec7OmLKRK75XJ/exec';
 
         // TODO: Ganti dengan URL Google Apps Script Web App khusus popup detail Delivery_Log
         // (deployment terpisah dari PO_GAS_URL). Backend ini membaca spreadsheet dengan ID
@@ -5142,8 +5142,8 @@
         let ttSerialInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer, kendala } }
         let ttRepairInfoMap = {};   // { serialLowerCase -> { typeMachine, namaCustomer } } fallback dari sheet "Repair" (kolom C/D/H) kalau tidak ketemu di "Penukaran Mesin NOD"
         let ttCustomerTypeKendalaMap = {}; // { "customer|type" -> kendala } fallback dari "Penukaran Mesin NOD" kalau serial tidak cocok
-        let ttServiceMesinNodBySerial = {};   // { noMesinLowerCase -> { kendala, tags, namaCustomer } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom G/B/H/I)
-        let ttServiceMesinNodByCustomer = {}; // { namaCustomerLowerCase -> { kendala, tags, noMesin } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom B/G/H/I)
+        let ttServiceMesinNodBySerial = {};   // { noMesinLowerCase -> { kendala, tags, namaCustomer, statusGaransi } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom G/B/H/I/E) — statusGaransi (kolom E) dipakai utk auto-centang checkbox Service/Status Warranty
+        let ttServiceMesinNodByCustomer = {}; // { namaCustomerLowerCase -> { kendala, tags, noMesin, statusGaransi } } fallback TERAKHIR dari sheet "Service Mesin NOD" (kolom B/G/H/I/E)
         let ttReturDataByFromLocation = {};   // { namaCustomerLowerCase -> { service, statusWarranty } } dari sheet "Retur_Data" (BARU)
         let ttInboundLogRemarkBySerial = {};  // { serialLowerCase -> remark } dari sheet "Inbound_Log" kolom Remark (BARU)
         let ttHistoricalKendalaBySerial = {};   // { serialSebelumnyaLowerCase -> alasanDitukar } fallback dari "Historycal Penukaran Customer" (kolom D/G)
@@ -5387,9 +5387,24 @@
             // dicocokkan lewat Serial Number). Dipanggil di setiap cabang di bawah begitu
             // Nama Customer & Serial Number diketahui.
             function applyServiceReturInfo(serialLowerArg, customerName) {
-                const returInfo = customerName ? ttReturDataByFromLocation[customerName.toLowerCase()] : null;
-                if (serviceCb) serviceCb.checked = !!(returInfo && returInfo.service);
-                if (warrantyCb) warrantyCb.checked = !!(returInfo && returInfo.statusWarranty);
+                // BARU: kalau Serial Number/Nama Customer ketemu di sheet "Service Mesin NOD",
+                // checkbox "Service" & "Status Warranty" mengikuti kolom E "Status Garansi":
+                //   - "Non Garansi" -> Service dicentang, Status Warranty TIDAK dicentang.
+                //   - "Garansi"     -> Service dicentang, Status Warranty ikut dicentang.
+                // Ini diprioritaskan di atas data "Retur_Data" (dipakai hanya kalau Serial
+                // Number/Nama Customer tidak ketemu di "Service Mesin NOD").
+                const svcNod = ttServiceMesinNodBySerial[serialLowerArg]
+                    || (customerName ? ttServiceMesinNodByCustomer[customerName.toLowerCase()] : null);
+                const statusGaransi = svcNod ? (svcNod.statusGaransi || '').trim().toLowerCase() : '';
+
+                if (svcNod && statusGaransi) {
+                    if (serviceCb) serviceCb.checked = true;
+                    if (warrantyCb) warrantyCb.checked = statusGaransi === 'garansi';
+                } else {
+                    const returInfo = customerName ? ttReturDataByFromLocation[customerName.toLowerCase()] : null;
+                    if (serviceCb) serviceCb.checked = !!(returInfo && returInfo.service);
+                    if (warrantyCb) warrantyCb.checked = !!(returInfo && returInfo.statusWarranty);
+                }
                 if (kelengkapanEl) kelengkapanEl.value = ttInboundLogRemarkBySerial[serialLowerArg] || '';
             }
 
