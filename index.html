@@ -4,6 +4,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- BUG FIX: tinggi layar HP yang akurat lewat JS (bukan cuma CSS dvh/vh).
+         Sebagian browser dalam-aplikasi (mis. browser bawaan WhatsApp/IG yang
+         memakai WKWebView custom) tidak selalu menghitung "dvh" dengan benar,
+         sehingga elemen "position:fixed; height:100vh/100dvh" bisa lebih
+         tinggi dari layar yang BENAR-BENAR terlihat — akibatnya konten yang
+         di-center secara vertikal (mis. card login) ketarik ke bawah. Simpan
+         tinggi layar sebenarnya ke custom property --app-vh, dipakai sebagai
+         pengganti 100vh/100dvh di CSS. Dijalankan sedini mungkin (sebelum body
+         dirender) supaya tidak ada "flash" posisi yang salah. -->
+    <script>
+        (function () {
+            function setAppVh() {
+                var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+                // PENTING: jangan pernah set custom property dengan nilai yang
+                // jelas tidak masuk akal (0, atau sangat kecil karena diukur
+                // sebelum browser sempat menghitung layout). CSS var() dengan
+                // fallback ("var(--app-vh, 100dvh)") HANYA memakai fallback-nya
+                // kalau property itu benar-benar belum pernah di-set — kalau
+                // sudah pernah di-set (walau isinya "0px" yang salah), fallback
+                // itu tidak akan pernah dipakai lagi. Makanya nilai yang jelas
+                // rusak sengaja TIDAK ditulis sama sekali, biar CSS tetap jatuh
+                // ke fallback 100dvh/100vh yang aman.
+                if (h && h > 100) {
+                    document.documentElement.style.setProperty('--app-vh', h + 'px');
+                }
+            }
+            setAppVh();
+            window.addEventListener('resize', setAppVh);
+            window.addEventListener('orientationchange', setAppVh);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', setAppVh);
+            }
+            // Sebagian browser belum sempat menghitung ukuran layar yang benar
+            // tepat saat script ini pertama kali jalan (terutama di <head>,
+            // sebelum <body> selesai di-parse) — ukur ulang beberapa kali di
+            // awal supaya nilainya pasti benar begitu layout sudah settle.
+            document.addEventListener('DOMContentLoaded', setAppVh);
+            window.addEventListener('load', setAppVh);
+            setTimeout(setAppVh, 300);
+        })();
+    </script>
     <title>NOD Dashboard Internal System</title>
 
     <!-- PWA: Home Screen Icon (Android Chrome & iOS Safari) -->
@@ -294,16 +336,32 @@
                 /* Pakai tinggi viewport yang benar-benar terlihat (bukan
                      "large viewport" yang ikut menghitung area address bar),
                      supaya card login tidak ketarik ke bawah saat address bar
-                     browser HP sedang tampil. Browser yang belum kenal dvh
-                     otomatis abaikan baris ini & tetap pakai height bawaan. */
+                     browser HP sedang tampil, atau saat dibuka lewat browser
+                     dalam-aplikasi (WhatsApp/IG dsb) yang kadang tidak
+                     menghitung dvh dengan akurat. --app-vh diisi oleh JS di
+                     <head> dengan tinggi layar yang sesungguhnya — fallback
+                     ke 100dvh lalu 100vh kalau JS-nya belum sempat jalan. */
+                height: 100vh;
                 height: 100dvh;
+                height: var(--app-vh, 100dvh);
             }
 
-            /* Card login: biarkan lebar menyesuaikan konten (seperti semula)
-                 supaya tetap center lewat flex parent (#login-page) — cukup
-                 pastikan tidak melebihi lebar layar. */
+            /* Card login: pakai teknik centering yang tidak bergantung sama
+                 sekali pada perilaku flex parent (#login-page) — beberapa
+                 browser/engine terbukti tidak konsisten men-center flex-item
+                 di sini (card selalu turun ke bawah walau parent sudah pakai
+                 items-center). position:fixed + top/left 50% + translate
+                 selalu center persis di tengah viewport, terlepas dari flex
+                 context di sekitarnya. */
             .login-card-wrap {
-                max-width: 100%;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                margin: 0;
+                max-width: 92vw;
+                max-height: 92vh;
+                z-index: 10;
             }
 
             input,
