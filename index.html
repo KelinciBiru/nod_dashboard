@@ -18105,7 +18105,16 @@
         // =========================================================================
         // PROSES INBOUND → KIRIM KE SPREADSHEET
         // =========================================================================
+        // [FIX] Guard anti-dobel-submit: mencegah data inbound tersimpan dua kali
+        // akibat user klik tombol "Proses Inbound" berkali-kali dengan cepat
+        // (double click / double tap di HP), atau menekan Enter berulang saat
+        // request pertama masih diproses. Tanpa guard ini, klik kedua bisa lolos
+        // sebelum tombol sempat ter-disable (misalnya saat modal konfirmasi masih
+        // terbuka), sehingga terkirim 2x ke server.
+        let _inboundSubmitting = false;
         async function prosesInbound() {
+            if (_inboundSubmitting) return; // sudah ada proses simpan yang berjalan, abaikan klik tambahan
+
             const tanggal = document.getElementById('inb-tanggal')?.value || '';
             const exLokasi = document.getElementById('inb-ex-lokasi')?.value?.trim() || '';
             const crew = document.getElementById('inb-crew')?.value || '';
@@ -18144,13 +18153,23 @@
                 return;
             }
 
-            const ok = await showConfirm('Proses Inbound?', `${items.length} item akan disimpan ke spreadsheet Inbound.`);
-            if (!ok) return;
+            // Set guard SEBELUM modal konfirmasi tampil, supaya klik/tap kedua yang
+            // masuk selagi modal konfirmasi masih terbuka langsung diabaikan di baris
+            // paling atas fungsi ini (bukan baru diblok setelah user klik "Ya").
+            _inboundSubmitting = true;
 
             const btn = document.querySelector('button[onclick="prosesInbound()"]');
             const originalHTML = btn ? btn.innerHTML : '';
+            if (btn) btn.disabled = true; // cegah klik ulang selama modal konfirmasi terbuka
+
+            const ok = await showConfirm('Proses Inbound?', `${items.length} item akan disimpan ke spreadsheet Inbound.`);
+            if (!ok) {
+                _inboundSubmitting = false;
+                if (btn) btn.disabled = false;
+                return;
+            }
+
             if (btn) {
-                btn.disabled = true;
                 btn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Menyimpan...`;
             }
             showProgressOverlay('Menyimpan data inbound ke server...');
@@ -18190,6 +18209,7 @@
             } catch (err) {
                 showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
             } finally {
+                _inboundSubmitting = false;
                 if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
                 hideProgressOverlay(true);
             }
