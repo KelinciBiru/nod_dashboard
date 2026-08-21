@@ -5439,8 +5439,23 @@
             // Nama Customer & Serial Number diketahui.
             function applyServiceReturInfo(serialLowerArg, customerName) {
                 const returInfo = customerName ? ttReturDataByFromLocation[customerName.toLowerCase()] : null;
-                if (serviceCb) serviceCb.checked = !!(returInfo && returInfo.service);
-                if (warrantyCb) warrantyCb.checked = !!(returInfo && returInfo.statusWarranty);
+                let service = returInfo ? returInfo.service : '';
+                let statusWarranty = returInfo ? returInfo.statusWarranty : '';
+
+                // FALLBACK (BARU): kalau Serial Number ketemu di sheet "Service Mesin
+                // NOD" (kolom G = No. Mesin), paksa checkbox "Service" tercentang &
+                // "Status Warranty" ikut kolom E "Status Garansi" (nilai "Garansi" /
+                // "Non Garansi") — SAMA seperti logika di backend getServiceReturInfo(),
+                // supaya mesin yang datanya cuma ada di "Service Mesin NOD" (belum
+                // tentu ada di "Retur_Data") tetap otomatis tercentang.
+                const svcNod = ttServiceMesinNodBySerial[serialLowerArg];
+                if (svcNod) {
+                    service = 'Service';
+                    statusWarranty = svcNod.statusGaransi || statusWarranty;
+                }
+
+                if (serviceCb) serviceCb.checked = !!service;
+                if (warrantyCb) warrantyCb.checked = !!statusWarranty && statusWarranty.toLowerCase() !== 'non garansi';
                 if (kelengkapanEl) kelengkapanEl.value = ttInboundLogRemarkBySerial[serialLowerArg] || '';
             }
 
@@ -13534,23 +13549,31 @@
             return diffDays <= REVISI_MAX_HARI;
         }
 
-        /** Isi baris-baris tabel item Form PO/RO dari hasil parsePOData().items */
-        function _fillItemRowsFromParsed(items, addRowFn, tbodyId) {
+        /** Isi baris-baris tabel item Form PO/RO dari hasil parsePOData().items.
+         *  [FIX 32] Sekarang async: kolom ID hasil ekstraksi PDF (it.id) hampir
+         *  selalu kosong karena PDF Request/Return Order yang di-generate memang
+         *  tidak pernah mencetak kolom ID — jadi kalau kosong, ID dicari otomatis
+         *  lewat _lookupIdByNamaBarang() (cocok persis nama item ke master data
+         *  sheet "LIST"), sama seperti yang sudah dipakai untuk hasil Import PDF
+         *  di Process PO. */
+        async function _fillItemRowsFromParsed(items, addRowFn, tbodyId) {
             const tbody = document.getElementById(tbodyId);
             if (!tbody) return;
             tbody.innerHTML = '';
-            (items || []).forEach(it => {
+            for (const it of (items || [])) {
                 addRowFn(false);
                 const tr = tbody.querySelector('tr:last-child');
-                if (!tr) return;
+                if (!tr) continue;
                 const idEl = tr.querySelector('.po-item-id');
                 const namaEl = tr.querySelector('.po-item-nama');
                 const qtyEl = tr.querySelector('.po-item-qty');
                 const uomEl = tr.querySelector('.po-item-uom');
                 const descEl = tr.querySelector('.po-item-desc');
                 const noteEl = tr.querySelector('.po-item-note');
-                if (idEl) idEl.value = it.id || '';
                 if (namaEl) { namaEl.value = it.nama_barang || ''; namaEl.title = namaEl.value; }
+                if (idEl) {
+                    idEl.value = it.id || await _lookupIdByNamaBarang(it.nama_barang) || '';
+                }
                 if (qtyEl) qtyEl.value = it.qty_po || '1';
                 if (uomEl) {
                     const match = [...uomEl.options].find(o => o.value.toLowerCase() === String(it.uom || '').toLowerCase());
@@ -13561,7 +13584,7 @@
                     descEl.value = match ? match.value : (descEl.options[descEl.options.length - 1]?.value || '');
                 }
                 if (noteEl) { noteEl.value = it.note || ''; autoResizeTextarea(noteEl); }
-            });
+            }
             if (tbody.querySelectorAll('tr').length === 0) {
                 tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
             }
@@ -13663,7 +13686,7 @@
                 if (noteEl) noteEl.value = noteKhusus;
 
                 // 4. Isi tabel item dari hasil ekstraksi PDF
-                _fillItemRowsFromParsed(parsed.items, tambahBarisFormPO, 'po-item-table-body');
+                await _fillItemRowsFromParsed(parsed.items, tambahBarisFormPO, 'po-item-table-body');
 
                 // 5. Masuk ke mode Revisi
                 window._revisiPOActive = noPO;
@@ -14296,7 +14319,7 @@
                 if (noteEl) noteEl.value = noteKhusus;
 
                 // 4. Isi tabel item dari hasil ekstraksi PDF
-                _fillItemRowsFromParsed(parsed.items, tambahBarisFormRetur, 'retur-item-table-body');
+                await _fillItemRowsFromParsed(parsed.items, tambahBarisFormRetur, 'retur-item-table-body');
 
                 // 5. Masuk ke mode Revisi
                 window._revisiROActive = noRO;
