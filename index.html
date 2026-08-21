@@ -5439,23 +5439,8 @@
             // Nama Customer & Serial Number diketahui.
             function applyServiceReturInfo(serialLowerArg, customerName) {
                 const returInfo = customerName ? ttReturDataByFromLocation[customerName.toLowerCase()] : null;
-                let service = returInfo ? returInfo.service : '';
-                let statusWarranty = returInfo ? returInfo.statusWarranty : '';
-
-                // FALLBACK (BARU): kalau Serial Number ketemu di sheet "Service Mesin
-                // NOD" (kolom G = No. Mesin), paksa checkbox "Service" tercentang &
-                // "Status Warranty" ikut kolom E "Status Garansi" (nilai "Garansi" /
-                // "Non Garansi") — SAMA seperti logika di backend getServiceReturInfo(),
-                // supaya mesin yang datanya cuma ada di "Service Mesin NOD" (belum
-                // tentu ada di "Retur_Data") tetap otomatis tercentang.
-                const svcNod = ttServiceMesinNodBySerial[serialLowerArg];
-                if (svcNod) {
-                    service = 'Service';
-                    statusWarranty = svcNod.statusGaransi || statusWarranty;
-                }
-
-                if (serviceCb) serviceCb.checked = !!service;
-                if (warrantyCb) warrantyCb.checked = !!statusWarranty && statusWarranty.toLowerCase() !== 'non garansi';
+                if (serviceCb) serviceCb.checked = !!(returInfo && returInfo.service);
+                if (warrantyCb) warrantyCb.checked = !!(returInfo && returInfo.statusWarranty);
                 if (kelengkapanEl) kelengkapanEl.value = ttInboundLogRemarkBySerial[serialLowerArg] || '';
             }
 
@@ -14399,6 +14384,7 @@
                     category: categoryEl.value,
                     fileData, fileName, fileType: 'application/pdf',
                 };
+                console.log('[RevisiRO] Mengirim payload → token ada?', !!payload.token, '| panjang token:', (payload.token || '').length, '| noRO:', payload.noRO);
                 const result = await fetchWriteWithRetry(API_URLS.purchaseOrder, {
                     method: 'POST', redirect: 'follow',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -17436,15 +17422,40 @@
         // dropdown autocomplete), sehingga tidak lewat attachItemAutocomplete().
         // =========================================================================
 
-        /** Cocokkan Nama Barang (persis, tanpa memandang huruf besar/kecil) ke
-         *  master data (sheet "LIST") dan kembalikan ID pasangannya, atau ''
-         *  kalau tidak ada yang cocok persis. */
+        /** Normalisasi nama item untuk keperluan pencocokan: gabungkan semua
+         *  jenis whitespace (termasuk non-breaking space hasil ekstraksi PDF)
+         *  jadi satu spasi, trim, lowercase. */
+        function _normalizeItemNameForMatch(s) {
+            return String(s || '')
+                .normalize('NFKC')
+                .replace(/[\u00A0\s]+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
+        /** Cocokkan Nama Barang ke master data (sheet "LIST") dan kembalikan ID
+         *  pasangannya, atau '' kalau tidak ada yang cocok.
+         *  [FIX 33] Sebelumnya pencocokan persis-sama (===) gagal untuk nama
+         *  hasil ekstraksi teks PDF yang punya perbedaan spasi/whitespace halus
+         *  (kerning font PDF kadang menyisipkan spasi ganda/non-standar) dari
+         *  nama aslinya di sheet "LIST", jadi ID tetap kosong walau nama-nya
+         *  terlihat identik. Sekarang whitespace dinormalisasi dulu sebelum
+         *  dibandingkan, dan kalau masih tidak ketemu persis, dicoba pencocokan
+         *  longgar (salah satu nama sepenuhnya mengandung nama lainnya). */
         async function _lookupIdByNamaBarang(nama) {
-            const n = String(nama || '').trim().toLowerCase();
+            const n = _normalizeItemNameForMatch(nama);
             if (!n || n === '-') return '';
             const items = await getSourceItems();
-            const match = items.find(i => (i.nama || '').trim().toLowerCase() === n);
-            return match ? (match.id || '') : '';
+            let match = items.find(i => _normalizeItemNameForMatch(i.nama) === n);
+            if (!match) {
+                match = items.find(i => {
+                    const m = _normalizeItemNameForMatch(i.nama);
+                    return m && (m.includes(n) || n.includes(m));
+                });
+            }
+            const found = match ? (match.id || '') : '';
+            if (!found) console.warn('[_lookupIdByNamaBarang] Tidak ketemu ID untuk nama:', JSON.stringify(nama));
+            return found;
         }
 
         /** Untuk tabel dengan sel ID & Nama Barang berupa <td contenteditable>
