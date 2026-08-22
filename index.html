@@ -6916,8 +6916,13 @@
         // =========================================================================
         // FORM SERVICE: SUBMIT
         // =========================================================================
+        // [FIX] Guard anti-dobel-submit Form Service (lihat pola yang sama di
+        // Process Inbound/Process PO/Receive PO) — mencegah data terkirim 2x
+        // kalau tombol "Kirim Form Service" sempat diklik/tap berkali-kali.
+        let _isSubmittingFormService = false;
         async function submitFormService() {
             if (window._revisiFormServiceActive) { return _doSubmitRevisiFormService(); }
+            if (_isSubmittingFormService) return;
             const namaEl = document.getElementById('fs-nama');
             const btn = document.getElementById('fs-submitBtn');
             const btnLabel = document.getElementById('fs-submitBtnLabel');
@@ -6980,6 +6985,7 @@
             };
 
             setSubmitLoading(true);
+            _isSubmittingFormService = true;
             showProgressOverlay('Membuat PDF Form Service...');
             try {
                 // ── Generate PDF Form Service dari isi form (menggantikan tombol Download PDF terpisah) ──
@@ -7033,6 +7039,7 @@
                 showAlert('error', 'Gagal Mengirim Form Service', err.message);
             } finally {
                 setSubmitLoading(false);
+                _isSubmittingFormService = false;
                 hideProgressOverlay(true);
             }
         }
@@ -13790,8 +13797,12 @@
             }
         }
 
+        // [FIX] Guard anti-dobel-submit Form PO — mencegah PO terkirim 2x kalau
+        // tombol "Kirim PO" sempat diklik/tap berkali-kali.
+        let _isSubmittingFormPO = false;
         async function submitPO() {
             if (window._revisiPOActive) { return _doSubmitRevisiPO(); }
+            if (_isSubmittingFormPO) return;
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
@@ -13844,6 +13855,7 @@
             };
 
             setSubmitLoading(true);
+            _isSubmittingFormPO = true;
             showProgressOverlay('Membuat PDF PO...');
             try {
                 // ── Generate PDF Request Order dari isi form (menggantikan tombol Download PDF terpisah) ──
@@ -13898,6 +13910,7 @@
                 showAlert('error', 'Gagal Mengirim PO', err.message);
             } finally {
                 setSubmitLoading(false);
+                _isSubmittingFormPO = false;
                 hideProgressOverlay(true);
             }
         }
@@ -14408,8 +14421,12 @@
             }
         }
 
+        // [FIX] Guard anti-dobel-submit Form RO — mencegah Retur terkirim 2x kalau
+        // tombol "Kirim Retur" sempat diklik/tap berkali-kali.
+        let _isSubmittingFormRetur = false;
         async function submitRetur() {
             if (window._revisiROActive) { return _doSubmitRevisiRO(); }
+            if (_isSubmittingFormRetur) return;
             const namaEl = document.getElementById('retur-nama');
             const categoryEl = document.getElementById('retur-category');
             const allocatedToEl = document.getElementById('retur-allocated-to');
@@ -14446,6 +14463,7 @@
             };
 
             setSubmitLoading(true);
+            _isSubmittingFormRetur = true;
             showProgressOverlay('Membuat PDF Retur...');
             try {
                 // ── Generate PDF Return Order dari isi form (menggantikan tombol Download PDF terpisah) ──
@@ -14496,6 +14514,7 @@
                 showAlert('error', 'Gagal Mengirim Retur', err.message);
             } finally {
                 setSubmitLoading(false);
+                _isSubmittingFormRetur = false;
                 hideProgressOverlay(true);
             }
         }
@@ -19657,7 +19676,13 @@
 
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwqrtvhwq2Erw9VlIsfsnBKiBpM4rHGJGEFVZjE5jh96Kzw8Z2fIsk34DP6wJvyUHs/exec";
 
+        // [FIX] Guard anti-dobel-submit Process PO — pola sama dengan Process
+        // Inbound: flag di-set SEBELUM modal konfirmasi tampil, supaya klik/tap
+        // kedua yang masuk selagi modal konfirmasi masih terbuka langsung
+        // diabaikan, bukan baru diblok setelah user klik "Ya".
+        let _isSubmittingProcessPO = false;
         async function simpanOutboundFinal() {
+            if (_isSubmittingProcessPO) return;
             const orderedByEl = document.getElementById('proc-ordered-by');
             const orderedBy = orderedByEl?.value?.trim() || '';
             const shipTo = document.getElementById('proc-ship')?.value?.trim() || '';
@@ -19721,11 +19746,12 @@
                 return;
             }
 
+            _isSubmittingProcessPO = true;
             const ok = await showConfirm(
                 'Simpan & Proses PO?',
                 `${items.length} item akan disimpan ke Outbound_Log${noPO ? ' dan status PO ' + noPO + ' akan diubah menjadi "Ready To Ship"' : ''}. PDF Delivery Order juga akan otomatis dibuat & disimpan ke Google Drive.`
             );
-            if (!ok) return;
+            if (!ok) { _isSubmittingProcessPO = false; return; }
 
             // ── Tampilkan loading di tombol ──
             const saveBtn = document.querySelector('button[onclick="simpanOutboundFinal()"]');
@@ -19885,6 +19911,7 @@
                     showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + (err?.message || err));
                 }
             } finally {
+                _isSubmittingProcessPO = false;
                 if (saveBtn) {
                     saveBtn.disabled = false;
                     saveBtn.innerHTML = originalBtnHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Proses`;
@@ -21263,7 +21290,11 @@
         }
 
         // ─── Simpan Receive PO ke GAS (Received_Log + update status Closed) ────────
+        // [FIX] Guard anti-dobel-submit Receive PO — pola sama dengan Process
+        // Inbound/Process PO.
+        let _isSubmittingReceivePO = false;
         async function simpanReceiveFinal() {
+            if (_isSubmittingReceivePO) return;
             const tglTerima = document.getElementById('recv-tgl-terima')?.value || '';
             const noPO = document.getElementById('recv-no-po')?.value?.trim() || '';
             const crewPacking = document.getElementById('recv-crew-packing')?.value?.trim() || '';
@@ -21307,11 +21338,12 @@
                 ? `Semua item Sesuai — status PO akan otomatis menjadi Closed.`
                 : `Terdapat item Tidak Sesuai — status PO tetap Done (belum Closed).`;
 
+            _isSubmittingReceivePO = true;
             const ok = await showConfirm(
                 'Simpan & Receive PO?',
                 `${items.length} item akan disimpan ke Received_Log.${statusInfo}`
             );
-            if (!ok) return;
+            if (!ok) { _isSubmittingReceivePO = false; return; }
 
             const saveBtn = document.getElementById('btn-receive-final');
             const origHTML = saveBtn ? saveBtn.innerHTML : '';
@@ -21473,6 +21505,7 @@
                     showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
                 }
             } finally {
+                _isSubmittingReceivePO = false;
                 if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Receive`; }
             }
         }
