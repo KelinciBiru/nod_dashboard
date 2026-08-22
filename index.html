@@ -383,14 +383,18 @@
                 padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem) !important;
                 height: auto !important;
                 min-height: 3.25rem;
-                background: rgba(255, 255, 255, 0.92) !important;
+                background: rgba(255, 255, 255, 0.94) !important;
                 backdrop-filter: saturate(180%) blur(10px);
                 -webkit-backdrop-filter: saturate(180%) blur(10px);
-                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 10px -6px rgba(15, 23, 42, 0.08);
+                border-bottom: 1px solid #e8ebf1;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
             }
 
             #app-container>header #page-title {
                 font-size: 0.95rem;
+                font-weight: 700;
+                letter-spacing: -0.01em;
+                color: #0f1f3d;
                 max-width: 46vw;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -488,55 +492,51 @@
                 margin-top: 0 !important;
             }
 
-            /* --- Tile "app icon" gaya EMBOSS/soft-UI: permukaan menyatu dengan
-                 background halaman + bayangan dua arah (terang di kiri-atas,
-                 gelap lembut di kanan-bawah) supaya tile terlihat "timbul"
-                 alami dari halaman, bukan sekadar kartu putih bertepi. --- */
+            /* --- Tile "app icon" gaya MODERN/FLAT: kartu putih bersih dengan
+                 border tipis + bayangan lembut satu arah (bukan emboss dua
+                 arah), konsisten dengan bahasa desain aplikasi profesional
+                 (Notion/Linear/Stripe-style mobile dashboard) — datar, rapi,
+                 dan tidak "berat". Warna ikon memakai tint biru-navy senada
+                 dengan warna brand (#0f1f3d) di header/topbar. --- */
             #sidebar-nav>button.nav-item,
             #sidebar-nav>div[id^="menu-"]>button {
                 flex-direction: column !important;
                 justify-content: center !important;
                 align-items: center !important;
-                gap: 0.45rem !important;
+                gap: 0.5rem !important;
                 text-align: center !important;
-                padding: 0.75rem 0.3rem 0.65rem !important;
-                border-radius: 1.25rem !important;
-                background: linear-gradient(160deg, #ffffff, #f3f4f7);
-                border: none;
-                box-shadow:
-                    5px 5px 12px rgba(148, 163, 184, 0.35),
-                    -5px -5px 12px rgba(255, 255, 255, 0.85);
-                min-height: 82px;
+                padding: 0.85rem 0.35rem 0.7rem !important;
+                border-radius: 1rem !important;
+                background: #ffffff;
+                border: 1px solid #e8ebf1;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 8px -4px rgba(15, 23, 42, 0.08);
+                min-height: 84px;
                 font-size: 0.68rem !important;
                 line-height: 1.15 !important;
                 letter-spacing: 0;
-                transition: box-shadow 0.15s ease, transform 0.1s ease;
+                transition: box-shadow 0.15s ease, transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
             }
 
             /* baris "Inventory Machine" dst punya wrapper .flex.items-center.gap-3
                  di dalam tombol — susun jadi kolom juga supaya ikon di atas label */
             #sidebar-nav>div[id^="menu-"]>button>.flex.items-center.gap-3 {
                 flex-direction: column !important;
-                gap: 0.45rem !important;
+                gap: 0.5rem !important;
             }
 
-            /* ikon: bubble cembung (convex) khas emboss — gradasi terang di
-                 kiri-atas & bayangan dalam (inset) tipis supaya terkesan
-                 timbul dari permukaannya sendiri, bukan cuma ditempel. */
+            /* ikon: badge persegi membulat (rounded-square) bertint biru-navy
+                 lembut — pola "icon tile" khas app profesional modern, datar
+                 tanpa gradasi/cembung, ukuran & spacing konsisten di semua tile. */
             #sidebar-nav>button.nav-item svg,
             #sidebar-nav>div[id^="menu-"]>button svg {
-                width: 1.2rem !important;
-                height: 1.2rem !important;
+                width: 1.15rem !important;
+                height: 1.15rem !important;
                 flex-shrink: 0;
-                padding: 0.65rem;
+                padding: 0.6rem;
                 box-sizing: content-box;
-                border-radius: 50%;
-                background: linear-gradient(145deg, #fff6df, #fbd383);
-                color: #b45309;
-                box-shadow:
-                    2px 2px 5px rgba(180, 83, 9, 0.25),
-                    -2px -2px 5px rgba(255, 255, 255, 0.9),
-                    inset 0 1px 1px rgba(255, 255, 255, 0.7);
+                border-radius: 0.75rem;
+                background: #eef2fb;
+                color: #0f1f3d;
             }
 
             /* label: maksimal 2 baris supaya tile tetap rapi & sama tinggi */
@@ -546,8 +546,8 @@
                 -webkit-line-clamp: 2;
                 -webkit-box-orient: vertical;
                 overflow: hidden;
-                font-weight: 700;
-                color: #374151;
+                font-weight: 600;
+                color: #1e293b;
             }
 
             /* sembunyikan tanda ▼/▲ selagi tampil sebagai ikon (gaya homescreen
@@ -557,14 +557,13 @@
                 display: none;
             }
 
-            /* efek tekan: tile "masuk ke dalam" sesaat saat disentuh, konsisten
-                 dengan bahasa desain emboss (raised -> pressed) */
+            /* efek tekan: skala mengecil + bayangan menipis, feedback sentuh
+                 yang ringan & cepat (bukan efek "masuk ke dalam" emboss) */
             #sidebar-nav>button.nav-item:active,
             #sidebar-nav>div[id^="menu-"]>button:active {
                 transform: scale(0.96);
-                box-shadow:
-                    inset 3px 3px 8px rgba(148, 163, 184, 0.4),
-                    inset -3px -3px 8px rgba(255, 255, 255, 0.7);
+                background: #f8fafc;
+                box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
             }
 
             /* wrapper div[id^="menu-"] jadi flex-col supaya tombol & sub-list
@@ -577,7 +576,8 @@
             /* --- Saat sub-menu terbuka (class "hidden" dilepas oleh toggleSubMenu):
                  tile melebar jadi satu baris penuh & tombolnya balik ke gaya
                  baris biasa (ikon+label sejajar, ada chevron) supaya daftar
-                 sub-menunya nyaman dibaca --- */
+                 sub-menunya nyaman dibaca — dibedakan dengan aksen garis kiri
+                 warna navy brand, konsisten dgn identitas header. --- */
             #sidebar-nav>div[id^="menu-"].nav-expanded {
                 grid-column: 1 / -1;
             }
@@ -589,11 +589,10 @@
                 text-align: left !important;
                 min-height: 48px;
                 font-size: 0.875rem !important;
-                background: linear-gradient(160deg, #fffaf0, #fef3c7);
-                border: none;
-                box-shadow:
-                    inset 2px 2px 5px rgba(180, 83, 9, 0.15),
-                    inset -2px -2px 5px rgba(255, 255, 255, 0.7);
+                background: #f5f7fb;
+                border: 1px solid #e2e8f0;
+                border-left: 3px solid #0f1f3d;
+                box-shadow: none;
             }
 
             #sidebar-nav>div[id^="menu-"].nav-expanded>button>.flex.items-center.gap-3 {
@@ -606,46 +605,44 @@
                 height: 1rem !important;
                 padding: 0;
                 background: transparent;
-                color: #b45309;
+                color: #0f1f3d;
             }
 
             #sidebar-nav>div[id^="menu-"].nav-expanded>button>.flex.items-center.gap-3>span {
                 -webkit-line-clamp: 1;
-                font-weight: 700;
-                color: #374151;
+                font-weight: 600;
+                color: #1e293b;
             }
 
             #sidebar-nav>div[id^="menu-"].nav-expanded [id^="arrow-"] {
                 display: inline;
-                color: #b45309;
+                color: #0f1f3d;
             }
 
             /* daftar sub-menu, full width di bawah tile yang terbuka — permukaan
-                 sedikit "cekung" (inset) supaya terlihat seperti wadah/laci yang
-                 menampung sub-menu, konsisten dgn bahasa emboss */
+                 datar dengan border tipis, terlihat seperti wadah/laci yang
+                 menampung sub-menu tanpa efek emboss cekung. */
             #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] {
                 margin-left: 0 !important;
                 border-left: none !important;
                 padding: 0.5rem !important;
                 margin-top: 0.5rem !important;
-                background: #f8f9fb;
-                border: none;
-                border-radius: 1rem;
-                box-shadow:
-                    inset 2px 2px 6px rgba(148, 163, 184, 0.25),
-                    inset -2px -2px 6px rgba(255, 255, 255, 0.7);
+                background: #f8fafc;
+                border: 1px solid #e8ebf1;
+                border-radius: 0.85rem;
+                box-shadow: none;
             }
 
             #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] .sub-item {
                 min-height: 42px;
                 display: flex;
                 align-items: center;
-                border-radius: 0.75rem !important;
+                border-radius: 0.65rem !important;
                 background: #ffffff;
+                border: 1px solid #edf0f5;
                 margin-bottom: 0.3rem;
-                box-shadow:
-                    2px 2px 5px rgba(148, 163, 184, 0.2),
-                    -2px -2px 5px rgba(255, 255, 255, 0.8);
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+                transition: background 0.12s ease;
             }
 
             #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] .sub-item:last-child {
@@ -653,47 +650,45 @@
             }
 
             #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] .sub-item:active {
-                box-shadow:
-                    inset 2px 2px 5px rgba(148, 163, 184, 0.3),
-                    inset -2px -2px 5px rgba(255, 255, 255, 0.7);
+                background: #f1f5f9;
+                box-shadow: none;
             }
 
             /* --- Tombol tanpa sub-menu (Dashboard, Process Inbound, dst.) yang
-                 sedang aktif (halaman sekarang) — dibuat terkesan "tertekan
-                 masuk" (inset) ke permukaan, khas status aktif pada gaya
-                 emboss/soft-UI, dibedakan lewat rona amber. --- */
+                 sedang aktif (halaman sekarang) — dibuat solid warna navy
+                 brand (#0f1f3d), teks & ikon putih, sedikit terangkat dengan
+                 bayangan navy lembut. Status aktif jadi jelas & tegas, khas
+                 pola "selected state" pada aplikasi profesional modern. --- */
             #sidebar-nav>button.nav-item.bg-amber-500,
             #sidebar-nav>div[id^="menu-"]>button.bg-amber-500 {
-                background: linear-gradient(160deg, #fde9b8, #fbbf24) !important;
+                background: linear-gradient(160deg, #16294d, #0f1f3d) !important;
                 border-color: transparent !important;
-                box-shadow:
-                    inset 3px 3px 7px rgba(180, 83, 9, 0.35),
-                    inset -3px -3px 7px rgba(255, 250, 230, 0.6),
-                    0 2px 6px rgba(245, 158, 11, 0.25) !important;
+                box-shadow: 0 4px 14px -4px rgba(15, 31, 61, 0.45) !important;
             }
 
             #sidebar-nav>button.nav-item.bg-amber-500 svg,
             #sidebar-nav>div[id^="menu-"]>button.bg-amber-500 svg {
-                background: rgba(255, 255, 255, 0.4) !important;
-                color: #7c2d12 !important;
-                box-shadow:
-                    2px 2px 5px rgba(124, 45, 18, 0.25),
-                    -1px -1px 3px rgba(255, 255, 255, 0.6);
+                background: rgba(255, 255, 255, 0.14) !important;
+                color: #ffffff !important;
+                box-shadow: none;
             }
 
             #sidebar-nav>button.nav-item.bg-amber-500 span,
             #sidebar-nav>div[id^="menu-"]>button.bg-amber-500 span {
-                color: #78350f !important;
+                color: #ffffff !important;
             }
 
-            /* Sub-item aktif di dalam daftar sub-menu yang terbuka — sama-sama
-                 dibuat "tertekan masuk" (inset) dgn rona amber, konsisten dgn
-                 status aktif tile utama */
+            /* Sub-item aktif di dalam daftar sub-menu yang terbuka — senada
+                 dengan status aktif tile utama, background navy solid +
+                 teks putih supaya tetap jelas dibedakan dari sub-item lain. */
             #sidebar-nav .sub-item.bg-amber-500 {
-                background: linear-gradient(160deg, #fde9b8, #fbbf24) !important;
-                box-shadow:
-                    inset 2px 2px 5px rgba(180, 83, 9, 0.3),
-                    inset -2px -2px 5px rgba(255, 250, 230, 0.6) !important;
+                background: linear-gradient(160deg, #16294d, #0f1f3d) !important;
+                border-color: transparent !important;
+                box-shadow: 0 2px 8px -2px rgba(15, 31, 61, 0.4) !important;
+            }
+
+            #sidebar-nav .sub-item.bg-amber-500 * {
+                color: #ffffff !important;
             }
 
             /* ---------- REPORT STATUS PO: kotak pencarian & tombol aksi massal
@@ -741,7 +736,8 @@
             #content-area .bg-white.rounded-xl,
             #content-area .bg-white.rounded-2xl {
                 border-radius: 1rem !important;
-                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px -10px rgba(15, 23, 42, 0.12) !important;
+                border: 1px solid #eef1f6;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 6px 16px -10px rgba(15, 23, 42, 0.1) !important;
             }
 
             /* ---------- TOMBOL & FORM: target sentuh nyaman, feedback tekan ---------- */
@@ -788,11 +784,11 @@
                 top: 0;
                 z-index: 5;
                 background-color: inherit;
-                box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.08);
+                box-shadow: 0 2px 0 0 rgba(15, 31, 61, 0.15);
             }
 
             table tbody tr:nth-child(even) {
-                background-color: #fafafa;
+                background-color: #f8fafc;
             }
 
             table td,
@@ -816,7 +812,8 @@
                 border-top-left-radius: 1.25rem !important;
                 border-top-right-radius: 1.25rem !important;
                 max-height: 88vh !important;
-                padding-bottom: env(safe-area-inset-bottom, 0px);
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem) !important;
+                box-shadow: 0 -8px 30px -8px rgba(15, 23, 42, 0.25) !important;
                 animation: mobileSheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
             }
 
@@ -825,10 +822,10 @@
             [class*="fixed inset-0"][class*="flex"][class*="items-center"][class*="justify-center"]>div[class*="rounded"]::before {
                 content: "";
                 display: block;
-                width: 40px;
+                width: 36px;
                 height: 4px;
                 border-radius: 9999px;
-                background: #e5e7eb;
+                background: #cbd5e1;
                 margin: 0.6rem auto 0.1rem;
             }
 
