@@ -867,6 +867,269 @@
         }
     </style>
 
+    <!-- =======================================================================
+         TEMA NEUMORPHISM — KHUSUS MODE HP (<= 767px)
+         Blok TAMBAHAN lagi (ditaruh SETELAH #mobile-uiux-overhaul, sebelum
+         </head>) yang me-restyle permukaan (surface) di mode HP dari gaya
+         "flat modern" (kartu putih + border tipis + shadow satu arah) jadi
+         neumorphism/soft-UI: elemen memakai warna dasar yang SAMA dengan latar
+         di sekelilingnya, dan kedalamannya dibuat murni lewat dua shadow
+         (terang di kiri-atas, gelap di kanan-bawah) — "timbul" (raised) untuk
+         elemen yang bisa ditekan, dan "cekung" (inset) untuk elemen yang
+         sedang aktif/ditekan atau untuk field input (kesan "lubang" tempat
+         mengetik). Sama seperti blok sebelumnya: MURNI CSS, tidak ada HTML
+         atau JS yang diubah/dihapus — hanya menimpa properti background/
+         border/box-shadow dari blok #mobile-uiux-overhaul di atas (selector
+         yang sama, diletakkan belakangan supaya menang di cascade), jadi
+         seluruh logic (toggleSidebar, toggleSubMenu, showPage, dst) tetap
+         100% aman & tidak tersentuh.
+
+         CATATAN CAKUPAN (supaya tidak mengubah terlalu banyak & berisiko):
+         tema ini menyasar permukaan STRUKTURAL yang menentukan "bahasa
+         desain" halaman — topbar, grid navigasi ala home-screen, kartu
+         konten, field form (input/select/textarea), pembungkus tabel, modal
+         (bottom sheet), notif popup, dan toast. Tombol aksi berwarna
+         (amber/merah/biru/hijau, dsb.) yang tersebar di ratusan form di
+         seluruh file SENGAJA disamakan lewat selector atribut generik
+         (mis. button[class*="bg-amber-500"]) alih-alih menimpa satu per
+         satu, supaya konsisten tanpa harus menyentuh setiap halaman.
+    ====================================================================== -->
+    <style id="mobile-neumorphism-theme">
+        @media (max-width: 767px) {
+
+            :root {
+                /* Warna dasar (base) neumorphism: satu warna abu-kebiruan
+                     lembut dipakai bergantian sebagai "kertas" DAN "kartu" —
+                     beda dari gaya flat sebelumnya (kartu putih di atas latar
+                     putih-keabuan), di sini kedalaman murni datang dari shadow,
+                     bukan dari beda warna. */
+                --neu-base: #e8edf4;
+                --neu-base-alt: #dfe5ee;
+                /* shadow gelap: abu-biru redup (bukan hitam) — ciri khas
+                     neumorphism supaya tetap terasa "lembut", bukan berat */
+                --neu-dark: rgba(163, 177, 198, 0.62);
+                --neu-dark-soft: rgba(163, 177, 198, 0.4);
+                /* shadow terang: putih hampir penuh, mensimulasikan cahaya
+                     jatuh dari kiri-atas */
+                --neu-light: rgba(255, 255, 255, 0.95);
+                --neu-light-soft: rgba(255, 255, 255, 0.7);
+            }
+
+            /* ---------- LAPISAN DASAR: satu warna "kertas" konsisten ---------- */
+            html,
+            body,
+            #app-container,
+            #content-area,
+            #login-page {
+                background: var(--neu-base) !important;
+            }
+
+            /* ---------- TOPBAR: dari "kaca blur + border" jadi permukaan
+                 timbul (raised) tanpa border, kedalaman dari shadow saja ---------- */
+            #app-container>header {
+                background: var(--neu-base) !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                border-bottom: none !important;
+                box-shadow: 0 6px 14px -6px var(--neu-dark), 0 1px 0 var(--neu-light-soft) inset !important;
+            }
+
+            /* Ikon di topbar (hamburger, notif, dst.) jadi chip bulat timbul;
+                 saat ditekan berubah cekung (inset) — pola tekan khas neumorphism,
+                 dipakai konsisten di semua elemen yang bisa diklik pada tema ini. */
+            #app-container>header button {
+                background: var(--neu-base);
+                border-radius: 0.85rem;
+                box-shadow: 3px 3px 7px var(--neu-dark-soft), -3px -3px 7px var(--neu-light);
+            }
+
+            #app-container>header button:active {
+                box-shadow: inset 2px 2px 5px var(--neu-dark), inset -2px -2px 5px var(--neu-light);
+                transform: scale(0.97);
+            }
+
+            #notif-popup {
+                background: var(--neu-base) !important;
+                border: none !important;
+                box-shadow: 9px 9px 20px var(--neu-dark), -9px -9px 20px var(--neu-light) !important;
+            }
+
+            /* ---------- GRID NAVIGASI HOMESCREEN: tile timbul, ikon jadi
+                 "lubang" cekung berisi ikon — kombinasi raised+inset yang
+                 paling mencirikan neumorphism ---------- */
+            #sidebar-nav>button.nav-item,
+            #sidebar-nav>div[id^="menu-"]>button {
+                background: var(--neu-base);
+                border: none;
+                box-shadow: 5px 5px 11px var(--neu-dark), -5px -5px 11px var(--neu-light);
+            }
+
+            #sidebar-nav>button.nav-item svg,
+            #sidebar-nav>div[id^="menu-"]>button svg {
+                background: var(--neu-base);
+                box-shadow: inset 2px 2px 5px var(--neu-dark), inset -2px -2px 5px var(--neu-light);
+            }
+
+            /* Tile ditekan: efek "masuk ke dalam" penuh (inset) — kebalikan
+                 dari state normalnya yang timbul */
+            #sidebar-nav>button.nav-item:active,
+            #sidebar-nav>div[id^="menu-"]>button:active {
+                background: var(--neu-base);
+                box-shadow: inset 3px 3px 8px var(--neu-dark), inset -3px -3px 8px var(--neu-light);
+            }
+
+            /* Tile yang sedang AKTIF/terpilih (background navy tetap dari
+                 blok sebelumnya) diberi shadow cekung bertint gelap supaya
+                 tetap terbaca sebagai "status terpilih = tertekan", konsisten
+                 dengan bahasa neumorphism, tanpa mengubah warna navy-nya. */
+            #sidebar-nav>button.nav-item.bg-amber-500,
+            #sidebar-nav>div[id^="menu-"]>button.bg-amber-500 {
+                box-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.4), inset -2px -2px 6px rgba(255, 255, 255, 0.08) !important;
+            }
+
+            /* Tile menu yang sedang melebar (submenu terbuka) — permukaan
+                 cekung datar (seperti "laci" tempat submenu berada) */
+            #sidebar-nav>div[id^="menu-"].nav-expanded>button {
+                background: var(--neu-base);
+                border: none;
+                border-left: 3px solid #0f1f3d;
+                box-shadow: inset 2px 2px 6px var(--neu-dark-soft), inset -2px -2px 6px var(--neu-light-soft);
+            }
+
+            #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] {
+                background: var(--neu-base);
+                border: none;
+                box-shadow: inset 3px 3px 8px var(--neu-dark-soft), inset -3px -3px 8px var(--neu-light-soft);
+            }
+
+            #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] .sub-item {
+                background: var(--neu-base);
+                border: none;
+                box-shadow: 3px 3px 7px var(--neu-dark-soft), -3px -3px 7px var(--neu-light);
+            }
+
+            #sidebar-nav>div[id^="menu-"]>div[id$="-sub"] .sub-item:active {
+                background: var(--neu-base);
+                box-shadow: inset 2px 2px 5px var(--neu-dark), inset -2px -2px 5px var(--neu-light);
+            }
+
+            #sidebar-nav .sub-item.bg-amber-500 {
+                box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.4), inset -2px -2px 5px rgba(255, 255, 255, 0.08) !important;
+            }
+
+            /* ---------- KARTU/PANEL KONTEN: dari "putih + border" jadi
+                 timbul senada warna dasar ---------- */
+            #content-area .bg-white.rounded-xl,
+            #content-area .bg-white.rounded-2xl {
+                background: var(--neu-base) !important;
+                border: none !important;
+                box-shadow: 6px 6px 14px var(--neu-dark-soft), -6px -6px 14px var(--neu-light) !important;
+            }
+
+            /* ---------- FIELD FORM: kesan "lubang" cekung tempat mengetik —
+                 pola paling umum pada UI neumorphism untuk input/select ---------- */
+            input[type="text"],
+            input[type="number"],
+            input[type="password"],
+            input[type="date"],
+            input[type="datetime-local"],
+            input[type="tel"],
+            input[type="email"],
+            input[type="search"],
+            textarea,
+            select {
+                background: var(--neu-base) !important;
+                border: none !important;
+                box-shadow: inset 3px 3px 6px var(--neu-dark-soft), inset -3px -3px 6px var(--neu-light) !important;
+            }
+
+            input[type="text"]:focus,
+            input[type="number"]:focus,
+            input[type="password"]:focus,
+            input[type="date"]:focus,
+            input[type="datetime-local"]:focus,
+            input[type="tel"]:focus,
+            input[type="email"]:focus,
+            input[type="search"]:focus,
+            textarea:focus,
+            select:focus {
+                box-shadow: inset 3px 3px 6px var(--neu-dark), inset -3px -3px 6px var(--neu-light), 0 0 0 2px rgba(15, 31, 61, 0.18) !important;
+            }
+
+            /* ---------- TOMBOL: dua pola generik lewat selector atribut,
+                 dipilih supaya konsisten di seluruh file tanpa menyentuh
+                 tiap halaman satu-satu ----------
+                 (a) tombol aksi utama berwarna (amber/merah/biru/hijau/dst,
+                     pola Tailwind "bg-{warna}-500") → tetap warna aslinya,
+                     ditambah shadow timbul lembut senada; saat ditekan
+                     berubah cekung.
+                 (b) tombol sekunder netral (putih/abu/bordered) → disamakan
+                     ke bahasa neumorphism penuh (warna dasar + shadow),
+                     border dihilangkan karena kedalaman sudah dari shadow. */
+            button[class*="bg-"][class*="-500"],
+            button[class*="bg-"][class*="-600"] {
+                border: none !important;
+                box-shadow: 4px 4px 10px rgba(15, 23, 42, 0.22), -2px -2px 6px rgba(255, 255, 255, 0.35) !important;
+            }
+
+            button[class*="bg-"][class*="-500"]:active,
+            button[class*="bg-"][class*="-600"]:active {
+                box-shadow: inset 3px 3px 7px rgba(15, 23, 42, 0.35), inset -2px -2px 5px rgba(255, 255, 255, 0.15) !important;
+            }
+
+            button[class*="border-gray"],
+            button[class*="bg-gray-50"],
+            button[class*="bg-gray-100"],
+            button[class*="bg-white"] {
+                background: var(--neu-base) !important;
+                border: none !important;
+                box-shadow: 4px 4px 9px var(--neu-dark-soft), -4px -4px 9px var(--neu-light) !important;
+            }
+
+            button[class*="border-gray"]:active,
+            button[class*="bg-gray-50"]:active,
+            button[class*="bg-gray-100"]:active,
+            button[class*="bg-white"]:active {
+                box-shadow: inset 2px 2px 5px var(--neu-dark), inset -2px -2px 5px var(--neu-light) !important;
+            }
+
+            /* ---------- TABEL: pembungkus jadi "layar" cekung tempat data
+                 ditampilkan; baris genap dibedakan lewat tint, bukan warna
+                 putih kontras (supaya tetap dalam satu keluarga warna) ---------- */
+            .overflow-x-auto {
+                background: var(--neu-base);
+                border-radius: 1rem;
+                box-shadow: inset 3px 3px 8px var(--neu-dark-soft), inset -3px -3px 8px var(--neu-light-soft);
+            }
+
+            table tbody tr:nth-child(even) {
+                background-color: var(--neu-base-alt) !important;
+            }
+
+            /* ---------- MODAL / BOTTOM SHEET: lembar timbul dari bawah,
+                 senada warna dasar, shadow menggantikan efek "kartu putih
+                 melayang" bawaan Tailwind (shadow-2xl dsb.) ---------- */
+            [class*="fixed inset-0"][class*="flex"][class*="items-center"][class*="justify-center"]>div[class*="rounded"] {
+                background: var(--neu-base) !important;
+                box-shadow: 0 -10px 26px -10px var(--neu-dark), 0 -1px 0 var(--neu-light-soft) inset !important;
+            }
+
+            [class*="fixed inset-0"][class*="flex"][class*="items-center"][class*="justify-center"]>div[class*="rounded"]::before {
+                background: var(--neu-dark);
+                box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.15);
+            }
+
+            /* ---------- TOAST: kartu timbul senada warna dasar (bukan putih
+                 kontras), border kiri berwarna status tetap dipertahankan
+                 lewat inline style yang sudah ada di JS ---------- */
+            #bg-toast-container>div {
+                background: var(--neu-base) !important;
+                border-color: transparent !important;
+                box-shadow: 5px 5px 12px var(--neu-dark), -5px -5px 12px var(--neu-light) !important;
+            }
+        }
+    </style>
+
 </head>
 
 <body class="font-sans text-gray-800 bg-gray-50">
