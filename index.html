@@ -18107,7 +18107,6 @@
          */
         function parseReturOrderPDFItems(pageData, rawText) {
             const items = [];
-            const KNOWN_HEADERS = ['NO', 'ITEM', 'QTY', 'UOM', 'DESCRIPTION', 'NOTE'];
 
             function isStopRow(tokens) {
                 const joined = tokens.map(t => t.str).join(' ').toUpperCase();
@@ -18119,57 +18118,53 @@
             }
 
             (pageData || []).forEach(rows => {
-                // ── Cari baris header tabel pada halaman ini ──
+                // ── Cari baris header tabel pada halaman ini (butuh token "No",
+                // "Item", DAN "Qty" — muncul di baris yang sama). autoTable
+                // mengulang header ini di setiap halaman baru secara default,
+                // jadi dicari per halaman, bukan cuma di halaman pertama. ──
                 let headerRowIdx = -1;
-                let colBounds = null;
                 for (let i = 0; i < rows.length; i++) {
                     const tokens = rows[i].tokens;
-                    const itemTok = tokens.find(t => t.str.toUpperCase() === 'ITEM');
-                    const qtyTok = tokens.find(t => t.str.toUpperCase() === 'QTY');
-                    if (itemTok && qtyTok && itemTok.x < qtyTok.x) {
-                        const headerToks = tokens
-                            .filter(t => KNOWN_HEADERS.includes(t.str.toUpperCase()))
-                            .sort((a, b) => a.x - b.x);
-                        colBounds = headerToks.map((t, idx) => ({
-                            name: t.str.toUpperCase(),
-                            left: idx === 0 ? -Infinity : (headerToks[idx - 1].x + t.x) / 2,
-                            right: idx === headerToks.length - 1 ? Infinity : (t.x + headerToks[idx + 1].x) / 2,
-                        }));
-                        headerRowIdx = i;
-                        break;
-                    }
+                    const hasNo = tokens.some(t => t.str.toUpperCase() === 'NO');
+                    const hasItem = tokens.some(t => t.str.toUpperCase() === 'ITEM');
+                    const hasQty = tokens.some(t => t.str.toUpperCase() === 'QTY');
+                    if (hasNo && hasItem && hasQty) { headerRowIdx = i; break; }
                 }
-                if (headerRowIdx === -1 || !colBounds) return; // halaman ini tidak ada tabel item
+                if (headerRowIdx === -1) return; // halaman ini tidak ada tabel item
 
-                function colFor(x) {
-                    const c = colBounds.find(c => x >= c.left && x < c.right);
-                    return c ? c.name : null;
-                }
-
+                // [PENTING] jsPDF-AutoTable merender ISI TIAP SEL sebagai SATU
+                // text run utuh (bukan per-kata) — jadi "Maximo Cosmic Blue (D)"
+                // muncul sebagai SATU token, bukan 4 token terpisah. Ini berarti
+                // posisi X token HEADER (yang di-center oleh headStyles) TIDAK
+                // bisa dipakai untuk menentukan batas kolom body (yang rata
+                // kiri) — pendekatan berbasis koordinat kolom akan salah
+                // mengelompokkan seluruh nama barang ke kolom "No" karena
+                // X-nya lebih kecil dari X tengah header "Item".
+                // Sebagai gantinya, dipakai urutan token: baris data NORMAL
+                // (bukan lanjutan wrap) selalu diawali token "No" (angka urut)
+                // lalu tepat token ke-2 = Item, token ke-3 = Qty, dst — sesuai
+                // urutan kolom No|Item|Qty|UOM|Description|Note di PDF ini.
                 let currentItem = null;
                 for (let i = headerRowIdx + 1; i < rows.length; i++) {
                     const tokens = rows[i].tokens;
                     if (!tokens || tokens.length === 0) continue;
                     if (isStopRow(tokens)) break;
 
-                    const byCol = {};
-                    tokens.forEach(t => {
-                        const col = colFor(t.x);
-                        if (!col) return;
-                        (byCol[col] = byCol[col] || []).push(t.str);
-                    });
+                    const first = tokens[0];
+                    const isFullRow = tokens.length >= 3 && /^\d+$/.test(first.str);
 
-                    const noStr = (byCol['NO'] || []).join('').trim();
-                    const qtyStr = (byCol['QTY'] || []).join(' ').replace(/[^\d.,]/g, '').trim();
-                    const namaPart = (byCol['ITEM'] || []).join(' ').trim();
-                    const isNewRow = /^\d+$/.test(noStr) || /^\d+([.,]\d+)?$/.test(qtyStr);
-
-                    if (isNewRow) {
+                    if (isFullRow) {
                         if (currentItem && currentItem.nama) items.push(currentItem);
-                        currentItem = { nama: namaPart, qty: qtyStr ? qtyStr.replace(',', '.') : '1' };
-                    } else if (currentItem && namaPart) {
-                        // Baris lanjutan (nama barang panjang yang wrap ke baris berikutnya)
-                        currentItem.nama = (currentItem.nama + ' ' + namaPart).trim();
+                        const nama = tokens[1] ? tokens[1].str.trim() : '';
+                        const qtyTok = tokens[2] ? tokens[2].str.trim() : '';
+                        const qty = /^\d+([.,]\d+)?$/.test(qtyTok) ? qtyTok.replace(',', '.') : '1';
+                        currentItem = { nama, qty };
+                    } else if (currentItem) {
+                        // Baris lanjutan (nama barang panjang yang wrap ke baris
+                        // berikutnya, hanya berisi lanjutan teks Item — tanpa
+                        // No/Qty/dst karena kolom lain tidak diulang saat wrap).
+                        const cont = tokens.map(t => t.str).join(' ').trim();
+                        if (cont) currentItem.nama = (currentItem.nama + ' ' + cont).trim();
                     }
                 }
                 if (currentItem && currentItem.nama) items.push(currentItem);
