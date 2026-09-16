@@ -3064,6 +3064,16 @@
                 cachedFetch(API_URLS.serviceCenter + '?action=getReportStatusRepair', 'getReportStatusRepair', 25000).catch(() => { });
                 cachedFetch(API_URLS.serviceCenter + '?action=getTaskTechnicianInit', 'getTaskTechnicianInit', 25000).catch(() => { });
             }
+            // [BOOST — Team Delivery > Route] getPlanDriver relatif berat di backend
+            // (baca sheet "Plan Driver" + Retur_Data + PO_Data + Driver_Location +
+            // geocode beberapa alamat sekaligus), jadi kalau ditunggu baru saat menu
+            // Route dibuka, terasa lambat. Prefetch di background sesaat setelah
+            // login (role ADMIN & DRIVER, keduanya yang akses menu Team Delivery)
+            // supaya begitu menu Route dibuka, data biasanya sudah siap dari cache
+            // — pola sama dengan getReportStatusRepair/getTaskTechnicianInit di atas.
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER') {
+                cachedFetch(DELIVERY_GAS_URL + '?action=getPlanDriver', 'getPlanDriver', 20000).catch(() => { });
+            }
         }
 
         /**
@@ -9711,12 +9721,26 @@
          * dianggap error permanen dan menghapus seluruh kartu Route yang sedang
          * tampil di layar driver.
          */
-        async function _fetchPlanDriverWithRetry(maxAttempts = 3) {
+        async function _fetchPlanDriverWithRetry(maxAttempts = 3, useCache = true) {
+            // [BOOST — Team Delivery > Route] Kalau data sudah "hangat" dari
+            // prefetch background (_prefetchCommonData) atau kunjungan sebelumnya
+            // (cache 5 menit di cachedFetch), pakai itu dulu supaya kartu Route
+            // langsung tampil instan — TIDAK menunggu round-trip ke GAS sama
+            // sekali. LiveSync (didaftarkan terpisah di showTeamDeliveryRoute)
+            // tetap jalan di belakang layar dengan fetch fresh (tanpa cache) dan
+            // akan mengoreksi tampilan dalam hitungan detik kalau data ternyata
+            // sudah berubah — jadi tidak ada risiko data basi lama-lama tampil.
+            if (useCache) {
+                const cached = getCached('getPlanDriver');
+                if (cached !== null) return cached;
+            }
             let lastErr = null;
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                 try {
                     const r = await fetchWithTimeout(DELIVERY_GAS_URL + '?action=getPlanDriver', {}, 20000);
-                    return await r.json();
+                    const data = await r.json();
+                    setCache('getPlanDriver', data);
+                    return data;
                 } catch (e) {
                     lastErr = e;
                     if (attempt < maxAttempts) {
@@ -9728,7 +9752,7 @@
             throw lastErr;
         }
 
-        async function showTeamDeliveryRoute(_preFetchedRaw, _forceSilent) {
+        async function showTeamDeliveryRoute(_preFetchedRaw, _forceSilent, _forceFresh) {
             const contentArea = document.getElementById('content-area');
             // Saat auto-update senyap (LiveSync) dan area kartu sudah ada di layar,
             // jangan reset seluruh halaman ke skeleton — cukup ganti isi kartunya saja
@@ -9756,7 +9780,7 @@
                         <h1 class="text-3xl font-semibold text-gray-700 mb-1">Team Delivery - Route</h1>
                         <p class="text-sm text-gray-500">Daftar pengiriman aktif hari ini. Klik <b>Start</b> untuk memulai, <b>Delivered</b> setelah sampai tujuan.</p>
                     </div>
-                    <button onclick="showTeamDeliveryRoute()"
+                    <button onclick="showTeamDeliveryRoute(null, false, true)"
                         class="flex items-center gap-2 px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg border border-amber-200 transition">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -9784,7 +9808,13 @@
             LiveSync.register('Route', {
                 check: async () => {
                     const r = await fetchWithTimeout(DELIVERY_GAS_URL + '?action=getPlanDriver', {}, 20000);
-                    return await r.json();
+                    const data = await r.json();
+                    // [BOOST] Setiap poll LiveSync selalu fresh (tidak lewat cache) —
+                    // sekalian perbarui cache 'getPlanDriver' di sini supaya kalau
+                    // user pindah menu lalu balik lagi ke Route, cache yang dipakai
+                    // _fetchPlanDriverWithRetry tetap up-to-date, bukan basi.
+                    setCache('getPlanDriver', data);
+                    return data;
                 },
                 onChange: async (freshRaw) => { await showTeamDeliveryRoute(freshRaw); }
             });
@@ -9805,7 +9835,12 @@
                 // rute driver masih aktif di server, sehingga rute tidak bisa
                 // diselesaikan. Sekarang: coba beberapa kali dulu (dengan jeda) sebelum
                 // benar-benar dianggap gagal.
-                const raw = _preFetchedRaw || await _fetchPlanDriverWithRetry();
+                // [BOOST] Tombol "Refresh" manual (_forceFresh) sengaja melewati
+                // cache 5 menit supaya user yang eksplisit minta refresh selalu
+                // dapat data terbaru dari server, bukan cache yang mungkin sudah
+                // sedikit basi.
+                if (_forceFresh) clearCache('getPlanDriver');
+                const raw = _preFetchedRaw || await _fetchPlanDriverWithRetry(3, !_forceFresh);
 
                 // raw = array of rows (dengan header di index 0)
                 // Kolom yang dikembalikan GAS dari sheet "Plan Driver":
@@ -10546,6 +10581,7 @@
          */
         async function routeStartDelivery(noPO, idx) {
             liveSyncNoteMutation();
+            clearCache('getPlanDriver'); // [BOOST] cegah cache Route basi setelah aksi Start/Delivered/Cancel
             const btn = document.getElementById(`route-btn-${idx}`);
             const card = document.getElementById(`route-card-${idx}`);
             if (!btn) return;
@@ -10648,6 +10684,7 @@
          */
         async function routeMarkDelivered(noPO, idx) {
             liveSyncNoteMutation();
+            clearCache('getPlanDriver'); // [BOOST] cegah cache Route basi setelah aksi Start/Delivered/Cancel
             // Tampilkan modal isian Nama Pengirim, Nama Penerima & Tanggal Diterima
             // (modal ini juga otomatis mengambil titik koordinat GPS lokasi tiba)
             const formData = await routeShowDeliveredModal(noPO);
@@ -10781,6 +10818,7 @@
          */
         async function routeCancelDelivery(noPO, idx) {
             liveSyncNoteMutation();
+            clearCache('getPlanDriver'); // [BOOST] cegah cache Route basi setelah aksi Start/Delivered/Cancel
             const cancelData = await routeShowCancelModal(noPO);
             if (!cancelData) return; // user klik Kembali
             const { namaDriver, alasan } = cancelData;
@@ -10862,6 +10900,7 @@
          */
         async function routeStartPickupRetur(noRO, idx) {
             liveSyncNoteMutation();
+            clearCache('getPlanDriver'); // [BOOST] cegah cache Route basi setelah aksi Start/Delivered/Cancel
             const btn = document.getElementById(`route-btn-${idx}`);
             const card = document.getElementById(`route-card-${idx}`);
             if (!btn) return;
@@ -10970,6 +11009,7 @@
          */
         async function routeCompletePickupRetur(noRO, idx) {
             liveSyncNoteMutation();
+            clearCache('getPlanDriver'); // [BOOST] cegah cache Route basi setelah aksi Start/Delivered/Cancel
             // Tampilkan modal isian Nama Pengirim, Nama Penerima & Tanggal Diterima
             // (modal ini juga otomatis mengambil titik koordinat GPS lokasi tiba)
             const formData = await routeShowDeliveredModal(noRO);
@@ -11107,6 +11147,7 @@
          */
         async function routeCancelPickupRetur(noRO, idx) {
             liveSyncNoteMutation();
+            clearCache('getPlanDriver'); // [BOOST] cegah cache Route basi setelah aksi Start/Delivered/Cancel
             const btn = document.getElementById(`route-btn-${idx}`);
             const cancelBtn = document.getElementById(`route-cancel-btn-${idx}`);
             const card = document.getElementById(`route-card-${idx}`);
@@ -11419,12 +11460,19 @@
             _poolDriverHistoryMarkers = [];
             _poolDriverSelectedHistoryDriver = null;
             _poolDriverMap = L.map('pool-driver-map').setView([-6.1901, 106.9002], 12);
-            // CartoDB "Voyager" — gratis, tanpa API key, lebih ringan & lebih jelas
-            // untuk marker berwarna di atasnya dibanding tile OSM standar.
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                maxZoom: 20,
-                subdomains: 'abcd',
-                attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+            // [FIX — peta "API KEY REQUIRED"] CartoDB "Voyager" (basemaps.cartocdn.com)
+            // sejak akhir Agustus 2026 mengubah kebijakan: tile raster gratis TANPA
+            // API key sekarang dibubuhi watermark besar "API KEY REQUIRED" di atas
+            // peta (bukan error/gagal load — tile tetap terkirim HTTP 200, tapi
+            // ditandai watermark), dan CARTO memang berencana pensiunkan endpoint
+            // raster ini sepenuhnya ke depannya. Supaya tidak bergantung pada akun/
+            // API key berbayar (fair-use CARTO tetap gratis tapi wajib daftar key),
+            // basemap diganti ke Esri "World Street Map" — gratis, TIDAK perlu API
+            // key/akun sama sekali, akurat (data jalan Esri terkini), dan andal
+            // untuk pemakaian volume operasional harian seperti Pool Driver ini.
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, © OpenStreetMap contributors, and the GIS User Community'
             }).addTo(_poolDriverMap);
 
             await _poolDriverTick(false);
