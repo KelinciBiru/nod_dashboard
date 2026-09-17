@@ -15704,22 +15704,30 @@
             try {
                 const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
                 const isImage = file.type.startsWith('image/');
-                let rawText = '';
+                let items = [];
 
                 if (isPdf) {
                     setStatus('Membaca isi PDF...', 'text-blue-500');
                     const { text } = await extractTextFromPDF(file);
-                    rawText = text || '';
+                    items = parseFasItemsFromText(text || '');
                 } else if (isImage) {
                     setStatus('Membaca isi gambar (OCR)... proses ini bisa memakan waktu beberapa detik.', 'text-blue-500');
-                    rawText = await ocrFasImageToText(file);
+                    const { words, rawText } = await ocrFasImageToWords(file);
+                    // Coba dulu parser berbasis KOORDINAT kolom (akurat untuk
+                    // gambar tabel rapi — screenshot spreadsheet, foto nota
+                    // bertabel, dll). Kalau tidak ketemu baris header yang
+                    // dikenali (bukan format tabel, mis. foto catatan bebas
+                    // "3 x Kertas A4"), fallback ke parser baris/regex lama.
+                    items = parseFasItemsFromOcrWords(words);
+                    if (items.length === 0) {
+                        items = parseFasItemsFromText(rawText);
+                    }
                 } else {
                     showAlert('warning', 'Format Tidak Didukung', 'Hanya file gambar (JPG/PNG/dll.) atau PDF yang bisa diimport ke sini.');
                     setStatus('', '');
                     return;
                 }
 
-                const items = parseFasItemsFromText(rawText);
                 if (items.length === 0) {
                     setStatus('Tidak ada baris Item + Qty yang berhasil dikenali dari file ini.', 'text-red-500');
                     showAlert('warning', 'Tidak Ada Item Terbaca',
@@ -15743,8 +15751,21 @@
          *  ocrWithTesseract() yang dipakai Warranty Registration (dibatasi
          *  alfanumerik & mode single-line untuk baca 1 baris serial number) —
          *  di sini teksnya multi-baris & butuh spasi/tanda baca umum supaya
-         *  baris "Nama Barang ... Qty" tidak terpotong/tergabung salah. */
-        async function ocrFasImageToText(file) {
+         *  baris "Nama Barang ... Qty" tidak terpotong/tergabung salah.
+         *
+         *  [FIX] Sebelumnya hanya mengembalikan data.text (teks polos hasil
+         *  Tesseract membaca baris demi baris secara horizontal). Untuk
+         *  gambar TABEL (screenshot/foto tabel Item | Category | QTY seperti
+         *  yang dilaporkan gagal), Tesseract membaca satu baris tabel jadi
+         *  SATU baris teks berisi ketiga kolom tergabung acak (mis.
+         *  "Maximo - Ultimate Black Machine 10"), yang tidak pernah cocok
+         *  dengan pola regex "<Nama> x <Qty>" dkk di parseFasItemsFromText —
+         *  makanya selalu muncul "Tidak Ada Item Terbaca". Sekarang fungsi
+         *  ini JUGA mengembalikan posisi (bbox x0/x1/y0/y1) tiap kata hasil
+         *  OCR, supaya parseFasItemsFromOcrWords() bisa membaca kolom Item &
+         *  Qty berdasarkan POSISI, bukan urutan teks. data.text tetap
+         *  dikembalikan sebagai fallback untuk format non-tabel. */
+        async function ocrFasImageToWords(file) {
             await _ensureTesseract();
             const worker = await Tesseract.createWorker('eng');
             try {
@@ -15752,11 +15773,184 @@
                     tessedit_pageseg_mode: '6', // asumsikan satu blok teks/tabel yang seragam
                     preserve_interword_spaces: '1'
                 });
-                const { data } = await worker.recognize(file);
-                return data.text || '';
+                const { data } = await worker.recognize(file, {}, { text: true, blocks: true, hocr: false, tsv: false });
+                const words = [];
+                const blocks = data.blocks || [];
+                for (const block of blocks) {
+                    for (const para of (block.paragraphs || [])) {
+                        for (const line of (para.lines || [])) {
+                            for (const w of (line.words || [])) {
+                                const t = (w.text || '').trim();
+                                if (!t) continue;
+                                const bbox = w.bbox || {};
+                                if (typeof bbox.x0 !== 'number' || typeof bbox.y0 !== 'number') continue;
+                                words.push({ text: t, x0: bbox.x0, x1: bbox.x1, y0: bbox.y0, y1: bbox.y1 });
+                            }
+                        }
+                    }
+                }
+                return { words, rawText: data.text || '' };
             } finally {
                 try { await worker.terminate(); } catch (_) { }
             }
+        }
+
+        /** Kelompokkan kata-kata hasil OCR (dengan bbox) menjadi baris-baris
+         *  berdasarkan posisi Y (pusat vertikal kata), dengan toleransi
+         *  dinamis mengikuti tinggi huruf rata-rata di gambar (supaya tetap
+         *  akurat baik untuk gambar resolusi kecil maupun besar). */
+        function _fasGroupWordsIntoRows(words) {
+            const withCenter = words.map(w => ({ ...w, yc: (w.y0 + w.y1) / 2, h: (w.y1 - w.y0) }));
+            withCenter.sort((a, b) => a.yc - b.yc);
+            const heights = withCenter.map(w => w.h).filter(h => h > 0).sort((a, b) => a - b);
+            const medianH = heights.length ? heights[Math.floor(heights.length / 2)] : 20;
+            const rowGap = Math.max(6, medianH * 0.6);
+
+            const rows = [];
+            let current = null;
+            for (const w of withCenter) {
+                if (!current || (w.yc - current.yc) > rowGap) {
+                    current = { yc: w.yc, words: [w] };
+                    rows.push(current);
+                } else {
+                    current.words.push(w);
+                    current.yc = current.words.reduce((s, x) => s + x.yc, 0) / current.words.length;
+                }
+            }
+            rows.forEach(r => r.words.sort((a, b) => a.x0 - b.x0));
+            return rows;
+        }
+
+        /** Gabungkan kata-kata header yang berdekatan jadi satu label kolom
+         *  (mis. "Nama" + "Barang" → "Nama Barang") berdasarkan jarak
+         *  horizontal antar kata, supaya deteksi header 2 kata tetap akurat. */
+        function _fasMergeHeaderTokens(rowWords) {
+            if (rowWords.length === 0) return [];
+            const avgH = rowWords.reduce((s, w) => s + (w.y1 - w.y0), 0) / rowWords.length;
+            const gapThresh = Math.max(8, avgH * 0.9);
+            const tokens = [{ text: rowWords[0].text, x0: rowWords[0].x0, x1: rowWords[0].x1 }];
+            for (let i = 1; i < rowWords.length; i++) {
+                const w = rowWords[i];
+                const last = tokens[tokens.length - 1];
+                if (w.x0 - last.x1 < gapThresh) {
+                    last.text += ' ' + w.text;
+                    last.x1 = Math.max(last.x1, w.x1);
+                } else {
+                    tokens.push({ text: w.text, x0: w.x0, x1: w.x1 });
+                }
+            }
+            return tokens;
+        }
+
+        /** Parser TABEL untuk hasil OCR gambar — dipakai khusus kalau gambar
+         *  punya baris header berisi kata "Item"/"Nama Barang" dan
+         *  "Qty"/"Jumlah" (mis. screenshot spreadsheet atau foto dokumen
+         *  bertabel — sama seperti kasus Inbound yang dilaporkan gagal).
+         *  Sama seperti teknik yang sudah dipakai untuk parsePOData (PDF) &
+         *  parseReturOrderPDFItems (PDF Retur): OCR teks per-baris/regex
+         *  TIDAK cukup untuk tabel karena Tesseract membaca satu baris tabel
+         *  jadi satu baris teks utuh, jadi kolom Item/Category/QTY tergabung
+         *  acak dan tidak match pola apapun.
+         *
+         *  [PENTING] Percobaan awal memakai batas KOORDINAT-X tetap (dari
+         *  lebar kata header) untuk memisahkan kolom, tapi itu keliru: lebar
+         *  teks header ("Item") jauh lebih sempit dari lebar data sebenarnya
+         *  (nama barang bisa sangat panjang), jadi kata-kata nama barang di
+         *  ujung kanan malah ikut terpotong/hilang. Solusi yang benar: pakai
+         *  URUTAN & JUMLAH kolom dari baris header (bukan lebar pixel-nya).
+         *  Untuk tiap baris data: cari token angka MURNI paling kanan sebagai
+         *  Qty (kolom Qty selalu paling kanan), lalu dari sisa kata di
+         *  sebelah kirinya, buang sejumlah token di awal sebanyak jumlah
+         *  kolom SEBELUM kolom Item (mis. kolom "No"), dan buang token di
+         *  akhir sebanyak jumlah kolom ANTARA Item & Qty (mis. "Category"/
+         *  "UOM") — sisanya adalah Nama Barang, seberapa pun panjangnya.
+         *  Baris tanpa Qty sama sekali dianggap lanjutan (word-wrap) nama
+         *  barang baris sebelumnya. Kalau baris header tidak ditemukan sama
+         *  sekali, return [] supaya caller fallback ke parseFasItemsFromText
+         *  (parser regex baris lama, untuk format bebas seperti foto catatan
+         *  "3 x Kertas A4"). */
+        function parseFasItemsFromOcrWords(words) {
+            if (!Array.isArray(words) || words.length === 0) return [];
+
+            const rows = _fasGroupWordsIntoRows(words);
+            if (rows.length === 0) return [];
+
+            const ITEM_HEADER_RE = /^(item|nama|namabarang|barang|product|produk|description|keterangan)$/i;
+            const QTY_HEADER_RE = /^(qty|quantity|jumlah|jml)$/i;
+
+            let headerRowIdx = -1, itemIdx = -1, qtyIdx = -1;
+            for (let i = 0; i < rows.length; i++) {
+                const tokens = _fasMergeHeaderTokens(rows[i].words);
+                let itIdx = -1, qIdx = -1;
+                tokens.forEach((t, ti) => {
+                    const clean = t.text.replace(/[^a-zA-Z]/g, '');
+                    if (itIdx === -1 && ITEM_HEADER_RE.test(clean)) itIdx = ti;
+                    if (qIdx === -1 && QTY_HEADER_RE.test(clean)) qIdx = ti;
+                });
+                if (itIdx !== -1 && qIdx !== -1 && itIdx < qIdx) {
+                    headerRowIdx = i;
+                    itemIdx = itIdx;
+                    qtyIdx = qIdx;
+                    break;
+                }
+            }
+
+            if (headerRowIdx === -1) return [];
+
+            const leftOtherCount = itemIdx;               // mis. kolom "No" sebelum Item
+            const rightOtherCount = qtyIdx - itemIdx - 1;  // mis. kolom "Category"/"UOM" di antara Item & Qty
+
+            const results = [];
+            const SKIP_RE = /^(total|grand total|subtotal|jumlah total)$/i;
+            const QTY_TOKEN_RE = /^\d[\d.,]*$/;
+            // Nama barang yang terpotong (word-wrap) SELALU muncul di baris
+            // SEBELUM baris yang berisi Qty-nya (bukan sesudahnya) — jadi
+            // teks baris tanpa Qty ditampung dulu di sini, lalu disambung ke
+            // DEPAN nama barang pada baris berikutnya yang punya Qty.
+            let pendingContinuation = '';
+
+            for (let i = headerRowIdx + 1; i < rows.length; i++) {
+                const rowWords = rows[i].words;
+                if (rowWords.length === 0) continue;
+
+                // Cari token Qty: token angka murni paling KANAN di baris ini
+                // (kolom Qty selalu kolom paling kanan pada tabel FAS).
+                let qtyTokenIdx = -1;
+                for (let k = rowWords.length - 1; k >= 0; k--) {
+                    if (QTY_TOKEN_RE.test(rowWords[k].text)) { qtyTokenIdx = k; break; }
+                }
+
+                if (qtyTokenIdx === -1) {
+                    // Tidak ada Qty di baris ini → kemungkinan lanjutan nama
+                    // barang yang bersambung ke baris berikutnya.
+                    const contText = rowWords.map(w => w.text).join(' ').trim();
+                    if (contText && !SKIP_RE.test(contText)) {
+                        pendingContinuation = (pendingContinuation ? pendingContinuation + ' ' : '') + contText;
+                    }
+                    continue;
+                }
+
+                const qtyDigits = rowWords[qtyTokenIdx].text.replace(/[^\d]/g, '');
+                const qtyNum = parseInt(qtyDigits, 10);
+
+                let candidate = rowWords.slice(0, qtyTokenIdx);
+                if (leftOtherCount > 0) candidate = candidate.slice(leftOtherCount);
+                if (rightOtherCount > 0 && candidate.length > rightOtherCount) {
+                    candidate = candidate.slice(0, candidate.length - rightOtherCount);
+                }
+
+                let namaRaw = candidate.map(w => w.text).join(' ').replace(/[.:\-]+$/, '').trim();
+                if (pendingContinuation) {
+                    namaRaw = (pendingContinuation + ' ' + namaRaw).trim();
+                    pendingContinuation = '';
+                }
+
+                if (namaRaw && qtyNum && qtyNum > 0 && qtyNum <= 99999 && !SKIP_RE.test(namaRaw)) {
+                    results.push({ nama_barang: namaRaw, qty_po: String(qtyNum) });
+                }
+            }
+
+            return results;
         }
 
         /** Parser generik: cari baris "Nama Barang" + "Qty" dari teks hasil
