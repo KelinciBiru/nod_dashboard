@@ -9789,7 +9789,7 @@
                     </button>
                 </div>
                 <div id="route-card-area">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 route-cards-container">
                         ${[1, 2, 3].map(() => `
                         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 animate-pulse">
                             <div class="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
@@ -9979,7 +9979,7 @@
                             <h2 class="text-base font-bold text-gray-700">${escapeHtml(driverName)}</h2>
                             <span class="text-xs text-gray-400">(${rowsForDriver.length} rute, urut terdekat)</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 route-cards-container">
                             ${rowsForDriver.map(r => {
                         const card = _buildRouteCard(r, globalIdx);
                         globalIdx++;
@@ -9997,7 +9997,7 @@
                             <h2 class="text-base font-bold text-gray-500">Belum Ada Driver</h2>
                             <span class="text-xs text-gray-400">(${noDriverRows.length} PO)</span>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 route-cards-container">
                             ${noDriverRows.map(r => {
                         const card = _buildRouteCard(r, globalIdx);
                         globalIdx++;
@@ -10416,6 +10416,71 @@
                 </div>
             </div>`;
         }
+
+        // =====================================================================
+        // [Mobile — BARU] Efek visual "kartu bertumpuk" (stacked cardview) untuk
+        // menu Route di HP. Kontainer grid biasa (`grid grid-cols-1 sm:grid-cols-2
+        // lg:grid-cols-3 gap-4`, dipakai di showTeamDeliveryRoute) sekarang juga
+        // diberi class tambahan `route-cards-container`. Class itu HANYA aktif
+        // secara visual di bawah 640px lewat CSS (lihat @media (max-width:640px)
+        // .route-cards-container di layer "UI/UX POLISH" pada <style> paling
+        // akhir) — di layar sm ke atas grid Tailwind lama tetap berjalan persis
+        // seperti sebelumnya, tidak ada perubahan apa pun.
+        //
+        // Di HP, container itu menjadi baris horizontal dengan scroll-snap
+        // (native, jadi gesture geser/swipe user sudah otomatis didukung tanpa
+        // library tambahan) dan tiap kartu discale/opacity-kan berdasarkan
+        // jaraknya dari tengah layar — memberi kesan "tumpukan kartu" yang
+        // kartu aktif (di tengah) tampil penuh, sisanya mengecil/memudar di
+        // kiri-kanan. Ini MURNI efek visual (transform/opacity via CSS
+        // custom property) — tidak menyentuh id, onclick, data-*, atau
+        // urutan render kartu sama sekali, jadi semua logika Start/Delivered/
+        // Cancel/Navigasi/LiveSync yang sudah ada tetap berjalan seperti biasa.
+        // =====================================================================
+        function _applyRouteCardStackEffect(container) {
+            if (!container || !container.isConnected) return;
+            if (!window.matchMedia('(max-width: 640px)').matches) return;
+            const rect = container.getBoundingClientRect();
+            if (!rect.width) return;
+            const center = rect.left + rect.width / 2;
+            Array.from(container.children).forEach(card => {
+                const cRect = card.getBoundingClientRect();
+                const cCenter = cRect.left + cRect.width / 2;
+                const dist = Math.abs(center - cCenter) / rect.width;
+                const scale = Math.max(0.90, 1 - dist * 0.14);
+                const opacity = Math.max(0.55, 1 - dist * 0.55);
+                card.style.setProperty('--route-card-scale', scale.toFixed(3));
+                card.style.setProperty('--route-card-opacity', opacity.toFixed(3));
+            });
+        }
+
+        // Delegated scroll listener (capture:true) — 'scroll' tidak bubble, tapi
+        // tetap tertangkap di fase capture pada ancestor manapun, jadi cukup satu
+        // listener di document tanpa perlu re-attach tiap kali kartu Route
+        // dirender ulang (mis. oleh LiveSync tiap beberapa detik).
+        let _routeStackRaf = null;
+        document.addEventListener('scroll', (e) => {
+            const target = e.target;
+            if (!target || !target.classList || !target.classList.contains('route-cards-container')) return;
+            if (_routeStackRaf) cancelAnimationFrame(_routeStackRaf);
+            _routeStackRaf = requestAnimationFrame(() => _applyRouteCardStackEffect(target));
+        }, true);
+
+        // Terapkan state awal (kartu tengah = fokus) setiap kali #route-card-area
+        // berubah isinya — termasuk saat render pertama maupun refresh senyap
+        // dari LiveSync — tanpa perlu memanggilnya manual di tiap titik render.
+        const _routeStackObserver = new MutationObserver(() => {
+            document.querySelectorAll('#route-card-area .route-cards-container')
+                .forEach(el => requestAnimationFrame(() => _applyRouteCardStackEffect(el)));
+        });
+        (function _observeRouteCardArea() {
+            const target = document.getElementById('content-area') || document.body;
+            if (target) _routeStackObserver.observe(target, { childList: true, subtree: true });
+        })();
+
+        window.addEventListener('resize', () => {
+            document.querySelectorAll('#route-card-area .route-cards-container').forEach(_applyRouteCardStackEffect);
+        });
 
         // =====================================================================
         // [Navigasi In-App — DIPERBARUI] Navigasi ke titik tujuan sekarang
@@ -23326,6 +23391,60 @@
 
             table {
                 font-size: 0.8125rem;
+            }
+        }
+
+        /* ---------- Menu Route (Team Delivery): cardview "kartu bertumpuk"
+             yang bisa digeser di HP ----------
+             Container-nya tetap `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+             gap-4` bawaan (dipakai apa adanya di sm ke atas — TIDAK diubah sama
+             sekali, jadi tampilan tablet/desktop persis seperti sebelumnya).
+             Class tambahan `route-cards-container` hanya di-override di sini,
+             khusus di bawah 640px, jadi grid vertikal 1 kolom berubah jadi
+             baris horizontal dengan scroll-snap native (swipe bawaan browser,
+             tanpa JS gesture library) plus efek scale/opacity dari
+             _applyRouteCardStackEffect() supaya terlihat seperti tumpukan
+             kartu. Semua id/onclick/data-* di dalam tiap kartu (dibuat oleh
+             _buildRouteCard) tidak disentuh — cukup layout & tampilannya. */
+        @media (max-width: 640px) {
+            .route-cards-container {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                align-items: stretch;
+                overflow-x: auto;
+                overflow-y: visible;
+                scroll-snap-type: x mandatory;
+                -webkit-overflow-scrolling: touch;
+                gap: 14px;
+                padding: 10px 30px 22px;
+                margin: 0 -1rem;
+                scroll-padding-left: 30px;
+                scroll-padding-right: 30px;
+            }
+
+            .route-cards-container::-webkit-scrollbar {
+                display: none;
+            }
+
+            .route-cards-container {
+                scrollbar-width: none;
+            }
+
+            .route-cards-container>* {
+                flex: 0 0 84%;
+                max-width: 84%;
+                scroll-snap-align: center;
+                scroll-snap-stop: always;
+                transform: scale(var(--route-card-scale, 0.94));
+                opacity: var(--route-card-opacity, 0.65);
+                transition: transform 0.2s var(--nod-ease, ease), opacity 0.2s var(--nod-ease, ease);
+                will-change: transform, opacity;
+            }
+
+            /* Section per-driver (mb-6 dari JS) tidak perlu batas horizontal
+                 tambahan — biarkan kartu di dalamnya yang scroll, bukan section-nya. */
+            #route-cards-grid {
+                overflow-x: visible;
             }
         }
     </style>
