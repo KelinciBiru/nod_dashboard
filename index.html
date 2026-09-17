@@ -13724,6 +13724,14 @@
                             ${categoryOptions}
                         </select>
                     </div>
+                    <div id="fas-import-block" class="hidden p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <label class="block text-sm font-semibold text-purple-700 mb-1">Import File/Gambar FAS (opsional)</label>
+                        <p class="text-xs text-gray-500 mb-2">Upload foto/gambar atau PDF daftar barang — Item &amp; Qty akan diekstrak otomatis lalu ditampilkan untuk dikonfirmasi sebelum dimasukkan ke tabel Detail Item di bawah.</p>
+                        <input type="file" id="fas-import-file" accept="image/*,application/pdf"
+                            onchange="handleFasImportFile(this.files[0])"
+                            class="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700">
+                        <p id="fas-import-status" class="text-xs text-gray-400 mt-1"></p>
+                    </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
                         <div id="allocated-to-wrapper">
@@ -13891,6 +13899,7 @@
                 // Render dulu field Ship To yang sesuai (input/dropdown) sebelum isi nilainya,
                 // supaya untuk kategori Outlet, dropdown-nya sudah siap ditempati draft.allocatedTo.
                 await renderShipToField(draft.category === 'Outlet', draft.allocatedTo || '');
+                toggleFasImportBlock(draft.category === 'FAS');
                 updatePOPreview();
             }
             const allocatedToEl = document.getElementById('allocated-to');
@@ -14038,11 +14047,29 @@
             updatePOPreview();
             const category = document.getElementById('category')?.value || '';
             const isOutlet = category === 'Outlet';
+            // [ADDON — BARU] Blok "Import File/Gambar FAS" hanya relevan & tampil
+            // saat Kategori = "FAS". Lihat toggleFasImportBlock() & handleFasImportFile().
+            toggleFasImportBlock(category === 'FAS');
             const existingVal = document.getElementById('allocated-to')?.value || '';
             await renderShipToField(isOutlet, existingVal);
             if (!isOutlet) return;
             // Kalau nilai lama masih cocok dengan salah satu outlet, isi juga Alamat & Phone-nya
             if (existingVal) fillAlamatPhoneFromOutlet(existingVal);
+        }
+
+        /** Tampilkan/sembunyikan blok upload "Import File/Gambar FAS" di Form PO.
+         *  Saat disembunyikan (kategori bukan FAS lagi), file & status lama
+         *  dibersihkan supaya tidak nyangkut kalau user ganti-ganti kategori. */
+        function toggleFasImportBlock(show) {
+            const block = document.getElementById('fas-import-block');
+            if (!block) return;
+            block.classList.toggle('hidden', !show);
+            if (!show) {
+                const fileInput = document.getElementById('fas-import-file');
+                if (fileInput) fileInput.value = '';
+                const statusEl = document.getElementById('fas-import-status');
+                if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
+            }
         }
 
         /** Auto-trigger No. PO preview when item table gets first row filled */
@@ -14227,6 +14254,7 @@
                 if (namaEl && [...namaEl.options].some(o => o.value === orderedBy)) namaEl.value = orderedBy;
                 if (categoryEl && category && CATEGORY_CODE[category]) {
                     categoryEl.value = category;
+                    toggleFasImportBlock(category === 'FAS');
                     await renderShipToField(category === 'Outlet', shipTo);
                 } else {
                     await renderShipToField(false, shipTo);
@@ -15631,6 +15659,254 @@
             if (tbody.querySelectorAll('tr').length === 0) {
                 tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
             }
+        }
+
+        // =========================================================================
+        // [ADDON — BARU] IMPORT FILE/GAMBAR UNTUK KATEGORI "FAS" DI FORM PO
+        // Saat Kategori = "FAS", muncul blok upload file (lihat #fas-import-block
+        // di showFormPO() & toggleFasImportBlock()). File yang diupload (gambar
+        // ATAU PDF) diekstrak isinya — HANYA kolom Item & Qty — lalu dimasukkan
+        // ke tabel "Detail Item" yang sudah ada. Kolom ID TIDAK diekstrak dari
+        // file; ID selalu dikoreksi otomatis mengikuti ID Barang master (sheet
+        // "LIST") lewat _lookupIdByNamaBarang(), sama seperti hasil Import PDF
+        // Request/Return Order & Process Inbound yang sudah ada.
+        //
+        // Ekstraksi:
+        //   - Gambar : dibaca via OCR client-side (Tesseract.js — library yang
+        //              SAMA yang sudah dipakai untuk scan serial number di
+        //              Warranty Registration). TIDAK perlu endpoint GAS baru
+        //              sama sekali untuk ini — 100% jalan di browser.
+        //   - PDF    : dibaca via pdf.js (extractTextFromPDF, fungsi yang sama
+        //              yang sudah dipakai untuk Import PDF Request/Return
+        //              Order & Revisi PO).
+        //
+        // PENTING soal akurasi: karena file sumber FAS formatnya bebas (bukan
+        // PDF Request Order buatan sistem sendiri yang tata letaknya sudah
+        // diketahui persis), OCR/parsing generik seperti ini TIDAK BISA dijamin
+        // 100% benar secara otomatis murni dari kode — terutama untuk hasil
+        // OCR gambar. Karena itu hasil ekstraksi SELALU ditampilkan dulu di
+        // modal konfirmasi (bisa diedit/dihapus per baris) SEBELUM benar-benar
+        // dimasukkan ke Detail Item, supaya user bisa memastikan/mengoreksi
+        // kecocokannya dengan file sumber. Baris yang tidak jelas angka Qty-nya
+        // di source TIDAK ditebak (dilewati), bukan dipaksa qty=1.
+        // =========================================================================
+
+        /** Handler utama saat file dipilih di #fas-import-file. */
+        async function handleFasImportFile(file) {
+            if (!file) return;
+            const statusEl = document.getElementById('fas-import-status');
+            const setStatus = (t, cls) => {
+                if (!statusEl) return;
+                statusEl.textContent = t;
+                statusEl.className = 'text-xs mt-1 ' + (cls || 'text-gray-400');
+            };
+
+            try {
+                const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+                const isImage = file.type.startsWith('image/');
+                let rawText = '';
+
+                if (isPdf) {
+                    setStatus('Membaca isi PDF...', 'text-blue-500');
+                    const { text } = await extractTextFromPDF(file);
+                    rawText = text || '';
+                } else if (isImage) {
+                    setStatus('Membaca isi gambar (OCR)... proses ini bisa memakan waktu beberapa detik.', 'text-blue-500');
+                    rawText = await ocrFasImageToText(file);
+                } else {
+                    showAlert('warning', 'Format Tidak Didukung', 'Hanya file gambar (JPG/PNG/dll.) atau PDF yang bisa diimport ke sini.');
+                    setStatus('', '');
+                    return;
+                }
+
+                const items = parseFasItemsFromText(rawText);
+                if (items.length === 0) {
+                    setStatus('Tidak ada baris Item + Qty yang berhasil dikenali dari file ini.', 'text-red-500');
+                    showAlert('warning', 'Tidak Ada Item Terbaca',
+                        'Tidak berhasil mengenali baris "Item" dan "Qty" dari file ini. Coba foto yang lebih jelas/terang & tidak miring, pastikan Qty tertulis jelas di sebelah nama barang, atau isi Detail Item secara manual.');
+                    return;
+                }
+                setStatus(`${items.length} baris item terdeteksi — silakan periksa & konfirmasi kecocokannya dengan file sumber.`, 'text-green-600');
+                showFasImportPreviewModal(items);
+            } catch (err) {
+                setStatus('', '');
+                showAlert('error', 'Gagal Membaca File', 'Terjadi kesalahan saat mengekstrak file: ' + err.message);
+            } finally {
+                // Kosongkan input file supaya file yang sama bisa dipilih ulang
+                // kalau user ingin mengulang (mis. setelah "Batal" di modal preview).
+                const fileInput = document.getElementById('fas-import-file');
+                if (fileInput) fileInput.value = '';
+            }
+        }
+
+        /** OCR gambar (bukan PDF) khusus untuk Import File FAS. Beda dengan
+         *  ocrWithTesseract() yang dipakai Warranty Registration (dibatasi
+         *  alfanumerik & mode single-line untuk baca 1 baris serial number) —
+         *  di sini teksnya multi-baris & butuh spasi/tanda baca umum supaya
+         *  baris "Nama Barang ... Qty" tidak terpotong/tergabung salah. */
+        async function ocrFasImageToText(file) {
+            await _ensureTesseract();
+            const worker = await Tesseract.createWorker('eng');
+            try {
+                await worker.setParameters({
+                    tessedit_pageseg_mode: '6', // asumsikan satu blok teks/tabel yang seragam
+                    preserve_interword_spaces: '1'
+                });
+                const { data } = await worker.recognize(file);
+                return data.text || '';
+            } finally {
+                try { await worker.terminate(); } catch (_) { }
+            }
+        }
+
+        /** Parser generik: cari baris "Nama Barang" + "Qty" dari teks hasil
+         *  OCR/PDF file sumber FAS (formatnya bebas, bukan format baku sistem).
+         *  Item & Qty diambil PERSIS dari teks sumbernya (hanya di-trim) — tidak
+         *  ada modifikasi/normalisasi nama lain. Baris yang angka Qty-nya tidak
+         *  jelas SENGAJA dilewati (tidak ditebak qty=1), supaya tidak menambah
+         *  risiko data yang tidak sesuai file sumber. */
+        function parseFasItemsFromText(rawText) {
+            const lines = String(rawText || '')
+                .split(/\r?\n/)
+                .map(l => l.replace(/[\u00A0]+/g, ' ').trim())
+                .filter(l => l.length > 0);
+
+            const HEADER_WORDS = /^(no\.?|item|nama( barang)?|qty|quantity|jumlah|total|keterangan|description|satuan|uom|harga|price|subtotal|catatan|note)$/i;
+            const UNIT_WORD = 'pcs?|pc|unit|box|pack|karton|kg|ltr|lusin|set|roll|sheet|btl|dus|meter';
+            const results = [];
+
+            // Pola 1: "<Nama> x <Qty>"  → mis. "Kertas A4 x 3"
+            const P1 = /^(.{2,}?)\s*[xX]\s*(\d{1,5})\s*$/;
+            // Pola 2: "<Qty> x <Nama>"  → mis. "3 x Kertas A4" / "3x Kertas A4"
+            const P2 = /^(\d{1,5})\s*[xX]\s+(.{2,})$/;
+            // Pola 3: "<Nama> ... <Qty> [satuan]" di akhir baris → mis. "Kertas A4  3 pcs"
+            const P3 = new RegExp('^(.{2,}?)[\\s.:\\-]+(\\d{1,5})\\s*(' + UNIT_WORD + ')?\\s*$', 'i');
+            // Pola 4: "<Qty> <Nama>" di awal baris → mis. "3 Kertas A4"
+            const P4 = /^(\d{1,5})\s+(.{2,})$/;
+            // Pola 5: kolom dipisah 2+ spasi/tab (hasil salin tabel) → ambil kolom
+            // teks pertama sbg nama & kolom angka pertama sbg qty.
+            const P5_SPLIT = /\s{2,}|\t/;
+
+            for (const line of lines) {
+                if (HEADER_WORDS.test(line)) continue;
+                if (/^[-=_*]{3,}$/.test(line)) continue; // garis pemisah
+
+                let nama = '', qty = null, m;
+
+                m = line.match(P1); if (m) { nama = m[1]; qty = m[2]; }
+                if (!qty) { m = line.match(P2); if (m) { qty = m[1]; nama = m[2]; } }
+                if (!qty) { m = line.match(P3); if (m) { nama = m[1]; qty = m[2]; } }
+                if (!qty && P5_SPLIT.test(line)) {
+                    const cols = line.split(P5_SPLIT).map(c => c.trim()).filter(Boolean);
+                    const qtyIdx = cols.findIndex(c => /^\d{1,5}$/.test(c));
+                    if (qtyIdx > 0) { qty = cols[qtyIdx]; nama = cols.slice(0, qtyIdx).join(' '); }
+                }
+                if (!qty) { m = line.match(P4); if (m) { qty = m[1]; nama = m[2]; } }
+
+                nama = String(nama || '').replace(/[.:\-]+$/, '').trim();
+                const qtyNum = parseInt(qty, 10);
+
+                if (!nama || nama.length < 2 || !qtyNum || qtyNum <= 0 || qtyNum > 99999) continue;
+                if (HEADER_WORDS.test(nama)) continue;
+
+                results.push({ nama_barang: nama, qty_po: String(qtyNum) });
+            }
+
+            return results;
+        }
+
+        /** Tampilkan modal konfirmasi berisi hasil ekstraksi (Item + Qty, bisa
+         *  diedit/dihapus per baris) SEBELUM dimasukkan ke tabel Detail Item. */
+        function showFasImportPreviewModal(items) {
+            document.getElementById('fas-import-preview-overlay')?.remove();
+
+            const rowsHtml = items.map((it, i) => `
+                <tr class="border-b border-gray-100" data-idx="${i}">
+                    <td class="p-2 text-center text-gray-400">${i + 1}</td>
+                    <td class="p-2">
+                        <input type="text" class="fas-preview-nama w-full p-1.5 border border-gray-300 rounded text-xs" value="${escapeHtml(it.nama_barang)}">
+                    </td>
+                    <td class="p-2 text-center">
+                        <input type="number" min="1" class="fas-preview-qty w-20 p-1.5 border border-gray-300 rounded text-center text-xs" value="${escapeHtml(String(it.qty_po))}">
+                    </td>
+                    <td class="p-2 text-center">
+                        <button type="button" onclick="this.closest('tr').remove()" title="Hapus baris ini dari daftar import"
+                            class="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition">
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </td>
+                </tr>`).join('');
+
+            const overlay = document.createElement('div');
+            overlay.id = 'fas-import-preview-overlay';
+            overlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[99999] p-4';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-lg shadow-lg w-full max-w-xl max-h-[85vh] flex flex-col">
+                    <div class="p-4 border-b">
+                        <h3 class="text-base font-bold text-gray-800">Konfirmasi Hasil Import FAS</h3>
+                        <p class="text-xs text-gray-500 mt-1">Cocokkan dulu dengan file sumbernya — ubah teks yang salah baca atau hapus baris yang tidak perlu, lalu klik "Masukkan ke Detail Item".</p>
+                    </div>
+                    <div class="p-4 overflow-y-auto flex-1">
+                        <table class="w-full text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-800 text-white">
+                                    <th class="p-2 text-center" style="width:36px">#</th>
+                                    <th class="p-2 text-left">Item</th>
+                                    <th class="p-2 text-center" style="width:90px">Qty</th>
+                                    <th class="p-2 text-center" style="width:50px">Hapus</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fas-preview-tbody">${rowsHtml}</tbody>
+                        </table>
+                    </div>
+                    <div class="p-4 border-t flex gap-3">
+                        <button type="button" onclick="document.getElementById('fas-import-preview-overlay').remove()"
+                            class="flex-1 py-2.5 rounded-lg font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">Batal</button>
+                        <button type="button" onclick="confirmFasImportPreview()"
+                            class="flex-1 py-2.5 rounded-lg font-bold text-white bg-purple-600 hover:bg-purple-700 transition">Masukkan ke Detail Item</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+        }
+
+        /** Dipanggil saat tombol "Masukkan ke Detail Item" di modal preview
+         *  diklik. Baris Detail Item yang SUDAH ada (kalau ada) dipertahankan —
+         *  hasil import ditambahkan setelahnya, bukan menimpa. Kolom ID diisi
+         *  otomatis lewat _fillItemRowsFromParsed() → _lookupIdByNamaBarang(),
+         *  persis seperti hasil Import PDF Request/Return Order yang sudah ada. */
+        async function confirmFasImportPreview() {
+            const tbody = document.getElementById('fas-preview-tbody');
+            if (!tbody) return;
+            const items = [];
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const nama = tr.querySelector('.fas-preview-nama')?.value?.trim() || '';
+                const qtyRaw = tr.querySelector('.fas-preview-qty')?.value?.trim() || '';
+                const qtyNum = parseInt(qtyRaw, 10);
+                if (nama && qtyNum > 0) items.push({ nama_barang: nama, qty_po: String(qtyNum) });
+            });
+            document.getElementById('fas-import-preview-overlay')?.remove();
+            if (items.length === 0) {
+                showAlert('warning', 'Tidak Ada Item', 'Tidak ada baris item yang valid untuk dimasukkan.');
+                return;
+            }
+
+            const existing = [];
+            document.querySelectorAll('#po-item-table-body tr:not([data-placeholder])').forEach(tr => {
+                const nama = tr.querySelector('.po-item-nama')?.value || '';
+                if (!nama.trim()) return;
+                existing.push({
+                    id: tr.querySelector('.po-item-id')?.value || '',
+                    nama_barang: nama,
+                    qty_po: tr.querySelector('.po-item-qty')?.value || '1',
+                    uom: tr.querySelector('.po-item-uom')?.value || '',
+                    description: tr.querySelector('.po-item-desc')?.value || '',
+                    note: tr.querySelector('.po-item-note')?.value || ''
+                });
+            });
+
+            await _fillItemRowsFromParsed(existing.concat(items), tambahBarisFormPO, 'po-item-table-body');
+            showAlert('success', 'Berhasil Ditambahkan',
+                `${items.length} item dari file berhasil dimasukkan ke Detail Item. Kolom ID sudah otomatis dicocokkan ke ID Barang master — periksa kembali baris yang ID-nya masih kosong (berarti nama barangnya belum ketemu pasangannya di master data).`);
         }
 
         // =========================================================================
