@@ -1080,6 +1080,196 @@
                 border-color: transparent !important;
                 box-shadow: var(--neu-inset-sm) !important;
             }
+
+            /* ================= LATAR & HEADER (permukaan dasar) ================= */
+            /* Latar utama & header atas diselaraskan ke tone neumorphic yang sama
+                 supaya kartu/menu/modal di atasnya terlihat "menyatu", bukan
+                 ditempel di atas putih polos. Warna teks/isi tidak disentuh. */
+            html body {
+                background: var(--neu-surface) !important;
+            }
+
+            header.flex-shrink-0 {
+                background: var(--neu-surface) !important;
+                border-color: transparent !important;
+                box-shadow: 0 2px 10px -4px rgba(163, 177, 198, .45) !important;
+            }
+
+            #sidebar-toggle,
+            #notif-bell-btn {
+                background: var(--neu-surface-alt) !important;
+                box-shadow: var(--neu-raised-sm) !important;
+                border-radius: .8rem !important;
+            }
+
+            #sidebar-toggle:active,
+            #notif-bell-btn:active {
+                box-shadow: var(--neu-inset-sm) !important;
+            }
+
+            #sidebar-inner,
+            aside#sidebar {
+                background: var(--neu-surface) !important;
+                border-color: transparent !important;
+            }
+
+            /* ===================== DECK: MENU & SUB-MENU ===================== */
+            /* Sidebar jadi "deck" kartu neumorphic — tiap menu utama adalah
+                 kartu tersendiri yang terangkat dari latar (bukan baris datar),
+                 dengan jarak antar-kartu yang jelas seperti tumpukan kartu. */
+            #sidebar-nav {
+                background: transparent !important;
+                padding: .85rem !important;
+                gap: .55rem !important;
+            }
+
+            #sidebar-nav>button.nav-item,
+            #sidebar-nav>div[id^="menu-"]>button {
+                border-radius: 1.15rem !important;
+            }
+
+            /* Tray submenu = permukaan "cekung" (inset) sebagai wadah deck kecil,
+                 garis pembatas lama (border-l) dihapus karena kedalamannya kini
+                 datang dari shadow, bukan garis. */
+            #sidebar-nav div[id$="-sub"] {
+                background: var(--neu-surface-alt) !important;
+                border-left: none !important;
+                border-radius: 1rem !important;
+                margin-left: .35rem !important;
+                padding: .5rem !important;
+                box-shadow: var(--neu-inset-sm) !important;
+            }
+
+            /* Tiap item submenu -> kartu deck kecil sendiri, terangkat dari
+                 permukaan cekung trainya, ditumpuk vertikal dgn jarak rapi. */
+            #sidebar-nav div[id$="-sub"]>button.sub-item {
+                background: var(--neu-surface) !important;
+                border-radius: .8rem !important;
+                box-shadow: var(--neu-raised-sm) !important;
+                margin-bottom: .4rem !important;
+            }
+
+            #sidebar-nav div[id$="-sub"]>button.sub-item:last-child {
+                margin-bottom: 0 !important;
+            }
+
+            #sidebar-nav div[id$="-sub"]>button.sub-item:active {
+                box-shadow: var(--neu-inset-sm) !important;
+            }
+
+            #sidebar-nav div[id$="-sub"]>button.sub-item.bg-amber-50 {
+                box-shadow: inset 3px 3px 7px rgba(163, 177, 198, .5), inset -2px -2px 6px rgba(255, 255, 255, .8) !important;
+            }
+
+            /* ============== KARTU KONTEN & FORM DI SELURUH DASHBOARD ============== */
+            /* Kartu putih polos (bg-white rounded-xl/2xl shadow-*) yang dipakai di
+                 hampir semua menu -> permukaan neumorphic senada tema. Warna teks,
+                 badge status, dan border semantik (kiri berwarna dst.) TIDAK
+                 disentuh — hanya latar & bayangan permukaannya. */
+            #content-area>.bg-white.rounded-2xl,
+            #content-area>.bg-white.rounded-xl,
+            #content-area .grid>.bg-white.rounded-2xl,
+            #content-area .grid>.bg-white.rounded-xl {
+                background: var(--neu-surface) !important;
+                border-color: transparent !important;
+                box-shadow: var(--neu-raised) !important;
+            }
+
+            /* Input/select/textarea polos di seluruh dashboard mobile -> efek
+                 "cekung" halus, satu keluarga visual dgn menu/modal/toast, tanpa
+                 mengubah ukuran atau perilaku fokusnya. */
+            #content-area input[type="text"],
+            #content-area input[type="number"],
+            #content-area input[type="search"],
+            #content-area input[type="tel"],
+            #content-area input[type="date"],
+            #content-area input[type="password"],
+            #content-area select,
+            #content-area textarea {
+                background: var(--neu-surface-alt) !important;
+                border-color: transparent !important;
+                box-shadow: var(--neu-inset-sm) !important;
+            }
+
+            /* Tombol aksi utama solid (amber/hijau/biru dst.) -> tetap pakai
+                 warnanya masing-masing, hanya ditambah kedalaman neumorphic +
+                 efek "masuk" saat ditekan, senada tombol modal. */
+            #content-area button.bg-amber-500,
+            #content-area button.bg-amber-600,
+            #content-area button.bg-blue-500,
+            #content-area button.bg-blue-600,
+            #content-area button.bg-green-500,
+            #content-area button.bg-green-600,
+            #content-area button.bg-red-500,
+            #content-area button.bg-red-600 {
+                box-shadow: 0 4px 10px -4px rgba(15, 23, 42, .3), var(--neu-raised-sm) !important;
+                border-color: transparent !important;
+            }
+
+            #content-area button.bg-amber-500:active,
+            #content-area button.bg-amber-600:active,
+            #content-area button.bg-blue-500:active,
+            #content-area button.bg-blue-600:active,
+            #content-area button.bg-green-500:active,
+            #content-area button.bg-green-600:active,
+            #content-area button.bg-red-500:active,
+            #content-area button.bg-red-600:active {
+                box-shadow: var(--neu-inset-sm) !important;
+            }
+
+            /* ==================== ROUTE: DECK KARTU ALA TINDER ==================== */
+            /* Pita petunjuk kecil di atas tumpukan kartu Route (murni teks CSS,
+                 tidak mengubah HTML) — menegaskan bahwa geser = pilih kartu,
+                 BUKAN tombol Start/Batal/Delivered (itu tetap di dalam kartu). */
+            .route-swipe-hint {
+                display: block;
+                text-align: center;
+                font-size: .72rem;
+                font-weight: 600;
+                color: #94a3b8;
+                background: var(--neu-surface-alt);
+                box-shadow: var(--neu-inset-sm);
+                border-radius: 9999px;
+                padding: .4rem .9rem;
+                margin: 0 0 .85rem;
+                width: fit-content;
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            /* Kartu Route sendiri -> permukaan neumorphic raised, senada tema. */
+            .route-cards-container>[id^="route-card-"] {
+                background: var(--neu-surface) !important;
+                border-color: transparent !important;
+                box-shadow: var(--neu-raised) !important;
+            }
+        }
+
+        /* Deck Tinder untuk Route HANYA berlaku ≤640px (breakpoint yg sama dgn
+             .route-cards-container asli) supaya tablet/desktop tidak berubah. */
+        @media (max-width: 640px) {
+
+            /* Ganti dari "baris horizontal scroll-snap" polos menjadi tumpukan
+                 kartu bergaya Tinder: kartu berikutnya mengintip di belakang
+                 (mengecil + berputar tipis + memudar) mengikuti arah geser,
+                 kartu fokus (tengah) tampil penuh & satu-satunya yang bisa
+                 disentuh (lihat pointer-events di _applyRouteCardStackEffect). */
+            .route-cards-container {
+                padding: 6px 30px 26px !important;
+            }
+
+            .route-cards-container>* {
+                transform: scale(var(--route-card-scale, 0.94)) rotate(var(--route-card-rotate, 0deg)) !important;
+                border-radius: 1.25rem;
+            }
+        }
+
+        /* Pita petunjuk geser Route murni fitur HP — disembunyikan total di
+             tablet/desktop supaya tidak muncul sbg teks polos tak bergaya. */
+        @media (min-width: 641px) {
+            .route-swipe-hint {
+                display: none !important;
+            }
         }
     </style>
 
@@ -10007,7 +10197,7 @@
                     </div>`;
                 }
 
-                smoothSwapContent(cardArea, `<div id="route-cards-grid">${html}</div>`);
+                smoothSwapContent(cardArea, `<p class="route-swipe-hint">👉 Geser kartu untuk memilih tugas — ketuk tombol di kartu yang aktif untuk Start/Delivered</p><div id="route-cards-grid">${html}</div>`);
 
             } catch (err) {
                 const areaEl = document.getElementById('route-card-area');
@@ -10446,11 +10636,24 @@
             Array.from(container.children).forEach(card => {
                 const cRect = card.getBoundingClientRect();
                 const cCenter = cRect.left + cRect.width / 2;
-                const dist = Math.abs(center - cCenter) / rect.width;
+                // signedDist: negatif = kartu ada di kiri pusat, positif = di kanan —
+                // dipakai utk arah rotasi "kartu bertumpuk" ala Tinder (kartu yang
+                // belum sampai ke tengah miring mengikuti arah datangnya).
+                const signedDist = (cCenter - center) / rect.width;
+                const dist = Math.abs(signedDist);
                 const scale = Math.max(0.90, 1 - dist * 0.14);
                 const opacity = Math.max(0.55, 1 - dist * 0.55);
+                const rotate = Math.max(-6, Math.min(6, signedDist * 9));
                 card.style.setProperty('--route-card-scale', scale.toFixed(3));
                 card.style.setProperty('--route-card-opacity', opacity.toFixed(3));
+                card.style.setProperty('--route-card-rotate', rotate.toFixed(2) + 'deg');
+                // [Tinder-deck] Geser di sini HANYA utk memilih/mengganti kartu yang
+                // fokus (persis seperti geser tumpukan kartu Tinder) — bukan utk
+                // cancel/skip/start apa pun. Supaya tombol Start/Batal/Delivered di
+                // kartu yang BELUM fokus (masih mengecil/miring di belakang) tidak
+                // bisa tersentuh tanpa sengaja saat jari masih di tengah gesture,
+                // hanya kartu paling fokus (dist kecil) yang boleh menerima tap.
+                card.style.pointerEvents = dist < 0.15 ? '' : 'none';
             });
         }
 
