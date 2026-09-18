@@ -13822,6 +13822,22 @@
                             class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                     </div>
                     <input type="file" id="po-pdfFile" accept="application/pdf" class="hidden" tabindex="-1" aria-hidden="true">
+                    <div id="po-fas-import-block" class="hidden p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <label class="block text-sm font-semibold text-amber-700 mb-1">Import File/Gambar (khusus Kategori FAS)</label>
+                        <p class="text-xs text-amber-600 mb-2">Upload PDF atau foto daftar permintaan FAS (format per baris: Nama Item + Qty). Tabel Detail Item di bawah akan otomatis terisi — Description default "Supplies" dan Nama Item dicocokkan ke sheet "LIST".</p>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="file" id="po-fas-import-file" accept="application/pdf,image/*"
+                                class="flex-1 min-w-0 text-sm border border-amber-300 rounded p-1.5 bg-white">
+                            <button id="btn-po-fas-import" onclick="handleFormPOFasImport()"
+                                class="flex-shrink-0 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition disabled:opacity-60 disabled:cursor-not-allowed">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                </svg>
+                                Import File/Gambar
+                            </button>
+                        </div>
+                        <p id="po-fas-import-status" class="text-xs text-gray-400 mt-1"></p>
+                    </div>
                     <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
                         <label class="block text-sm font-semibold text-indigo-700 mb-1">Revisi PO (opsional)</label>
                         <select id="revisi-po-select" onchange="handleRevisiPOSelect(this.value)"
@@ -14105,13 +14121,38 @@
             if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
         }
 
+        // =========================================================================
+        // AUTO-FILL Kategori "FAS" — Ship To/Alamat/No. Telepon terisi otomatis
+        // =========================================================================
+        const FAS_AUTOFILL = {
+            shipTo: 'FAS',
+            alamat: 'Komplek Pergudangan Widya Sakti Kusuma (WSK) Blok D No. 1, Jl. Wahab Affan (Hyundai), Jl. Raya Bekasi KM 28. Pondok Ungu, Kota Bekasi, 17132',
+            phone: '083876727392'
+        };
+
         /** Dipanggil setiap kali kategori di Form PO berubah */
         async function handleFormPOCategoryChange() {
             updatePOPreview();
             const category = document.getElementById('category')?.value || '';
             const isOutlet = category === 'Outlet';
+            const isFAS = category === 'FAS';
             const existingVal = document.getElementById('allocated-to')?.value || '';
             await renderShipToField(isOutlet, existingVal);
+
+            const fasImportBlock = document.getElementById('po-fas-import-block');
+            if (fasImportBlock) fasImportBlock.classList.toggle('hidden', !isFAS);
+
+            if (isFAS) {
+                const shipToEl = document.getElementById('allocated-to');
+                const alamatEl = document.getElementById('po-alamat');
+                const phoneEl = document.getElementById('po-phone');
+                if (shipToEl) shipToEl.value = FAS_AUTOFILL.shipTo;
+                if (alamatEl) alamatEl.value = FAS_AUTOFILL.alamat;
+                if (phoneEl) phoneEl.value = FAS_AUTOFILL.phone;
+                // Trigger autosave draft karena diisi lewat script, bukan langsung diketik user
+                if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
+            }
+
             if (!isOutlet) return;
             // Kalau nilai lama masih cocok dengan salah satu outlet, isi juga Alamat & Phone-nya
             if (existingVal) fillAlamatPhoneFromOutlet(existingVal);
@@ -15702,6 +15743,162 @@
             tr.remove();
             if (tbody.querySelectorAll('tr').length === 0) {
                 tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+            }
+        }
+
+        // =========================================================================
+        // FORM PO: IMPORT FILE/GAMBAR — khusus Kategori "FAS"
+        // Terima PDF (teks langsung diekstrak via pdf.js) atau foto/gambar (OCR
+        // via Tesseract.js), lalu parse tiap baris jadi {nama, qty} dengan format
+        // sederhana "Nama Item + Qty". Description tabel Detail Item selalu
+        // di-default "Supplies", dan Nama Item dicocokkan/dikoreksi ke sheet "LIST".
+        // =========================================================================
+
+        /** OCR teks penuh (multi-baris, bukan single-line seperti scan Serial
+         *  Number) dari sebuah foto/gambar. Tidak pakai whitelist karakter supaya
+         *  spasi & tanda baca pada nama barang ikut terbaca. */
+        async function _ocrFullTextTesseract(source) {
+            await _ensureTesseract();
+            const worker = await Tesseract.createWorker('eng');
+            try {
+                const { data } = await worker.recognize(source);
+                return data.text || '';
+            } finally {
+                try { await worker.terminate(); } catch (_) { }
+            }
+        }
+
+        /** Ambil teks mentah dari file Import FAS — PDF lewat pdf.js, selain itu
+         *  (foto/gambar) lewat OCR Tesseract. */
+        async function _extractRawTextFromFasFile(file) {
+            const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+            if (isPdf) {
+                const { text } = await extractTextFromPDF(file);
+                return text;
+            }
+            return await _ocrFullTextTesseract(file);
+        }
+
+        // Baris-baris label/header dokumen yang harus diabaikan (bukan baris item)
+        const FAS_IMPORT_SKIP_LINE_RE = /^(no\.?|nama(\s*(barang|item))?|qty|quantity|jumlah|keterangan|kategori|ship\s*to|alamat|no\.?\s*telepon|tanggal|deskripsi|description|purchase\s*order|request\s*order|catatan|note)\s*[:.]?\s*$/i;
+
+        /** Parse teks hasil ekstrak PDF/OCR jadi daftar {nama, qty} — 1 baris
+         *  dokumen = 1 item, format "Nama Item + Qty" (qty boleh di depan atau
+         *  di belakang nama; kalau tidak ketemu angka, qty default 1). */
+        function _parseFasImportItems(rawText) {
+            const lines = String(rawText || '')
+                .split(/\r?\n/)
+                .map(l => l.replace(/[\u00A0]+/g, ' ').trim())
+                .filter(Boolean);
+
+            const items = [];
+            for (const line of lines) {
+                if (line.length < 2) continue;
+                if (/^\d+$/.test(line)) continue; // baris cuma nomor urut/halaman
+                if (FAS_IMPORT_SKIP_LINE_RE.test(line)) continue;
+
+                let nama = '', qty = 1, m;
+                // Pola "5 x Nama Item" / "5) Nama Item" / "5. Nama Item"
+                m = line.match(/^(\d{1,5})\s*[xX×.\)]\s*(.+)$/);
+                if (m) {
+                    qty = parseInt(m[1], 10) || 1;
+                    nama = m[2].trim();
+                } else {
+                    // Pola "Nama Item 5" / "Nama Item - 5" / "Nama Item x5"
+                    m = line.match(/^(.+?)\s*[-xX×:]?\s*(\d{1,5})\s*$/);
+                    if (m && m[1].trim().length >= 2) {
+                        nama = m[1].trim();
+                        qty = parseInt(m[2], 10) || 1;
+                    } else {
+                        nama = line; // tidak ketemu angka sama sekali → qty default 1
+                        qty = 1;
+                    }
+                }
+                nama = nama.replace(/^[\-\u2022\*\s]+/, '').replace(/[\-\u2022\*\s]+$/, '').trim();
+                if (!nama || nama.length < 2) continue;
+                items.push({ nama, qty });
+            }
+            return items;
+        }
+
+        /** Handler tombol "Import File/Gambar" di Form PO (khusus Kategori FAS):
+         *  baca file → parse baris item → cocokkan tiap Nama Item ke sheet "LIST"
+         *  → isi tabel Detail Item dengan Description default "Supplies". */
+        async function handleFormPOFasImport() {
+            const fileInput = document.getElementById('po-fas-import-file');
+            const statusEl = document.getElementById('po-fas-import-status');
+            const btn = document.getElementById('btn-po-fas-import');
+            const file = fileInput?.files?.[0];
+            if (!file) {
+                showAlert('warning', 'Belum Pilih File', 'Pilih file PDF atau foto/gambar terlebih dahulu.');
+                return;
+            }
+
+            const tbody = document.getElementById('po-item-table-body');
+            const existingRows = tbody ? Array.from(tbody.querySelectorAll('tr:not([data-placeholder])')) : [];
+            if (existingRows.length > 0) {
+                const ok = await showConfirm(
+                    'Timpa Tabel Item?',
+                    `Tabel Detail Item sudah berisi ${existingRows.length} baris. Import file ini akan MENGGANTI semua baris yang ada. Lanjutkan?`
+                );
+                if (!ok) return;
+            }
+
+            if (btn) btn.disabled = true;
+            if (statusEl) { statusEl.textContent = 'Membaca isi file...'; statusEl.className = 'text-xs text-blue-500 mt-1'; }
+
+            try {
+                const rawText = await _extractRawTextFromFasFile(file);
+                const parsedItems = _parseFasImportItems(rawText);
+
+                if (parsedItems.length === 0) {
+                    if (statusEl) {
+                        statusEl.textContent = 'Tidak ada baris item yang terbaca dari file ini. Coba file lain atau isi manual.';
+                        statusEl.className = 'text-xs text-red-500 mt-1';
+                    }
+                    return;
+                }
+
+                if (statusEl) statusEl.textContent = `Mencocokkan ${parsedItems.length} item ke sheet "LIST"...`;
+
+                if (tbody) tbody.innerHTML = '';
+                let tidakKetemu = 0;
+                for (const it of parsedItems) {
+                    const tr = tambahBarisFormPO(false);
+                    if (!tr) continue;
+                    const idEl = tr.querySelector('.po-item-id');
+                    const namaEl = tr.querySelector('.po-item-nama');
+                    const qtyEl = tr.querySelector('.po-item-qty');
+                    const descEl = tr.querySelector('.po-item-desc');
+
+                    const matched = await _lookupItemByNamaBarang(it.nama);
+                    if (!matched) tidakKetemu++;
+                    const finalNama = matched ? matched.nama : it.nama;
+                    if (namaEl) namaEl.value = finalNama;
+                    if (idEl) idEl.value = matched ? (matched.id || '') : '';
+                    if (qtyEl) qtyEl.value = it.qty || 1;
+                    // Kategori FAS: Description selalu default "Supplies"
+                    if (descEl) descEl.value = 'Supplies';
+                }
+
+                if (fileInput) fileInput.value = '';
+                if (statusEl) {
+                    statusEl.textContent = `${parsedItems.length} item berhasil diimport dari "${file.name}"` +
+                        (tidakKetemu > 0 ? ` (${tidakKetemu} nama tidak ketemu persis di sheet "LIST", cek manual).` : '.') +
+                        ' Cek & sesuaikan Qty/Item sebelum kirim.';
+                    statusEl.className = 'text-xs text-green-600 mt-1';
+                }
+                updatePOPreview();
+                if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
+            } catch (err) {
+                console.error('[FAS Import] gagal:', err);
+                if (statusEl) {
+                    statusEl.textContent = 'Gagal membaca file: ' + err.message;
+                    statusEl.className = 'text-xs text-red-500 mt-1';
+                }
+                showAlert('error', 'Gagal Import', 'Terjadi kesalahan saat membaca file: ' + err.message);
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 
@@ -18094,9 +18291,13 @@
          *  terlihat identik. Sekarang whitespace dinormalisasi dulu sebelum
          *  dibandingkan, dan kalau masih tidak ketemu persis, dicoba pencocokan
          *  longgar (salah satu nama sepenuhnya mengandung nama lainnya). */
-        async function _lookupIdByNamaBarang(nama) {
+        /** Cocokkan Nama Barang ke master data (sheet "LIST") dan kembalikan
+         *  seluruh item ({id, nama, ...}) yang cocok, atau null kalau tidak ada.
+         *  Dipakai baik untuk auto-isi ID (_lookupIdByNamaBarang) maupun untuk
+         *  mengoreksi nama itu sendiri (lihat fitur Import File/Gambar FAS). */
+        async function _lookupItemByNamaBarang(nama) {
             const n = _normalizeItemNameForMatch(nama);
-            if (!n || n === '-') return '';
+            if (!n || n === '-') return null;
             const items = await getSourceItems();
             let match = items.find(i => _normalizeItemNameForMatch(i.nama) === n);
             if (!match) {
@@ -18105,6 +18306,11 @@
                     return m && (m.includes(n) || n.includes(m));
                 });
             }
+            return match || null;
+        }
+
+        async function _lookupIdByNamaBarang(nama) {
+            const match = await _lookupItemByNamaBarang(nama);
             const found = match ? (match.id || '') : '';
             if (!found) console.warn('[_lookupIdByNamaBarang] Tidak ketemu ID untuk nama:', JSON.stringify(nama));
             return found;
