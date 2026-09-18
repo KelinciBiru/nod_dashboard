@@ -1315,6 +1315,216 @@
                 border-color: transparent !important;
                 box-shadow: var(--neu-raised) !important;
             }
+
+            /* ============================= TABEL ============================= */
+            /* Wadah scroll tabel (.overflow-x-auto, dipakai di ~semua tabel
+                 dashboard) -> "baki" neumorphic cekung, tempat baris tabel duduk
+                 di dalamnya. Header & body TIDAK diberi shadow individual (supaya
+                 baris rapat tetap rapi/tidak berat), kedalaman cukup datang dari
+                 baki-nya + strip header terangkat tipis. */
+            #content-area .overflow-x-auto {
+                background: var(--neu-surface-alt) !important;
+                box-shadow: var(--neu-inset-sm) !important;
+                padding: .5rem !important;
+            }
+
+            #content-area table thead tr th {
+                background: var(--neu-surface) !important;
+                box-shadow: var(--neu-raised-sm) !important;
+                border-radius: .6rem;
+                color: #33415c !important;
+            }
+
+            /* Zebra baris diselaraskan ke tone neumorphic (bukan abu polos) */
+            #content-area table tbody tr:nth-child(even) {
+                background-color: rgba(255, 255, 255, .55) !important;
+            }
+
+            #content-area table tbody tr:nth-child(odd) {
+                background-color: transparent !important;
+            }
+
+            /* ==================== BOTTOM NAV BAR (mobile) ==================== */
+            /* Bar navigasi utama HP, permukaan neumorphic terangkat, menempel di
+                 dasar layar. Hanya tampil ≤767px (lihat aturan dasar non-media di
+                 bawah yg menyembunyikannya di tablet/desktop). */
+            #mobile-bottom-nav {
+                display: flex !important;
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 40;
+                gap: .5rem;
+                padding: .55rem .6rem calc(env(safe-area-inset-bottom, 0px) + .55rem);
+                background: var(--neu-surface);
+                box-shadow: 0 -6px 18px -10px rgba(15, 23, 42, .35), 0 -1px 0 rgba(255, 255, 255, .6) inset;
+            }
+
+            #mobile-bottom-nav .mbn-item {
+                flex: 1 1 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: .2rem;
+                min-width: 0;
+                padding: .45rem .25rem;
+                border-radius: 1rem;
+                background: transparent;
+                border: none;
+                color: #5b6b85;
+                font-size: .65rem;
+                font-weight: 600;
+                line-height: 1;
+            }
+
+            #mobile-bottom-nav .mbn-item span:last-child {
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #mobile-bottom-nav .mbn-icon {
+                width: 1.35rem;
+                height: 1.35rem;
+                flex-shrink: 0;
+            }
+
+            #mobile-bottom-nav .mbn-icon-wrap {
+                position: relative;
+                display: inline-flex;
+            }
+
+            #mobile-bottom-nav .mbn-badge {
+                position: absolute;
+                top: -.15rem;
+                right: -.3rem;
+                width: .55rem;
+                height: .55rem;
+                border-radius: 9999px;
+                background: #ef4444;
+                box-shadow: 0 0 0 2px var(--neu-surface);
+            }
+
+            #mobile-bottom-nav .mbn-item:active {
+                background: var(--neu-surface-alt);
+                box-shadow: var(--neu-inset-sm);
+                transform: scale(.97);
+            }
+
+            /* Tab aktif (halaman sekarang = home) ditandai warna navy senada
+                 aksen aktif menu lain di app ini. */
+            #mobile-bottom-nav .mbn-item.mbn-active {
+                color: #0f1f3d;
+                background: var(--neu-surface-alt);
+                box-shadow: var(--neu-inset-sm);
+            }
+
+            /* ---- Bottom sheet "Menu" ---- */
+            #mobile-menu-sheet-overlay:not(.hidden) {
+                display: block;
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, .35);
+                z-index: 49;
+            }
+
+            #mobile-menu-sheet:not(.hidden) {
+                display: flex;
+                flex-direction: column;
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 50;
+                max-height: 78vh;
+                background: var(--neu-surface);
+                border-radius: 1.35rem 1.35rem 0 0;
+                box-shadow: 0 -14px 34px -12px rgba(15, 23, 42, .4);
+                padding: .6rem .85rem calc(env(safe-area-inset-bottom, 0px) + .85rem);
+                overflow: hidden;
+            }
+
+            #mobile-menu-sheet .mms-handle {
+                width: 2.75rem;
+                height: .3rem;
+                border-radius: 9999px;
+                background: var(--neu-shadow-dark);
+                margin: .1rem auto .6rem;
+                flex-shrink: 0;
+            }
+
+            #mobile-menu-sheet .mms-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-weight: 700;
+                color: #0f1f3d;
+                padding: 0 .15rem .6rem;
+                flex-shrink: 0;
+            }
+
+            #mobile-menu-sheet .mms-close {
+                width: 2rem;
+                height: 2rem;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 9999px;
+                background: var(--neu-surface-alt);
+                box-shadow: var(--neu-raised-sm);
+                border: none;
+                color: #334155;
+            }
+
+            #mobile-menu-sheet #mobile-menu-sheet-body {
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Pastikan bar bawah tidak menutupi konten paling bawah tiap halaman */
+            #main-scroll-area {
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4.5rem) !important;
+            }
+
+            /* Toast non-blocking (#bg-toast-container, dipakai showBgToast/
+                 showToastAlert/hideProgressOverlay) sebelumnya nempel pas di
+                 pojok kanan-bawah — sekarang ketutup/numpuk sama bottom nav bar
+                 baru. Diangkat ke atas bottom nav bar + selebar layar (bukan
+                 nempel kanan doang) supaya tetap kebaca penuh di HP. */
+            #bg-toast-container {
+                bottom: calc(env(safe-area-inset-bottom, 0px) + 4.75rem) !important;
+                left: .75rem !important;
+                right: .75rem !important;
+                align-items: stretch !important;
+            }
+
+            #bg-toast-container>div {
+                max-width: 100% !important;
+            }
+        }
+
+        /* Ketinggian progress-overlay (kartu non-blocking) juga disesuaikan di HP
+             supaya nempel rapi di bawah topbar tanpa numpuk sama notif-popup. */
+        @media (max-width: 767px) {
+            #progress-overlay {
+                padding-left: .75rem !important;
+                padding-right: .75rem !important;
+            }
+        }
+
+        /* Bar/sheet navigasi bawah murni fitur HP — dikunci mati di tablet &
+             desktop, terlepas dari class "hidden" JS-nya, supaya tidak pernah
+             nyangkut kepencet/kebuka di layar lebar. */
+        @media (min-width: 768px) {
+
+            #mobile-bottom-nav,
+            #mobile-menu-sheet,
+            #mobile-menu-sheet-overlay {
+                display: none !important;
+            }
         }
 
         /* Deck Tinder untuk Route HANYA berlaku ≤640px (breakpoint yg sama dgn
@@ -1984,6 +2194,51 @@
             <main id="content-area" class="relative isolate flex-1 p-4 md:p-8 bg-gray-50">
                 <h1 class="text-3xl font-semibold text-gray-700">Dashboard</h1>
             </main>
+        </div>
+
+        <!-- ================= BOTTOM NAV BAR (khusus HP, ≤767px) =================
+             Navigasi utama HP dipindah ke bottom bar spt aplikasi mobile modern:
+             Home, Notifikasi, Menu (buka nav#sidebar-nav lengkap sbg bottom
+             sheet). Disembunyikan total di tablet/desktop lewat CSS — sidebar
+             kiri yg lama tetap dipakai di sana seperti biasa. Elemen ini
+             SENGAJA diletakkan sebagai sibling #main-scroll-area (bukan di
+             dalamnya) supaya tidak ikut ke-render-ulang saat konten halaman
+             berganti, dan position:fixed-nya konsisten menutupi lebar layar. -->
+        <nav id="mobile-bottom-nav" aria-label="Navigasi utama (HP)">
+            <button type="button" class="mbn-item" id="mbn-home" onclick="navTo(getMobileHomePage())" aria-label="Home">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mbn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h4a1 1 0 001-1v-4h2v4a1 1 0 001 1h4a1 1 0 001-1V10" />
+                </svg>
+                <span>Home</span>
+            </button>
+            <button type="button" class="mbn-item" id="mbn-notif" onclick="document.getElementById('notif-bell-btn') && document.getElementById('notif-bell-btn').click()" aria-label="Notifikasi">
+                <span class="mbn-icon-wrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mbn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4a2 2 0 01-.6-1.4V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span id="mbn-notif-badge" class="mbn-badge hidden"></span>
+                </span>
+                <span>Notifikasi</span>
+            </button>
+            <button type="button" class="mbn-item" id="mbn-menu" onclick="openMobileMenuSheet()" aria-label="Menu lainnya">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mbn-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <span>Menu</span>
+            </button>
+        </nav>
+
+        <!-- Bottom sheet "Menu" — menampung nav#sidebar-nav (dipinjam sementara dari
+             tempat aslinya) saat tombol Menu di bottom bar ditekan. Ditutup ->
+             nav dikembalikan ke tempat semestinya lewat syncSidebarNavPlacement(). -->
+        <div id="mobile-menu-sheet-overlay" class="hidden" onclick="closeMobileMenuSheet()"></div>
+        <div id="mobile-menu-sheet" class="hidden" role="dialog" aria-modal="true" aria-label="Menu navigasi">
+            <div class="mms-handle" aria-hidden="true"></div>
+            <div class="mms-header">
+                <span>Menu</span>
+                <button type="button" onclick="closeMobileMenuSheet()" aria-label="Tutup menu" class="mms-close">✕</button>
+            </div>
+            <div id="mobile-menu-sheet-body"></div>
         </div>
     </div>
 
@@ -3555,6 +3810,9 @@
                     if (filteredRows.length > 0) dotEl.classList.remove('hidden');
                     else dotEl.classList.add('hidden');
                 }
+                // Cerminkan titik notif ke badge tab "Notifikasi" di bottom nav bar (HP)
+                const mbnDot = document.getElementById('mbn-notif-badge');
+                if (mbnDot) mbnDot.classList.toggle('hidden', filteredRows.length === 0);
 
                 if (filteredRows.length === 0) {
                     contentEl.innerHTML = `<div class="p-3 text-sm text-gray-400 text-center">Tidak ada PO ${targetStatus}.</div>`;
@@ -3594,31 +3852,56 @@
          * Process Inbound, Kirim PO, Kirim Retur, Kirim Form Service) diklik, supaya
          * user tahu progres berjalan (bukan cuma spinner tanpa info) selama proses
          * generate PDF + kirim ke server GAS berlangsung.
-         * - showProgressOverlay(message): tampilkan overlay mulai dari 0%, lalu
-         *   "merayap" otomatis mendekati 90% (melambat) selama menunggu, supaya
-         *   terlihat tetap berjalan walau tahap sebenarnya (mis. request ke GAS)
-         *   tidak melaporkan persentase asli.
+         *
+         * [FIX STABILITAS/PERSEPSI KECEPATAN] Sebelumnya ini adalah overlay
+         * FULL-SCREEN gelap (bg-black/50, z-[9999], menutupi seluruh layar) yang
+         * memblokir semua interaksi user sampai proses selesai — user "terpaksa
+         * menunggu" walau proses sebenarnya (generate PDF + kirim ke GAS) berjalan
+         * async di belakang layar dan tidak butuh layar dikunci. Sekarang diganti
+         * jadi kartu kecil non-blocking (pointer-events:none di wrapper, jadi
+         * SELURUH layar di baliknya tetap bisa disentuh/discroll) yang nempel di
+         * bawah topbar — proses tetap berjalan sama seperti sebelumnya, cuma user
+         * tidak lagi "dipaksa" diam menunggu di depan layar penuh. Tombol yang
+         * memicu proses ini tetap dikunci sendiri lewat setSubmitLoading()/
+         * disabled di masing-masing form (mencegah submit ganda), jadi aman.
+         *
+         * - showProgressOverlay(message): tampilkan kartu progres mulai dari 0%,
+         *   lalu "merayap" otomatis mendekati 90% (melambat) selama menunggu,
+         *   supaya terlihat tetap berjalan walau tahap sebenarnya (mis. request
+         *   ke GAS) tidak melaporkan persentase asli.
          * - setProgressOverlay(percent, message?): set persen manual di titik-titik
          *   tahap yang diketahui (mis. selesai generate PDF, sebelum kirim ke server).
          * - hideProgressOverlay(success): animasikan ke 100% dulu kalau success lalu
-         *   fade-out & sembunyikan; kalau gagal, langsung sembunyi.
+         *   fade-out & sembunyikan, DAN otomatis munculkan Toast (berhasil/gagal)
+         *   supaya user tetap tahu hasilnya walau sudah pindah ke layar lain
+         *   sambil menunggu; kalau gagal, langsung sembunyi tanpa toast (pemanggil
+         *   sudah/akan menampilkan showAlert error sendiri dgn pesan lebih detail).
          */
         function showProgressOverlay(message = 'Memproses...') {
             let overlay = document.getElementById('progress-overlay');
             if (!overlay) {
                 overlay = document.createElement('div');
                 overlay.id = 'progress-overlay';
-                overlay.className = 'fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center px-4';
+                // Non-blocking: wrapper penuh layar TAPI pointer-events:none, jadi
+                // klik/scroll tetap tembus ke konten di baliknya. Cuma kartu kecil
+                // di dalamnya (pointer-events:none juga, murni informatif) yang
+                // tampak, mengambang di bawah topbar, tidak di tengah layar.
+                overlay.className = 'fixed inset-x-0 top-0 z-[9999] flex justify-center px-4 pointer-events-none';
+                overlay.style.paddingTop = 'calc(env(safe-area-inset-top, 0px) + 4rem)';
                 overlay.innerHTML = `
-                <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-xs text-center">
-                    <p id="progress-overlay-message" class="text-sm font-semibold text-gray-700 mb-3">Memproses...</p>
-                    <div class="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-full max-w-xs text-center pointer-events-none">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <svg class="animate-spin h-4 w-4 text-amber-500" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        <p id="progress-overlay-message" class="text-xs font-semibold text-gray-700">Memproses...</p>
+                    </div>
+                    <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div id="progress-overlay-bar" class="h-full bg-amber-500 rounded-full transition-all duration-300 ease-out" style="width:0%"></div>
                     </div>
-                    <p id="progress-overlay-percent" class="text-xs text-gray-400 mt-2 font-mono">0%</p>
+                    <p id="progress-overlay-percent" class="text-[10px] text-gray-400 mt-1.5 font-mono">0% • berjalan di latar belakang, silakan lanjut pakai aplikasi</p>
                 </div>`;
                 document.body.appendChild(overlay);
             }
+            overlay._lastMessage = message;
             overlay.style.display = 'flex';
             setProgressOverlay(0, message);
             if (overlay._creepInterval) clearInterval(overlay._creepInterval);
@@ -3632,13 +3915,15 @@
         }
 
         function setProgressOverlay(percent, message) {
+            const overlay = document.getElementById('progress-overlay');
             const bar = document.getElementById('progress-overlay-bar');
             const pct = document.getElementById('progress-overlay-percent');
             const msg = document.getElementById('progress-overlay-message');
             const clamped = Math.max(0, Math.min(100, percent));
             if (bar) bar.style.width = clamped + '%';
-            if (pct) pct.textContent = Math.round(clamped) + '%';
+            if (pct) pct.textContent = Math.round(clamped) + '% • berjalan di latar belakang, silakan lanjut pakai aplikasi';
             if (msg && message) msg.textContent = message;
+            if (overlay && message) overlay._lastMessage = message;
         }
 
         function hideProgressOverlay(success = true) {
@@ -3647,6 +3932,11 @@
             if (overlay._creepInterval) { clearInterval(overlay._creepInterval); overlay._creepInterval = null; }
             if (success) {
                 setProgressOverlay(100);
+                // Toast konfirmasi berhasil — supaya user tetap tahu hasilnya walau
+                // sudah pindah layar lain sambil menunggu proses ini di latar belakang.
+                if (typeof showBgToast === 'function') {
+                    showBgToast('success', (overlay._lastMessage || 'Proses selesai') + ' — berhasil.');
+                }
                 setTimeout(() => { overlay.style.display = 'none'; }, 250);
             } else {
                 overlay.style.display = 'none';
@@ -4197,6 +4487,33 @@
             return 'Dashboard';
         }
 
+        /** Buka bottom sheet "Menu" (HP): pinjam nav#sidebar-nav dari tempatnya
+         *  sekarang (home slot ATAU aside sidebar) lalu tampilkan di sheet. */
+        function openMobileMenuSheet() {
+            const nav = document.getElementById('sidebar-nav');
+            const body = document.getElementById('mobile-menu-sheet-body');
+            const sheet = document.getElementById('mobile-menu-sheet');
+            const overlay = document.getElementById('mobile-menu-sheet-overlay');
+            if (!nav || !body || !sheet || !overlay) return;
+            syncNavExpandedClasses();
+            body.appendChild(nav);
+            sheet.classList.remove('hidden');
+            overlay.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        /** Tutup bottom sheet "Menu" (HP) & kembalikan nav#sidebar-nav ke tempat
+         *  semestinya (home slot kalau lagi di halaman home, aside sidebar kalau
+         *  bukan) lewat syncSidebarNavPlacement() yang sudah ada. */
+        function closeMobileMenuSheet() {
+            const sheet = document.getElementById('mobile-menu-sheet');
+            const overlay = document.getElementById('mobile-menu-sheet-overlay');
+            if (sheet) sheet.classList.add('hidden');
+            if (overlay) overlay.classList.add('hidden');
+            document.body.style.overflow = '';
+            syncSidebarNavPlacement();
+        }
+
         function toggleSidebar() {
             // Di HP, sidebar drawer sudah tidak dipakai lagi (navigasi ikon
             // sekarang menempel di halaman "home" masing-masing role) —
@@ -4238,11 +4555,15 @@
             const menuIcon = document.getElementById('sidebar-toggle-icon-menu');
             const backIcon = document.getElementById('sidebar-toggle-icon-back');
             const btn = document.getElementById('sidebar-toggle');
-            if (!menuIcon || !backIcon || !btn) return;
-            const showBack = window.innerWidth < 768 && pageName && pageName !== getMobileHomePage();
-            menuIcon.classList.toggle('hidden', showBack);
-            backIcon.classList.toggle('hidden', !showBack);
-            btn.setAttribute('aria-label', showBack ? 'Kembali ke Home' : 'Buka/tutup menu');
+            if (menuIcon && backIcon && btn) {
+                const showBack = window.innerWidth < 768 && pageName && pageName !== getMobileHomePage();
+                menuIcon.classList.toggle('hidden', showBack);
+                backIcon.classList.toggle('hidden', !showBack);
+                btn.setAttribute('aria-label', showBack ? 'Kembali ke Home' : 'Buka/tutup menu');
+            }
+            // Tandai tab "Home" di bottom nav bar aktif kalau sedang di halaman home
+            const mbnHome = document.getElementById('mbn-home');
+            if (mbnHome) mbnHome.classList.toggle('mbn-active', pageName === getMobileHomePage());
         }
 
         /** Pindahkan menu navigasi (nav#sidebar-nav) balik ke dalam sidebar asli.
@@ -4435,6 +4756,12 @@
 
             // Tutup sidebar di mobile setelah klik menu
             if (window.innerWidth < 768 && sidebarOpen) toggleSidebar();
+
+            // Tutup bottom sheet "Menu" (HP) kalau lagi terbuka — ini juga yang
+            // mengembalikan nav#sidebar-nav ke tempat semestinya kalau sempat
+            // dipinjam ke dalam sheet.
+            const _mms = document.getElementById('mobile-menu-sheet');
+            if (_mms && !_mms.classList.contains('hidden')) closeMobileMenuSheet();
 
             // Pastikan menu navigasi balik ke sidebar asli dulu sebelum konten
             // halaman (termasuk slot-nya di Dashboard) dirender ulang/diganti.
@@ -13979,6 +14306,7 @@
                 // Render dulu field Ship To yang sesuai (input/dropdown) sebelum isi nilainya,
                 // supaya untuk kategori Outlet, dropdown-nya sudah siap ditempati draft.allocatedTo.
                 await renderShipToField(draft.category === 'Outlet', draft.allocatedTo || '');
+                _syncFasImportBlockVisibility(draft.category); // FIX: tombol Import FAS tidak muncul saat restore draft
                 updatePOPreview();
             }
             const allocatedToEl = document.getElementById('allocated-to');
@@ -14130,6 +14458,15 @@
             phone: '083876727392'
         };
 
+        /** Tampilkan/sembunyikan blok "Import File/Gambar" (khusus Kategori FAS).
+         *  FIX: sebelumnya blok ini CUMA disinkronkan di dalam handleFormPOCategoryChange(),
+         *  jadi kalau kategori FAS masuk lewat jalur lain (restore draft, load PO untuk
+         *  Revisi, reset form) tombol Import tidak pernah dimunculkan/disembunyikan lagi. */
+        function _syncFasImportBlockVisibility(category) {
+            const fasImportBlock = document.getElementById('po-fas-import-block');
+            if (fasImportBlock) fasImportBlock.classList.toggle('hidden', category !== 'FAS');
+        }
+
         /** Dipanggil setiap kali kategori di Form PO berubah */
         async function handleFormPOCategoryChange() {
             updatePOPreview();
@@ -14139,8 +14476,7 @@
             const existingVal = document.getElementById('allocated-to')?.value || '';
             await renderShipToField(isOutlet, existingVal);
 
-            const fasImportBlock = document.getElementById('po-fas-import-block');
-            if (fasImportBlock) fasImportBlock.classList.toggle('hidden', !isFAS);
+            _syncFasImportBlockVisibility(category);
 
             if (isFAS) {
                 const shipToEl = document.getElementById('allocated-to');
@@ -14344,6 +14680,7 @@
                 } else {
                     await renderShipToField(false, shipTo);
                 }
+                _syncFasImportBlockVisibility(category); // FIX: tombol Import FAS tidak muncul saat load PO utk Revisi
                 const allocatedToEl = document.getElementById('allocated-to');
                 if (allocatedToEl) allocatedToEl.value = shipTo;
                 if (alamatEl) alamatEl.value = alamat;
@@ -14606,6 +14943,7 @@
             const preOrderToggleEl = document.getElementById('po-preorder-toggle');
             if (preOrderToggleEl) preOrderToggleEl.checked = false;
             renderShipToField(false, ''); // kembalikan Ship To ke input teks biasa (kategori direset)
+            _syncFasImportBlockVisibility(''); // FIX: pastikan tombol Import FAS ikut disembunyikan saat reset
             if (alamatEl) alamatEl.value = '';
             if (phoneEl) phoneEl.value = '';
             if (shippingDateEl) shippingDateEl.value = '';
@@ -15779,8 +16117,27 @@
             return await _ocrFullTextTesseract(file);
         }
 
-        // Baris-baris label/header dokumen yang harus diabaikan (bukan baris item)
-        const FAS_IMPORT_SKIP_LINE_RE = /^(no\.?|nama(\s*(barang|item))?|qty|quantity|jumlah|keterangan|kategori|ship\s*to|alamat|no\.?\s*telepon|tanggal|deskripsi|description|purchase\s*order|request\s*order|catatan|note)\s*[:.]?\s*$/i;
+        // Baris-baris label/header dokumen yang harus diabaikan (bukan baris item).
+        // Ditambah "item" & "header" berdiri sendiri (FIX: sebelumnya cuma "nama item"/"nama
+        // barang" yang dikenali, jadi header tabel dengan kolom "Item" polos ikut ke-ekstrak).
+        const FAS_IMPORT_SKIP_LINE_RE = /^(no\.?|header|item|nama(\s*(barang|item))?|qty|quantity|jumlah|keterangan|kategori|ship\s*to|alamat|no\.?\s*telepon|tanggal|deskripsi|description|purchase\s*order|request\s*order|catatan|note)\s*[:.]?\s*$/i;
+
+        // Kata-kata label kolom tabel — dipakai untuk mendeteksi satu baris header yang
+        // berisi BEBERAPA label sekaligus (mis. "Item     Qty" hasil OCR/ekstraksi tabel),
+        // yang tidak akan ketangkap oleh FAS_IMPORT_SKIP_LINE_RE (itu cuma cocok utk 1 label).
+        const FAS_IMPORT_HEADER_WORDS = new Set([
+            'no', 'header', 'item', 'nama', 'nama barang', 'nama item', 'qty', 'quantity',
+            'jumlah', 'keterangan', 'kategori', 'ship to', 'alamat', 'no telepon', 'tanggal',
+            'deskripsi', 'description', 'purchase order', 'request order', 'catatan', 'note'
+        ]);
+
+        /** True kalau SEMUA "kolom" pada satu baris (dipisah spasi ganda/tab/pipe) adalah
+         *  kata label header tabel — artinya baris ini header, bukan baris item. */
+        function _isFasImportHeaderLine(line) {
+            const parts = line.split(/\s{2,}|\t|\|/).map(p => p.trim().replace(/[:.]+$/, '').toLowerCase()).filter(Boolean);
+            if (parts.length < 2) return false; // baris header gabungan minimal 2 kolom
+            return parts.every(p => FAS_IMPORT_HEADER_WORDS.has(p));
+        }
 
         /** Parse teks hasil ekstrak PDF/OCR jadi daftar {nama, qty} — 1 baris
          *  dokumen = 1 item, format "Nama Item + Qty" (qty boleh di depan atau
@@ -15796,6 +16153,7 @@
                 if (line.length < 2) continue;
                 if (/^\d+$/.test(line)) continue; // baris cuma nomor urut/halaman
                 if (FAS_IMPORT_SKIP_LINE_RE.test(line)) continue;
+                if (_isFasImportHeaderLine(line)) continue; // FIX: header gabungan mis. "Item   Qty"
 
                 let nama = '', qty = 1, m;
                 // Pola "5 x Nama Item" / "5) Nama Item" / "5. Nama Item"
