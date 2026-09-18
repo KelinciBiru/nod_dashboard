@@ -18291,14 +18291,50 @@
          *  terlihat identik. Sekarang whitespace dinormalisasi dulu sebelum
          *  dibandingkan, dan kalau masih tidak ketemu persis, dicoba pencocokan
          *  longgar (salah satu nama sepenuhnya mengandung nama lainnya). */
+        /** [BARU] Alias eksplisit untuk nama Item kategori "FAS" yang variasi
+         *  penulisannya di dokumen sumber (PDF/foto Import FAS) TIDAK BISA
+         *  dicocokkan otomatis ke sheet "LIST" lewat normalisasi whitespace
+         *  atau pencocokan substring biasa di _lookupItemByNamaBarang() di
+         *  bawah — baik karena spasinya hilang ("GatotKaca" vs "Gatot Kaca",
+         *  "MoonBeams" vs "Moon Beams") maupun karena penulisannya memang
+         *  jauh berbeda dari nama resmi di "LIST" ("NOD Artisan Mix Pack
+         *  20s" vs "NOD Curated Artisant Pack 20's"). Key HARUS berupa hasil
+         *  _normalizeItemNameForMatch() dari varian yang mau dikoreksi;
+         *  value adalah nama resmi persis seperti di sheet "LIST" (juga
+         *  dicocokkan lewat _normalizeItemNameForMatch() supaya tidak perlu
+         *  persis karakter per karakter). Tambahkan entri baru ke sini kalau
+         *  nanti ketemu variasi penulisan FAS lain yang tidak ketemu.
+         */
+        const FAS_ITEM_NAME_ALIASES = {
+            'gatotkaca': 'NOD X First Crack (CS) - Gatot Kaca',
+            'moonbeams': 'NOD X Makmur Jaya (CS) - Moon Beams',
+            'nod artisan mix pack 20s': "NOD Curated Artisant Pack 20's",
+        };
+
         /** Cocokkan Nama Barang ke master data (sheet "LIST") dan kembalikan
          *  seluruh item ({id, nama, ...}) yang cocok, atau null kalau tidak ada.
          *  Dipakai baik untuk auto-isi ID (_lookupIdByNamaBarang) maupun untuk
-         *  mengoreksi nama itu sendiri (lihat fitur Import File/Gambar FAS). */
+         *  mengoreksi nama itu sendiri (lihat fitur Import File/Gambar FAS).
+         *  [BARU] Alias eksplisit (FAS_ITEM_NAME_ALIASES) dicek LEBIH DULU,
+         *  sebelum pencocokan persis-sama & substring longgar di bawah —
+         *  supaya variasi penulisan yang sudah diketahui (lihat komentar di
+         *  FAS_ITEM_NAME_ALIASES) langsung dikoreksi ke nama resmi di "LIST"
+         *  meski tidak akan pernah cocok lewat dua metode pencocokan lainnya. */
         async function _lookupItemByNamaBarang(nama) {
             const n = _normalizeItemNameForMatch(nama);
             if (!n || n === '-') return null;
             const items = await getSourceItems();
+
+            const aliasTarget = FAS_ITEM_NAME_ALIASES[n];
+            if (aliasTarget) {
+                const aliasNorm = _normalizeItemNameForMatch(aliasTarget);
+                const aliasMatch = items.find(i => _normalizeItemNameForMatch(i.nama) === aliasNorm);
+                if (aliasMatch) return aliasMatch;
+                // Kalau nama di "LIST" sendiri berubah sehingga alias jadi
+                // tidak ketemu, lanjut ke pencocokan biasa di bawah (jangan
+                // langsung gagal) supaya tetap ada kemungkinan ketemu.
+            }
+
             let match = items.find(i => _normalizeItemNameForMatch(i.nama) === n);
             if (!match) {
                 match = items.find(i => {
