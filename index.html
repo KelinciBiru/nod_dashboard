@@ -7396,12 +7396,113 @@
             wrap.classList.remove('hidden');
         }
 
-        /** Gabungkan DELIVERY DETAILS semua baris tercentang, cocokkan ke sheet
-         *  "LIST" (reuse mesin Import FAS: _parseFasImportItems + _lookupItemByNamaBarang),
-         *  lalu isi tabel Detail Item Form PO/Form RO secara otomatis. */
+        // =========================================================================
+        // [ADDON — Parser DELIVERY DETAILS Request B2B/B2C]
+        // Format asli kolom DELIVERY DETAILS di sheet B2B_Data/B2C_Data BEDA dengan
+        // format Import FAS ("Nama Item + Qty" polos). Contoh nyata:
+        //   Kirim :
+        //   1. NOD Izzio : 21 Unit
+        //
+        //   Capsule :
+        //   1. Aceh Gayo : 200pcs
+        //   2. NOD Blend : 200pcs
+        //   3. Bali Kintamani : 200pcs
+        // Ciri-cirinya:
+        //   - Baris "Kirim :" / "Capsule :" dst adalah judul SEKSI (tidak ada isi
+        //     setelah titik dua) -> bukan baris item, harus dilewati sepenuhnya.
+        //   - Baris item selalu diawali penomoran "1.", "2.", dst -> dibuang.
+        //   - Polanya "Nama Item : Qty[Satuan]" — qty & satuan bisa nempel tanpa
+        //     spasi ("200pcs") atau berspasi ("21 Unit"). Ini yang sebelumnya bikin
+        //     Qty ikut kebawa jadi bagian nama (karena parser lama pakai pola
+        //     "Nama - Qty" / "Qty x Nama", bukan pola "Nama : Qty").
+        // =========================================================================
+
+        /** True kalau satu baris adalah judul seksi ("Kirim :", "Capsule :", dst) —
+         *  yaitu diakhiri titik dua TANPA ada isi apa pun setelahnya. */
+        function _isRqDeliverySectionHeader(line) {
+            return /^[^:]+:\s*$/.test(line);
+        }
+
+        /** Parse satu baris DELIVERY DETAILS jadi {nama, qty, unit} atau null kalau
+         *  baris ini bukan baris item (judul seksi/baris kosong/tidak jelas). */
+        function _parseRqDeliveryLine(line) {
+            if (!line || line.length < 2) return null;
+            if (_isRqDeliverySectionHeader(line)) return null; // judul seksi, bukan item
+
+            // Buang penomoran list di depan: "1.", "2)", "3 -", dst.
+            let content = line.replace(/^\d{1,3}\s*[\.\)]\s*/, '');
+            if (content.length < 2) return null;
+
+            let nama = '', qty = 1, unit = '';
+
+            // Pola utama data B2B/B2C: "Nama Item : Qty[Satuan]" (satuan boleh nempel/berspasi/kosong).
+            let m = content.match(/^(.+?)\s*:\s*(\d{1,6})\s*([A-Za-z]*)\.?\s*$/);
+            if (m) {
+                nama = m[1].trim();
+                qty = parseInt(m[2], 10) || 1;
+                unit = (m[3] || '').trim();
+            } else {
+                // Fallback pola umum lain (kalau suatu saat format sedikit berbeda):
+                // "5 x Nama Item" / "5) Nama Item"
+                m = content.match(/^(\d{1,5})\s*[xX×]\s*(.+)$/);
+                if (m) {
+                    qty = parseInt(m[1], 10) || 1;
+                    nama = m[2].trim();
+                } else {
+                    // "Nama Item - 5" / "Nama Item 5pcs" (tanpa titik dua)
+                    m = content.match(/^(.+?)\s*[-xX×]?\s*(\d{1,5})\s*([A-Za-z]*)\s*$/);
+                    if (m && m[1].trim().length >= 2) {
+                        nama = m[1].trim();
+                        qty = parseInt(m[2], 10) || 1;
+                        unit = (m[3] || '').trim();
+                    } else {
+                        nama = content; // tidak ketemu angka sama sekali -> qty default 1
+                        qty = 1;
+                    }
+                }
+            }
+
+            nama = nama.replace(/^[\-\u2022\*\s]+/, '').replace(/[\-\u2022\*:\s]+$/, '').trim();
+            if (!nama || nama.length < 2) return null;
+            return { nama, qty: qty || 1, unit };
+        }
+
+        /** Parse teks DELIVERY DETAILS (bisa gabungan beberapa baris tercentang,
+         *  dengan beberapa seksi "Kirim :" / "Capsule :" dst di dalamnya) jadi
+         *  daftar {nama, qty, unit}. Baris judul seksi otomatis dilewati. */
+        function _parseRqDeliveryDetailsItems(rawText) {
+            const lines = String(rawText || '')
+                .split(/\r?\n/)
+                .map(l => l.replace(/[\u00A0]+/g, ' ').trim())
+                .filter(Boolean);
+
+            const items = [];
+            for (const line of lines) {
+                const parsed = _parseRqDeliveryLine(line);
+                if (parsed) items.push(parsed);
+            }
+            return items;
+        }
+
+        /** Cari opsi UOM (dropdown ".po-item-uom") yang cocok (case-insensitive)
+         *  dengan satuan hasil parsing, mis. "pcs" -> "Pcs", "unit" -> "Unit". */
+        function _matchUomOption(uomEl, unitText) {
+            if (!uomEl || !unitText) return false;
+            const target = String(unitText).trim().toLowerCase();
+            const match = Array.from(uomEl.options).find(o => o.value.toLowerCase() === target)
+                || Array.from(uomEl.options).find(o => o.value.toLowerCase().startsWith(target) || target.startsWith(o.value.toLowerCase()));
+            if (match) { uomEl.value = match.value; return true; }
+            return false;
+        }
+
+        /** Gabungkan DELIVERY DETAILS semua baris tercentang, parse dengan
+         *  _parseRqDeliveryDetailsItems (paham format "Nama : Qty[Satuan]" +
+         *  judul seksi), cocokkan tiap nama ke sheet "LIST" via
+         *  _lookupItemByNamaBarang, lalu isi tabel Detail Item Form PO/Form RO
+         *  secara otomatis (Item, Qty, dan UOM kalau satuannya cocok). */
         async function _fillItemTableFromRqDeliveryDetails(mode, rows) {
             const combinedRaw = rows.map(r => r.deliveryDetails || '').filter(Boolean).join('\n');
-            const parsedItems = _parseFasImportItems(combinedRaw);
+            const parsedItems = _parseRqDeliveryDetailsItems(combinedRaw);
             if (parsedItems.length === 0) return;
 
             const tbodyId = mode === 'RO' ? 'retur-item-table-body' : 'po-item-table-body';
@@ -7409,20 +7510,29 @@
             const tbody = document.getElementById(tbodyId);
             if (tbody) tbody.innerHTML = '';
 
+            let tidakKetemu = 0;
             for (const it of parsedItems) {
                 const tr = addRowFn(false);
                 if (!tr) continue;
                 const idEl = tr.querySelector('.po-item-id');
                 const namaEl = tr.querySelector('.po-item-nama');
                 const qtyEl = tr.querySelector('.po-item-qty');
+                const uomEl = tr.querySelector('.po-item-uom');
 
                 const matched = await _lookupItemByNamaBarang(it.nama);
+                if (!matched) tidakKetemu++;
                 const finalNama = matched ? matched.nama : it.nama;
-                if (namaEl) namaEl.value = finalNama;
+                if (namaEl) { namaEl.value = finalNama; namaEl.title = finalNama; }
                 if (idEl) idEl.value = matched ? (matched.id || '') : '';
                 if (qtyEl) qtyEl.value = it.qty || 1;
+                if (uomEl) _matchUomOption(uomEl, it.unit);
                 const listEl = tr.querySelector('.autocomplete-list');
                 if (listEl) listEl.classList.add('hidden');
+            }
+
+            if (tidakKetemu > 0) {
+                showToastAlert('warning', 'Sebagian Item Tidak Ketemu Persis',
+                    `${tidakKetemu} dari ${parsedItems.length} item tidak ketemu persis di sheet "LIST" — nama tetap diisi apa adanya dari Delivery Details, cek & sesuaikan manual.`);
             }
 
             if (mode === 'RO') {
