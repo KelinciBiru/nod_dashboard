@@ -24309,6 +24309,297 @@
     </style>
 
     <!-- ═══════════════════════════════════════════════════════════════════
+         DECK BAR (HP) — PENYEMPURNAAN TAMPILAN
+         ---------------------------------------------------------------------
+         Blok TAMBAHAN murni CSS untuk topbar yang dipindah ke dasar layar
+         ("deck bar"). Tidak mengubah HTML/JS: id, onclick, dan perilaku
+         tombol (back/hamburger, judul, notifikasi, badge role, logout) sama.
+         Ditaruh PALING AKHIR dokumen + memakai !important & spesifisitas
+         lebih tinggi, karena beberapa aturan lama saling menimpa:
+           • "header.flex-shrink-0" (neumorphic) mematikan box-shadow & border
+             deck lama → deck tampak datar.
+           • "#app-container header {blur(2px)}" di blok style paling akhir
+             menimpa blur 16px → efek kaca hilang.
+           • Judul max 46vw + gap-3 + tombol logout ber-padding → total lebar
+             melebihi deck → logout / badge role KELUAR dari area deck.
+           • ".hidden" Tailwind kalah oleh "#app-container>header button
+             {display:inline-flex}" → bell yang harusnya disembunyikan JS
+             (role tertentu) tetap tampil dan memakan ruang.
+         Cara kembali ke tampilan lama: hapus seluruh blok style ini. -->
+    <style id="mobile-deck-bar-premium">
+        @media (max-width: 767px) {
+
+            /* Bottom nav lama (Home/Notifikasi/Menu) tertutup penuh oleh deck
+                 bar (z-index 45) sehingga tak bisa ditekan, dan hanya menyisakan
+                 pita abu-abu + bayangan di belakang deck. Fungsinya sudah ada di
+                 deck bar (home/back, notifikasi) dan halaman Dashboard. */
+            #mobile-bottom-nav {
+                display: none !important;
+            }
+
+            /* ---------- Token ukuran (satu tempat untuk mengatur skala) ---------- */
+            #app-container>header.flex-shrink-0 {
+                --deck-tile: 2.5rem;
+                /* tombol ikon: 40px */
+                --deck-gap: .5rem;
+                --deck-ink: #0f1f3d;
+                --deck-hair: rgba(15, 31, 61, .08);
+            }
+
+            /* ---------- 1. Dock: kaca tipis, cincin halus, bayangan berlapis ---------- */
+            #app-container>header.flex-shrink-0 {
+                position: fixed !important;
+                top: auto !important;
+                bottom: calc(env(safe-area-inset-bottom, 0px) + .7rem) !important;
+                left: max(.6rem, env(safe-area-inset-left, 0px)) !important;
+                right: max(.6rem, env(safe-area-inset-right, 0px)) !important;
+                width: auto !important;
+                max-width: 36rem !important;
+                margin-left: auto !important;
+                /* di layar lebar (mis. HP landscape) dock tetap  */
+                margin-right: auto !important;
+                /* di tengah, tidak melar sampai ke tepi          */
+                box-sizing: border-box !important;
+                height: 3.75rem !important;
+                min-height: 3.75rem !important;
+                padding: 0 .5rem !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                gap: var(--deck-gap) !important;
+                border-radius: 1.5rem !important;
+                border: 1px solid rgba(255, 255, 255, .8) !important;
+                background: linear-gradient(180deg, rgba(255, 255, 255, .97) 0%, rgba(243, 246, 251, .95) 100%) !important;
+                -webkit-backdrop-filter: saturate(180%) blur(18px) !important;
+                backdrop-filter: saturate(180%) blur(18px) !important;
+                box-shadow:
+                    0 0 0 1px var(--deck-hair),
+                    0 1px 0 rgba(255, 255, 255, .95) inset,
+                    0 22px 40px -20px rgba(15, 31, 61, .42),
+                    0 6px 14px -6px rgba(15, 31, 61, .16) !important;
+                z-index: 45 !important;
+                overflow: visible !important;
+                /* JANGAN clip: #notif-popup (fixed) hidup di dalam header */
+            }
+
+            /* Plat kedua yang mengintip di bawah dock = "tumpukan deck".
+                 Seluruhnya di LUAR kotak dock (tinggi 6px, mulai dari tepi bawah)
+                 supaya tidak menimbulkan pita gelap di dalam dock. */
+            #app-container>header.flex-shrink-0::after {
+                content: "";
+                position: absolute;
+                left: 9%;
+                right: 9%;
+                top: 100%;
+                bottom: auto;
+                height: 6px;
+                border-radius: 0 0 1.1rem 1.1rem;
+                background: linear-gradient(180deg, rgba(226, 232, 242, .95), rgba(214, 222, 235, .85));
+                box-shadow: 0 0 0 1px rgba(15, 31, 61, .05), 0 8px 12px -8px rgba(15, 31, 61, .3);
+                z-index: -1;
+                pointer-events: none;
+            }
+
+            /* ---------- 2. Anti-overflow: dua zona yang boleh menyusut ---------- */
+            /* Kiri (tombol + judul) fleksibel & boleh menyusut sampai 0. */
+            #app-container>header.flex-shrink-0>div:first-child {
+                flex: 1 1 auto !important;
+                min-width: 0 !important;
+                gap: .5rem !important;
+            }
+
+            /* Kanan (bell + badge + logout): TIDAK menyusut. Yang mengalah lebih
+                 dulu adalah judul (di kiri, di-clamp 2 baris). Badge role hanya
+                 dibatasi lebar maksimumnya (elipsis untuk nama driver yang panjang).
+                 Garis pemisah tipis memisahkan judul dari zona aksi. */
+            #app-container>header.flex-shrink-0>div:nth-child(2) {
+                flex: 0 0 auto !important;
+                gap: .4rem !important;
+            }
+
+            #app-container>header.flex-shrink-0>div:nth-child(2)::before {
+                content: "";
+                flex: none;
+                width: 1px;
+                height: 1.5rem;
+                margin-right: -.15rem;
+                background: var(--deck-hair);
+            }
+
+            /* Elemen yang oleh JS diberi class "hidden" harus BENAR-BENAR hilang
+                 (aturan display:inline-flex pada tombol header mengalahkan .hidden). */
+            #app-container>header .hidden {
+                display: none !important;
+            }
+
+            /* ---------- 3. Judul: 1–2 baris, tidak pernah mendorong tombol ---------- */
+            #app-container>header #page-title {
+                flex: 1 1 auto !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                display: -webkit-box !important;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                line-clamp: 2;
+                overflow: hidden !important;
+                white-space: normal !important;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+                /* cadangan Safari lama */
+                font-size: clamp(.78rem, 3.5vw, .875rem) !important;
+                font-weight: 700 !important;
+                line-height: 1.2 !important;
+                letter-spacing: -.005em !important;
+                color: var(--deck-ink) !important;
+            }
+
+            /* ---------- 4. Tombol ikon: ubin seragam (back, bell, logout) ---------- */
+            /* Hanya 3 tombol deck — BUKAN semua "button" di dalam header, karena
+                 #notif-popup (dengan isi dinamis) juga hidup di dalam <header>. */
+            #app-container>header #sidebar-toggle,
+            #app-container>header #notif-bell-btn,
+            #app-container>header button[onclick^="logout"] {
+                flex: 0 0 auto !important;
+                width: var(--deck-tile) !important;
+                height: var(--deck-tile) !important;
+                min-width: var(--deck-tile) !important;
+                min-height: var(--deck-tile) !important;
+                padding: 0 !important;
+                border-radius: .95rem !important;
+                transition: transform .12s ease, box-shadow .12s ease;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            #app-container>header #sidebar-toggle,
+            #app-container>header #notif-bell-btn {
+                color: var(--deck-ink) !important;
+                background: linear-gradient(180deg, #ffffff 0%, #eef2f8 100%) !important;
+                border: 1px solid var(--deck-hair) !important;
+                box-shadow: 0 1px 0 rgba(255, 255, 255, .95) inset, 0 5px 10px -6px rgba(15, 31, 61, .35) !important;
+            }
+
+            #app-container>header #sidebar-toggle:active,
+            #app-container>header #notif-bell-btn:active {
+                background: #e9eef6 !important;
+                box-shadow: inset 0 2px 5px rgba(15, 31, 61, .18) !important;
+                transform: scale(.96);
+            }
+
+            /* Logout: tinted merah lembut — jelas sebagai aksi keluar, tidak berteriak */
+            #app-container>header button[onclick^="logout"] {
+                color: #d12b2b !important;
+                background: linear-gradient(180deg, #fff7f7 0%, #ffeaea 100%) !important;
+                border: 1px solid rgba(209, 43, 43, .22) !important;
+                box-shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 5px 10px -6px rgba(209, 43, 43, .35) !important;
+            }
+
+            #app-container>header button[onclick^="logout"]:active {
+                background: #ffe1e1 !important;
+                box-shadow: inset 0 2px 5px rgba(209, 43, 43, .2) !important;
+                transform: scale(.96);
+            }
+
+            #app-container>header #sidebar-toggle svg,
+            #app-container>header #notif-bell-btn svg,
+            #app-container>header button[onclick^="logout"] svg {
+                flex: none;
+            }
+
+            /* Titik notifikasi: diberi cincin supaya tetap terbaca di atas ubin */
+            #app-container>header #notif-bell-dot {
+                top: .5rem !important;
+                right: .55rem !important;
+                width: .55rem !important;
+                height: .55rem !important;
+                box-shadow: 0 0 0 2px #f4f7fb;
+            }
+
+            /* ---------- 5. Badge role: pil amber, menyusut dengan elipsis ---------- */
+            #app-container>header #user-role-badge {
+                flex: 0 1 auto !important;
+                min-width: 0 !important;
+                max-width: min(6.25rem, 24vw) !important;
+                box-sizing: border-box;
+                height: 1.85rem;
+                padding: 0 .65rem !important;
+                line-height: calc(1.85rem - 2px) !important;
+                font-size: .72rem !important;
+                font-weight: 700 !important;
+                letter-spacing: .01em;
+                color: #874f00 !important;
+                background: linear-gradient(180deg, #fff9e8 0%, #ffefc4 100%) !important;
+                border: 1px solid rgba(217, 119, 6, .3);
+                border-radius: 9999px !important;
+                box-shadow: 0 1px 0 rgba(255, 255, 255, .85) inset;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #app-container>header #user-role-badge:not(.hidden) {
+                display: block !important;
+            }
+
+            /* ---------- 6. Keyboard / a11y ---------- */
+            #app-container>header #sidebar-toggle:focus-visible,
+            #app-container>header #notif-bell-btn:focus-visible,
+            #app-container>header button[onclick^="logout"]:focus-visible {
+                outline: 2px solid #f59e0b;
+                outline-offset: 2px;
+            }
+
+            /* ---------- 7. Ruang aman untuk konten di belakang dock ---------- */
+            #content-area {
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.75rem) !important;
+            }
+        }
+
+        /* HP standar (≤ 420px): badge role sedikit lebih ringkas supaya judul
+             halaman punya ruang lebih (tanpa membuang teks role-nya). */
+        @media (max-width: 420px) {
+            #app-container>header #user-role-badge {
+                padding: 0 .5rem !important;
+                font-size: .68rem !important;
+            }
+        }
+
+        /* HP sempit (≤ 359px, mis. iPhone SE 1): ubin & jarak dirapatkan sedikit */
+        @media (max-width: 359px) {
+            #app-container>header.flex-shrink-0 {
+                --deck-tile: 2.25rem;
+                --deck-gap: .35rem;
+                padding: 0 .4rem !important;
+            }
+
+            #app-container>header.flex-shrink-0>div:first-child {
+                gap: .4rem !important;
+            }
+
+            #app-container>header.flex-shrink-0>div:nth-child(2) {
+                gap: .3rem !important;
+            }
+
+            #app-container>header.flex-shrink-0>div:nth-child(2)::before {
+                display: none;
+            }
+
+            #app-container>header #user-role-badge {
+                max-width: 24vw !important;
+                padding: 0 .5rem !important;
+            }
+        }
+
+        @media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+            #app-container>header #sidebar-toggle,
+            #app-container>header #notif-bell-btn,
+            #app-container>header button[onclick^="logout"] {
+                transition: none !important;
+            }
+        }
+    </style>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
          FITUR: karakter mascot login kiri (duduk) jadi interaktif — klik
          untuk beralih pose ke versi berdiri (menyapa lalu menyajikan kopi),
          transisi antar pose pakai crossfade opacity yang smooth (bukan
