@@ -2532,11 +2532,31 @@
         })();
 
         // Fetch with configurable timeout (default 15 detik)
+        // [FIX KEAMANAN] Endpoint GET (?action=...) di semua backend GAS aplikasi
+        // ini sebelumnya bisa dipanggil TANPA token sama sekali (siapa saja yang
+        // tahu URL web app-nya bisa baca data PO/Retur/lokasi driver dst tanpa
+        // login). Sekarang token sesi ikut disisipkan otomatis ke URL untuk setiap
+        // request GET yang menuju backend GAS aplikasi sendiri (script.google.com)
+        // dan belum membawa token — supaya backend bisa memvalidasinya (lihat
+        // checkAccess() versi doGet yang baru di Code.gs). Request POST TIDAK
+        // disentuh (token-nya sudah dikirim lewat body JSON seperti biasa), dan
+        // fetch ke domain lain (kalau ada) juga tidak disentuh.
+        function _withGasAuthToken(url, options) {
+            const method = (options && options.method ? String(options.method) : 'GET').toUpperCase();
+            if (method !== 'GET') return url;
+            if (typeof url !== 'string' || !url.includes('script.google.com')) return url;
+            if (/[?&]token=/.test(url)) return url; // sudah ada token eksplisit, jangan timpa
+            if (!sessionToken) return url; // belum login (mis. sebelum sessionToken terisi) — biarkan backend yang menolak
+            const sep = url.includes('?') ? '&' : '?';
+            return url + sep + 'token=' + encodeURIComponent(sessionToken);
+        }
+
         async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeoutMs);
             try {
-                const res = await fetch(url, { ...options, signal: controller.signal, redirect: 'follow' });
+                const authedUrl = _withGasAuthToken(url, options);
+                const res = await fetch(authedUrl, { ...options, signal: controller.signal, redirect: 'follow' });
                 return res;
             } finally {
                 clearTimeout(id);
