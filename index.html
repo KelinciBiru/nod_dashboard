@@ -2590,7 +2590,12 @@
         function fetchPDFWithProgress(url, timeoutMs, onProgress) {
             return new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                xhr.open('GET', url, true);
+                // [FIX TOKEN] XHR TIDAK lewat fetchWithTimeout(), jadi token sesi
+                // tidak otomatis ikut ke URL. Sejak backend GAS mewajibkan token
+                // di doGet (FIX KEAMANAN), tarik PDF dari Google Drive (Process PO
+                // & Receive PO) gagal "Sesi tidak valid ... token TIDAK terkirim".
+                // Sisipkan token lewat helper yang sama dengan fetchWithTimeout.
+                xhr.open('GET', _withGasAuthToken(url, { method: 'GET' }), true);
                 xhr.timeout = timeoutMs;
                 xhr.onprogress = (e) => {
                     if (typeof onProgress === 'function') {
