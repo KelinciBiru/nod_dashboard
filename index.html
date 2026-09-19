@@ -344,27 +344,73 @@
             color: #374151; font-size: .75rem; font-weight: 700; cursor: pointer;
         }
         .rq-more-btn:hover { background: #f9fafb; }
-        /* [ADDON — add Form PO / add Form RO dari Request B2B/B2C] */
-        .rq-add-btn {
-            padding: .5rem 1rem; border-radius: .75rem; font-size: .75rem; font-weight: 700;
-            cursor: pointer; border: 1px solid transparent; white-space: nowrap; transition: background .15s;
+        /* ── add Form PO / add Form RO: tombol, checklist, preview ── */
+        .rq-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+        .rq-btn {
+            padding: .5rem 1rem; border-radius: .75rem; border: 1px solid transparent;
+            font-size: .75rem; font-weight: 700; line-height: 1.25; cursor: pointer;
+            transition: background-color .15s, box-shadow .15s;
         }
-        .rq-add-btn-po { background: #f59e0b; color: #fff; }
-        .rq-add-btn-po:hover { background: #d97706; }
-        .rq-add-btn-ro { background: #4f46e5; color: #fff; }
-        .rq-add-btn-ro:hover { background: #4338ca; }
-        .rq-add-btn-cancel { background: #fff; color: #374151; border-color: #e5e7eb; }
-        .rq-add-btn-cancel:hover { background: #f9fafb; }
-        .rq-check-col { width: 40px; text-align: center; }
-        .rq-select-checkbox { width: 1rem; height: 1rem; accent-color: #4f46e5; cursor: pointer; }
-        .rq-selection-bar {
-            position: sticky; bottom: 0; z-index: 30; display: flex; align-items: center;
-            justify-content: space-between; gap: .75rem; flex-wrap: wrap;
-            background: #111827; color: #fff; padding: .75rem 1.25rem; border-radius: .75rem;
-            box-shadow: 0 -4px 14px rgba(0,0,0,.15); margin-top: -0.5rem; margin-bottom: 1.5rem;
+        .rq-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .rq-btn-po { background: #f59e0b; color: #fff; }
+        .rq-btn-po:hover:not(:disabled) { background: #d97706; }
+        .rq-btn-ro { background: #4f46e5; color: #fff; }
+        .rq-btn-ro:hover:not(:disabled) { background: #4338ca; }
+        .rq-btn-ghost { background: #fff; color: #374151; border-color: #e5e7eb; }
+        .rq-btn-ghost:hover:not(:disabled) { background: #f9fafb; }
+        .rq-btn-active { box-shadow: 0 0 0 3px rgba(17, 24, 39, .25); }
+        .rq-modebar {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem;
+            padding: .75rem 1rem; border-radius: .75rem; margin-bottom: 1rem; font-size: .8125rem;
         }
-        .rq-selection-bar .rq-selection-count { font-size: .8rem; font-weight: 700; }
-        .rq-row-checked { background: #eef2ff !important; }
+        .rq-modebar-po { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+        .rq-modebar-ro { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
+        .rq-check-col { width: 2.75rem; text-align: center; }
+        .rq-check { width: 1.15rem; height: 1.15rem; cursor: pointer; accent-color: #f59e0b; }
+        tr.rq-row-selected { background: #fffbeb; }
+        .rq-chip {
+            display: inline-block; padding: .1rem .55rem; border-radius: 9999px; background: #fef3c7;
+            border: 1px solid #fde68a; color: #92400e; font-size: .6875rem; font-weight: 700; vertical-align: middle;
+        }
+        .rq-preview {
+            background: #fff; border: 1px solid #fde68a; border-radius: 1rem; overflow: hidden;
+            box-shadow: 0 1px 2px rgba(0,0,0,.05); margin-bottom: 1rem;
+        }
+        .rq-preview-ro { border-color: #c7d2fe; }
+        .rq-preview-head {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem;
+            padding: .75rem 1rem; background: #fffbeb; font-size: .875rem; color: #374151;
+        }
+        .rq-preview-ro .rq-preview-head { background: #eef2ff; }
+        .rq-preview-scroll { max-height: 18rem; overflow: auto; }
+
+        /* ── banner antrian + preview DELIVERY DETAILS di Form PO / Form RO ── */
+        .b2b-queue {
+            max-width: 56rem; margin: 0 auto 1rem; padding: .75rem 1rem; border-radius: .75rem;
+            background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: .8125rem;
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem;
+        }
+        .b2b-queue-note { margin-top: .25rem; font-size: .75rem; color: #a16207; }
+        .b2b-smart {
+            max-width: 56rem; margin: 1.5rem auto 0; padding: 1.5rem; background: #fff;
+            border: 1px solid #e5e7eb; border-radius: .5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,.1);
+        }
+        .b2b-smart-title { font-size: 1.125rem; font-weight: 700; color: #374151; margin-bottom: .25rem; }
+        .b2b-smart-sub { font-size: .75rem; color: #6b7280; margin-bottom: .75rem; }
+        .b2b-raw {
+            white-space: pre-wrap; overflow-wrap: anywhere; background: #f9fafb; border: 1px solid #e5e7eb;
+            border-radius: .5rem; padding: .75rem; font-size: .8125rem; color: #374151; max-height: 10rem; overflow: auto; margin-bottom: .75rem;
+        }
+        .b2b-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+        .b2b-smart-table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+        .b2b-smart-table th { background: #1f2937; color: #fff; text-align: left; padding: .5rem; font-weight: 600; white-space: nowrap; }
+        .b2b-smart-table td { padding: .5rem; border-top: 1px solid #f3f4f6; vertical-align: top; color: #374151; }
+        .b2b-cell-raw { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 10rem; }
+        .b2b-row-ign td { color: #9ca3af; }
+        .b2b-qty { white-space: nowrap; text-align: center; font-weight: 600; }
+        .b2b-hint { font-size: .6875rem; font-weight: 400; color: #9ca3af; }
+        .b2b-hint-warn { color: #b45309; }
+        .b2b-alt { width: 100%; min-width: 14rem; padding: .4rem; border: 1px solid #d1d5db; border-radius: .5rem; background: #fff; font-size: .75rem; }
     </style>
 
     <!-- [FIX PERF LOGIN — Agustus 2026] Semua library berat di bawah ini TIDAK dipakai
@@ -6973,8 +7019,8 @@
             _requestB2BB2CType = type;
             _requestB2BB2CRows = [];
             _requestB2BB2CLimit = RQ_PAGE_SIZE;
-            _rqSelectionMode = null;
-            _rqSelection = new Map();
+            _rqMode = null;               // keluar dari mode checklist tiap kali halaman dibuka ulang
+            _rqSelected = new Map();
 
             const headCells = cfg.cols.map(c =>
                 `<th class="px-4 py-3 text-left font-semibold whitespace-nowrap">${escapeHtml(c.label)}</th>`).join('');
@@ -6982,18 +7028,19 @@
             document.getElementById('content-area').innerHTML = `
             <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
                 <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700">${escapeHtml(cfg.title)}</h1>
-                <div class="flex items-center gap-2 flex-wrap justify-end">
-                    <button id="rq-add-po-btn" onclick="startRqSelection('PO')" class="rq-add-btn rq-add-btn-po">+ Form PO</button>
-                    <button id="rq-add-ro-btn" onclick="startRqSelection('RO')" class="rq-add-btn rq-add-btn-ro">+ Form RO</button>
-                    <button id="rq-cancel-selection-btn" onclick="cancelRqSelection()" class="hidden rq-add-btn rq-add-btn-cancel">Batal</button>
-                    <button id="rq-refresh-btn" onclick="loadRequestB2BB2C(_requestB2BB2CType)"
-                        class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold shadow-sm transition">
-                        ⟳ Refresh
-                    </button>
-                </div>
+                <button id="rq-refresh-btn" onclick="loadRequestB2BB2C(_requestB2BB2CType)"
+                    class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold shadow-sm transition">
+                    ⟳ Refresh
+                </button>
             </div>
             <p class="text-sm text-gray-500 mb-4">Data dari sheet "${escapeHtml(cfg.sheetName)}" (spreadsheet "Purchase Order nod."). Remaining dihitung dari kolom DATE sampai hari ini.</p>
-            <p id="rq-selection-hint" class="hidden text-sm text-indigo-600 font-semibold mb-4"></p>
+
+            <div class="rq-actions" style="margin-bottom:1rem">
+                <button id="rq-btn-add-po" class="rq-btn rq-btn-po" onclick="rqStartAddMode('PO')">add Form PO</button>
+                <button id="rq-btn-add-ro" class="rq-btn rq-btn-ro" onclick="rqStartAddMode('RO')">add Form RO</button>
+            </div>
+            <div id="rq-modebar" class="hidden"></div>
+            <div id="rq-preview" class="hidden"></div>
 
             <div class="rq-toolbar">
                 <div class="rq-search-wrap">
@@ -7015,7 +7062,7 @@
                 <h2 class="text-base font-bold text-gray-700">${escapeHtml(cfg.sheetName)}</h2>
                 <span id="rq-count" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">0 data</span>
             </div>
-            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
@@ -7033,12 +7080,6 @@
                 </div>
                 <div id="rq-more-wrap" class="rq-more-wrap hidden">
                     <button class="rq-more-btn" onclick="showMoreRequestB2BB2C()">Tampilkan lebih banyak</button>
-                </div>
-            </div>
-            <div id="rq-selection-bar" class="rq-selection-bar hidden mb-8">
-                <span class="rq-selection-count"><span id="rq-selection-count-num">0</span> data dicentang</span>
-                <div class="flex items-center gap-2 flex-wrap">
-                    <button onclick="showRqPreviewModal()" class="rq-add-btn bg-white/10 hover:bg-white/20 text-white">Lihat Preview Checklist</button>
                 </div>
             </div>`;
 
@@ -7078,6 +7119,7 @@
                 });
                 _requestB2BB2CRows = rows;
                 _requestB2BB2CLimit = RQ_PAGE_SIZE;
+                _rqSyncSelectionAfterLoad();
 
                 // Isi dropdown filter STATUS ORDER dari data (pertahankan pilihan yang sedang aktif).
                 const sel = document.getElementById('rq-status-filter');
@@ -7097,7 +7139,7 @@
                 if (mySeq !== _requestB2BB2CLoadSeq || _requestB2BB2CType !== type) return;
                 const cur = document.getElementById('rq-tbody');
                 if (cur) {
-                    cur.innerHTML = `<tr><td colspan="${_rqColCount(cfg)}" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                    cur.innerHTML = `<tr><td colspan="${cfg.cols.length}" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
                 }
                 const countEl = document.getElementById('rq-count');
                 if (countEl) countEl.textContent = '0 data';
@@ -7118,166 +7160,202 @@
             renderRequestB2BB2C();
         }
 
-        // =========================================================================
-        // [ADDON — "add Form PO" / "add Form RO" dari Request B2B/B2C]
-        // Mengubah tabel B2B_Data/B2C_Data jadi mode checklist (checkbox), dibatasi
-        // hanya menampilkan baris yang eligible sesuai tombol yang diklik:
-        //   - "add Form PO" -> ACTION PLAN "Delivery" / "Machine Exchange" DAN STATUS
-        //     ORDER masih kosong.
-        //   - "add Form RO" -> ACTION PLAN "Machine Withdrawal" DAN STATUS ORDER
-        //     masih kosong.
-        // Baris yang dicentang bisa dilihat di modal "Preview Checklist" (hanya
-        // menampilkan LOCATION NAME & DELIVERY DETAILS), lalu tombol "Add" di modal
-        // itu mengirim semua baris tercentang ke Form PO/Form RO sekaligus:
-        //   - Header form (PIC/Ordered By, Ship To/From Location, Alamat, No.
-        //     Telepon) diisi dari baris PERTAMA yang dicentang (urutan klik).
-        //   - Semua DELIVERY DETAILS baris tercentang digabung lalu dicocokkan ke
-        //     sheet "LIST" (reuse mesin parsing/pencocokan Import FAS yang sudah
-        //     ada: _parseFasImportItems + _lookupItemByNamaBarang) untuk mengisi
-        //     tabel Detail Item secara otomatis.
-        // =========================================================================
-        let _rqSelectionMode = null;       // null | 'PO' | 'RO'
-        let _rqSelection = new Map();      // rowKey (String(_row)) -> row object
-
-        const RQ_PO_ACTION_PLANS = ['Delivery', 'Machine Exchange'];
-        const RQ_RO_ACTION_PLANS = ['Machine Withdrawal'];
-
-        /** True kalau baris `r` boleh dicentang untuk mode saat ini (PO/RO). */
-        function _rqIsEligibleForMode(r, mode) {
-            if (r.statusOrder) return false; // wajib "belum ada status"
-            const plans = mode === 'RO' ? RQ_RO_ACTION_PLANS : RQ_PO_ACTION_PLANS;
-            return plans.includes(String(r.actionPlan || '').trim());
-        }
-
-        /** Jumlah kolom tabel saat ini (dipakai untuk colspan baris info/loading/error). */
-        function _rqColCount(cfg) {
-            return cfg.cols.length + (_rqSelectionMode ? 1 : 0);
-        }
-
-        /** Bangun ulang header tabel (<tr id="rq-thead-row">) sesuai mode saat ini. */
-        function _rqRebuildThead() {
-            const cfg = REQUEST_B2BB2C_CONFIG[_requestB2BB2CType];
-            const theadRow = document.getElementById('rq-thead-row');
-            if (!cfg || !theadRow) return;
-            const checkTh = _rqSelectionMode ? '<th class="px-2 py-3 rq-check-col"></th>' : '';
-            const headCells = cfg.cols.map(c =>
-                `<th class="px-4 py-3 text-left font-semibold whitespace-nowrap">${escapeHtml(c.label)}</th>`).join('');
-            theadRow.innerHTML = checkTh + headCells;
-        }
-
-        /** Mulai mode checklist untuk mengirim data Request B2B/B2C ke Form PO ('PO') atau Form RO ('RO'). */
-        function startRqSelection(mode) {
-            _rqSelectionMode = mode;
-            _rqSelection = new Map();
-            _rqRebuildThead();
-
-            const addPoBtn = document.getElementById('rq-add-po-btn');
-            const addRoBtn = document.getElementById('rq-add-ro-btn');
-            const cancelBtn = document.getElementById('rq-cancel-selection-btn');
-            const bar = document.getElementById('rq-selection-bar');
-            const hint = document.getElementById('rq-selection-hint');
-            const statusFilterEl = document.getElementById('rq-status-filter');
-            if (addPoBtn) addPoBtn.classList.add('hidden');
-            if (addRoBtn) addRoBtn.classList.add('hidden');
-            if (cancelBtn) cancelBtn.classList.remove('hidden');
-            if (bar) bar.classList.remove('hidden');
-            if (statusFilterEl) { statusFilterEl.value = ''; statusFilterEl.disabled = true; }
-            if (hint) {
-                hint.classList.remove('hidden');
-                hint.textContent = mode === 'RO'
-                    ? 'Mode add Form RO: hanya menampilkan data dengan ACTION PLAN "Machine Withdrawal" & STATUS ORDER kosong. Centang data yang ingin dikirim.'
-                    : 'Mode add Form PO: hanya menampilkan data dengan ACTION PLAN "Delivery"/"Machine Exchange" & STATUS ORDER kosong. Centang data yang ingin dikirim.';
-            }
-            updateRqSelectionBar();
-            renderRequestB2BB2C();
-        }
-
-        /** Batalkan mode checklist, kembali ke tampilan tabel normal. */
-        function cancelRqSelection() {
-            _rqSelectionMode = null;
-            _rqSelection = new Map();
-            _rqRebuildThead();
-
-            const addPoBtn = document.getElementById('rq-add-po-btn');
-            const addRoBtn = document.getElementById('rq-add-ro-btn');
-            const cancelBtn = document.getElementById('rq-cancel-selection-btn');
-            const bar = document.getElementById('rq-selection-bar');
-            const hint = document.getElementById('rq-selection-hint');
-            const statusFilterEl = document.getElementById('rq-status-filter');
-            if (addPoBtn) addPoBtn.classList.remove('hidden');
-            if (addRoBtn) addRoBtn.classList.remove('hidden');
-            if (cancelBtn) cancelBtn.classList.add('hidden');
-            if (bar) bar.classList.add('hidden');
-            if (statusFilterEl) statusFilterEl.disabled = false;
-            if (hint) hint.classList.add('hidden');
-            renderRequestB2BB2C();
-        }
-
-        /** Dipanggil saat checkbox pada satu baris tabel Request B2B/B2C dicentang/dilepas. */
-        function toggleRqRowCheck(checkboxEl) {
-            const rowKey = checkboxEl.dataset.rowkey;
-            const tr = checkboxEl.closest('tr');
-            if (checkboxEl.checked) {
-                const row = _requestB2BB2CRows.find(r => String(r._row) === rowKey);
-                if (row) _rqSelection.set(rowKey, row);
-                if (tr) tr.classList.add('rq-row-checked');
-            } else {
-                _rqSelection.delete(rowKey);
-                if (tr) tr.classList.remove('rq-row-checked');
-            }
-            updateRqSelectionBar();
-        }
-
-        /** Perbarui angka & status tombol pada bar checklist di bawah tabel. */
-        function updateRqSelectionBar() {
-            const numEl = document.getElementById('rq-selection-count-num');
-            if (numEl) numEl.textContent = String(_rqSelection.size);
-        }
-
         function renderRequestB2BB2C() {
-            const cfg = REQUEST_B2BB2C_CONFIG[_requestB2BB2CType];
-            const tbody = document.getElementById('rq-tbody');
-            if (!cfg || !tbody) return;
+            _rqRenderTable();
+            _rqSyncModeUi();
+        }
 
+        // =========================================================================
+        // FITUR "add Form PO" / "add Form RO" — halaman Request B2B & Request B2C
+        //   - "add Form PO": tabel jadi checklist, hanya baris ber-Action Plan
+        //     "Delivery" / "Machine Exchange" yang STATUS ORDER-nya masih kosong.
+        //   - "add Form RO": tabel jadi checklist, hanya baris ber-Action Plan
+        //     "Machine Withdrawal" yang STATUS ORDER-nya masih kosong.
+        //   - Baris yang dicentang tampil di kotak Preview (Location Name +
+        //     DELIVERY DETAILS) berikut tombol "Add" yang mengirim datanya ke
+        //     Form PO / Form RO (mapping kolom: lihat _b2bBuildHeader()).
+        //   - Kalau yang dicentang lebih dari satu, datanya jadi antrian: Form PO/RO
+        //     terisi satu per satu (banner "Data 1/3" + tombol Sebelumnya/Berikutnya,
+        //     otomatis lanjut ke data berikutnya setelah PO/RO berhasil dikirim).
+        // =========================================================================
+        const RQ_MODE_CONFIG = {
+            PO: { btn: 'add Form PO', plans: ['delivery', 'machine exchange'], plansLabel: 'Delivery & Machine Exchange', formLabel: 'Form PO' },
+            RO: { btn: 'add Form RO', plans: ['machine withdrawal'], plansLabel: 'Machine Withdrawal', formLabel: 'Form RO' }
+        };
+        const B2B_SHIPTO_SEPARATOR = ' - ';                        // pemisah "Location Name" + "SITE PIC"
+        const B2B_RO_SHIPTO = 'Jumpstart Warehouse Pulogadung';   // Ship To otomatis di Form RO (sama dgn shortcut "WH PG")
+
+        let _rqMode = null;               // null | 'PO' | 'RO'
+        let _rqSelected = new Map();      // nomor baris sheet (_row) -> objek baris yang dicentang
+
+        function _rqNormPlan(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+        /** Baris layak masuk checklist: STATUS ORDER kosong & Action Plan sesuai mode. */
+        function _rqRowMatchesMode(r, mode) {
+            const cfg = RQ_MODE_CONFIG[mode];
+            if (!cfg) return false;
+            if (String(r.statusOrder || '').trim()) return false;
+            const parts = String(r.actionPlan || '').split(/[,;\/+&\n]+/).map(_rqNormPlan).filter(Boolean);
+            return parts.some(p => cfg.plans.includes(p));
+        }
+
+        function _rqGetFiltered() {
             const searchEl = document.getElementById('rq-search');
             const statusEl = document.getElementById('rq-status-filter');
-            const clearBtn = document.getElementById('rq-search-clear');
             const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
             const st = statusEl ? statusEl.value : '';
-            if (clearBtn) clearBtn.classList.toggle('hidden', !q);
-
-            const colCount = _rqColCount(cfg);
-
             const filtered = _requestB2BB2CRows.filter(r => {
-                if (_rqSelectionMode) return _rqIsEligibleForMode(r, _rqSelectionMode) && (!q || (r._search || '').includes(q));
-                if (st === RQ_EMPTY_STATUS) { if (r.statusOrder) return false; }
+                if (_rqMode) { if (!_rqRowMatchesMode(r, _rqMode)) return false; }
+                else if (st === RQ_EMPTY_STATUS) { if (r.statusOrder) return false; }
                 else if (st && r.statusOrder !== st) return false;
                 return !q || (r._search || '').includes(q);
             });
+            return { q, st, filtered, visible: filtered.slice(0, _requestB2BB2CLimit) };
+        }
+
+        function rqStartAddMode(mode) {
+            if (currentUserRole !== 'ADMIN') { showAlert('error', 'Akses Ditolak', 'Fitur ini hanya dapat diakses oleh Admin.'); return; }
+            if (!RQ_MODE_CONFIG[mode]) return;
+            if (_rqMode === mode) { rqCancelAddMode(); return; }   // klik tombol yang sedang aktif = batal
+            _rqMode = mode;
+            _rqSelected = new Map();
+            _requestB2BB2CLimit = RQ_PAGE_SIZE;
+            renderRequestB2BB2C();
+        }
+
+        function rqCancelAddMode() {
+            _rqMode = null;
+            _rqSelected = new Map();
+            _requestB2BB2CLimit = RQ_PAGE_SIZE;
+            renderRequestB2BB2C();
+        }
+
+        function rqClearSelection() {
+            _rqSelected = new Map();
+            document.querySelectorAll('#rq-tbody input.rq-check').forEach(cb => {
+                cb.checked = false;
+                const tr = cb.closest('tr'); if (tr) tr.classList.remove('rq-row-selected');
+            });
+            _rqRenderPreview();
+            _rqSyncHeaderCheck();
+        }
+
+        function rqToggleRow(cb) {
+            const rowNo = parseInt(cb.dataset.row, 10);
+            const r = _requestB2BB2CRows.find(x => x._row === rowNo);
+            if (!r) return;
+            if (cb.checked) _rqSelected.set(rowNo, r); else _rqSelected.delete(rowNo);
+            const tr = cb.closest('tr'); if (tr) tr.classList.toggle('rq-row-selected', cb.checked);
+            _rqRenderPreview();
+            _rqSyncHeaderCheck();
+        }
+
+        function rqToggleAllVisible(checked) {
+            const { visible } = _rqGetFiltered();
+            visible.forEach(r => { if (checked) _rqSelected.set(r._row, r); else _rqSelected.delete(r._row); });
+            document.querySelectorAll('#rq-tbody input.rq-check').forEach(cb => {
+                cb.checked = checked;
+                const tr = cb.closest('tr'); if (tr) tr.classList.toggle('rq-row-selected', checked);
+            });
+            _rqRenderPreview();
+        }
+
+        function _rqSyncHeaderCheck() {
+            const all = document.getElementById('rq-check-all');
+            if (!all) return;
+            const { visible } = _rqGetFiltered();
+            const n = visible.filter(r => _rqSelected.has(r._row)).length;
+            all.checked = visible.length > 0 && n === visible.length;
+            all.indeterminate = n > 0 && n < visible.length;
+        }
+
+        /** Tombol aktif + bar keterangan mode + kotak preview checklist. */
+        function _rqSyncModeUi() {
+            const cfg = RQ_MODE_CONFIG[_rqMode];
+            const btnPo = document.getElementById('rq-btn-add-po');
+            const btnRo = document.getElementById('rq-btn-add-ro');
+            if (btnPo) btnPo.classList.toggle('rq-btn-active', _rqMode === 'PO');
+            if (btnRo) btnRo.classList.toggle('rq-btn-active', _rqMode === 'RO');
+            const bar = document.getElementById('rq-modebar');
+            if (bar) {
+                if (!cfg) { bar.className = 'hidden'; bar.innerHTML = ''; }
+                else {
+                    bar.className = 'rq-modebar ' + (_rqMode === 'RO' ? 'rq-modebar-ro' : 'rq-modebar-po');
+                    bar.innerHTML = `<div><b>Mode ${escapeHtml(cfg.btn)}</b> — menampilkan data ber-Action Plan <b>${escapeHtml(cfg.plansLabel)}</b> yang STATUS ORDER-nya masih kosong. Centang data yang mau dikirim ke ${escapeHtml(cfg.formLabel)}.</div>
+                        <button class="rq-btn rq-btn-ghost" onclick="rqCancelAddMode()">Batal</button>`;
+                }
+            }
+            _rqRenderPreview();
+        }
+
+        function _rqRenderPreview() {
+            const box = document.getElementById('rq-preview');
+            if (!box) return;
+            const cfg = RQ_MODE_CONFIG[_rqMode];
+            const rows = _requestB2BB2CRows.filter(r => _rqSelected.has(r._row));
+            if (!cfg || !rows.length) { box.className = 'hidden'; box.innerHTML = ''; return; }
+            box.className = 'rq-preview ' + (_rqMode === 'RO' ? 'rq-preview-ro' : '');
+            box.innerHTML = `
+                <div class="rq-preview-head">
+                    <div><b>Preview Checklist</b> <span class="rq-chip">${rows.length} dipilih</span></div>
+                    <div class="rq-actions">
+                        <button class="rq-btn rq-btn-ghost" onclick="rqClearSelection()">Kosongkan</button>
+                        <button class="rq-btn ${_rqMode === 'RO' ? 'rq-btn-ro' : 'rq-btn-po'}" onclick="rqAddSelectedToForm()">Add ke ${escapeHtml(cfg.formLabel)}</button>
+                    </div>
+                </div>
+                <div class="rq-preview-scroll">
+                    <table class="w-full text-sm">
+                        <thead><tr class="bg-gray-800 text-white text-xs uppercase tracking-wide">
+                            <th class="px-4 py-2 text-left font-semibold whitespace-nowrap">LOCATION NAME</th>
+                            <th class="px-4 py-2 text-left font-semibold whitespace-nowrap">DELIVERY DETAILS</th>
+                        </tr></thead>
+                        <tbody>${rows.map(r => `
+                            <tr class="border-t border-gray-100">
+                                <td class="px-4 py-2 text-gray-700 rq-cell-long">${escapeHtml(r.locationName || '-')}</td>
+                                <td class="px-4 py-2 text-gray-600 rq-cell-long">${escapeHtml(r.deliveryDetails || '-')}</td>
+                            </tr>`).join('')}</tbody>
+                    </table>
+                </div>`;
+        }
+
+        function _rqRenderTable() {
+            const cfg = REQUEST_B2BB2C_CONFIG[_requestB2BB2CType];
+            const tbody = document.getElementById('rq-tbody');
+            if (!cfg || !tbody) return;
+            const inMode = !!_rqMode;
+            const { q, filtered, visible } = _rqGetFiltered();
+            const clearBtn = document.getElementById('rq-search-clear');
+            if (clearBtn) clearBtn.classList.toggle('hidden', !q);
+
+            const stSel = document.getElementById('rq-status-filter');
+            if (stSel) stSel.style.display = inMode ? 'none' : '';
+
+            const theadRow = document.getElementById('rq-thead-row');
+            if (theadRow) {
+                theadRow.innerHTML =
+                    (inMode ? `<th class="px-4 py-3 rq-check-col"><input type="checkbox" id="rq-check-all" class="rq-check" onchange="rqToggleAllVisible(this.checked)" title="Pilih semua yang tampil"></th>` : '') +
+                    cfg.cols.map(c => `<th class="px-4 py-3 text-left font-semibold whitespace-nowrap">${escapeHtml(c.label)}</th>`).join('');
+            }
+            const colCount = cfg.cols.length + (inMode ? 1 : 0);
 
             const countEl = document.getElementById('rq-count');
             if (countEl) {
-                countEl.textContent = filtered.length === _requestB2BB2CRows.length
-                    ? `${filtered.length} data`
-                    : `${filtered.length} dari ${_requestB2BB2CRows.length} data`;
+                countEl.textContent = inMode
+                    ? `${filtered.length} data siap di-add`
+                    : (filtered.length === _requestB2BB2CRows.length ? `${filtered.length} data` : `${filtered.length} dari ${_requestB2BB2CRows.length} data`);
             }
 
+            const moreWrap = document.getElementById('rq-more-wrap');
             if (!filtered.length) {
-                tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-4 py-10 text-center text-gray-400 text-sm">${
-                    _rqSelectionMode ? 'Tidak ada data yang eligible untuk mode ini.' :
-                    (_requestB2BB2CRows.length ? 'Tidak ada data yang cocok dengan pencarian/filter.' : 'Belum ada data.')}</td></tr>`;
-                const moreEmpty = document.getElementById('rq-more-wrap');
-                if (moreEmpty) moreEmpty.classList.add('hidden');
+                const msg = inMode
+                    ? `Tidak ada data yang siap di-add (Action Plan ${escapeHtml(RQ_MODE_CONFIG[_rqMode].plansLabel)} & STATUS ORDER masih kosong).`
+                    : (_requestB2BB2CRows.length ? 'Tidak ada data yang cocok dengan pencarian/filter.' : 'Belum ada data.');
+                tbody.innerHTML = `<tr><td colspan="${colCount}" class="px-4 py-10 text-center text-gray-400 text-sm">${msg}</td></tr>`;
+                if (moreWrap) moreWrap.classList.add('hidden');
                 return;
             }
 
-            const visible = filtered.slice(0, _requestB2BB2CLimit);
             tbody.innerHTML = visible.map(r => {
-                const rowKey = String(r._row);
-                const isChecked = _rqSelection.has(rowKey);
-                const checkTd = _rqSelectionMode
-                    ? `<td class="px-2 py-3 rq-check-col"><input type="checkbox" class="rq-select-checkbox" data-rowkey="${escapeHtml(rowKey)}" onchange="toggleRqRowCheck(this)" ${isChecked ? 'checked' : ''}></td>`
-                    : '';
                 const tds = cfg.cols.map(c => {
                     if (c.kind === 'remaining') {
                         return `<td class="px-4 py-3 whitespace-nowrap">${_rqRemainingBadgeHtml(r.date)}</td>`;
@@ -7293,337 +7371,754 @@
                     }
                     return `<td class="px-4 py-3 text-gray-600 whitespace-nowrap">${escapeHtml(r[c.key] || '-')}</td>`;
                 }).join('');
-                const rowCls = `border-t border-gray-100 hover:bg-gray-50${isChecked ? ' rq-row-checked' : ''}`;
-                return `<tr class="${rowCls}">${checkTd}${tds}</tr>`;
+                const sel = inMode && _rqSelected.has(r._row);
+                const chk = inMode
+                    ? `<td class="px-4 py-3 rq-check-col"><input type="checkbox" class="rq-check" data-row="${r._row}" onchange="rqToggleRow(this)" ${sel ? 'checked' : ''}></td>`
+                    : '';
+                return `<tr class="border-t border-gray-100 hover:bg-gray-50${sel ? ' rq-row-selected' : ''}">${chk}${tds}</tr>`;
             }).join('');
 
-            const moreWrap = document.getElementById('rq-more-wrap');
             if (moreWrap) moreWrap.classList.toggle('hidden', filtered.length <= visible.length);
+            _rqSyncHeaderCheck();
         }
 
-        /**
-         * Modal "Preview Checklist" — hanya menampilkan LOCATION NAME & DELIVERY
-         * DETAILS dari baris-baris yang sudah dicentang, plus tombol "Add" yang
-         * mengirim semuanya ke Form PO/Form RO (sesuai _rqSelectionMode).
-         */
-        function showRqPreviewModal() {
-            const old = document.getElementById('rq-preview-modal');
-            if (old) old.remove();
-
-            const rows = Array.from(_rqSelection.values());
-            const modeLabel = _rqSelectionMode === 'RO' ? 'Form RO' : 'Form PO';
-
-            const rowsHtml = rows.length > 0
-                ? rows.map(r => `
-                    <tr class="border-b border-gray-100 align-top">
-                        <td class="p-2 text-sm font-semibold text-gray-700" style="min-width:160px">${escapeHtml(r.locationName || '-')}</td>
-                        <td class="p-2 text-xs text-gray-600 whitespace-pre-line">${escapeHtml(r.deliveryDetails || '-')}</td>
-                    </tr>`).join('')
-                : `<tr><td colspan="2" class="p-6 text-center text-gray-400 italic text-sm">Belum ada data yang dicentang.</td></tr>`;
-
-            const modal = document.createElement('div');
-            modal.id = 'rq-preview-modal';
-            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4';
-            modal.innerHTML = `
-            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col">
-                <div class="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
-                    <div>
-                        <p class="font-bold text-gray-800 text-base">Preview Checklist</p>
-                        <p class="text-xs text-gray-400">${rows.length} data siap dikirim ke ${escapeHtml(modeLabel)}</p>
-                    </div>
-                    <button onclick="document.getElementById('rq-preview-modal').remove()" aria-label="Tutup"
-                        class="text-gray-400 hover:text-gray-600 transition flex-shrink-0">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="overflow-y-auto p-4">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
-                                <th class="p-2">Location Name</th>
-                                <th class="p-2">Delivery Details</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rowsHtml}</tbody>
-                    </table>
-                </div>
-                <div class="p-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">
-                    <button onclick="document.getElementById('rq-preview-modal').remove()"
-                        class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition">
-                        Tutup
-                    </button>
-                    <button id="rq-preview-add-btn" onclick="sendRqSelectionToForm()" ${rows.length === 0 ? 'disabled' : ''}
-                        class="px-4 py-2 ${_rqSelectionMode === 'RO' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-500 hover:bg-amber-600'} text-white text-sm font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed">
-                        Add ke ${escapeHtml(modeLabel)}
-                    </button>
-                </div>
-            </div>`;
-            document.body.appendChild(modal);
+        /** Refresh data: pertahankan centang hanya untuk baris yang masih layak. */
+        function _rqSyncSelectionAfterLoad() {
+            if (!_rqSelected.size) return;
+            const byRow = new Map(_requestB2BB2CRows.map(r => [r._row, r]));
+            const next = new Map();
+            _rqSelected.forEach((_, k) => {
+                const nr = byRow.get(k);
+                if (nr && _rqMode && _rqRowMatchesMode(nr, _rqMode)) next.set(k, nr);
+            });
+            _rqSelected = next;
         }
 
-        /** Set value sebuah <select>, tambahkan <option> baru dulu kalau belum ada di daftar
-         *  (mis. Ordered By yang belum tentu ada di daftar PIC hasil getNames). */
-        function _rqSetSelectValue(selectEl, value) {
-            if (!selectEl) return;
-            const val = String(value || '').trim();
-            if (!val) return;
-            const exists = Array.from(selectEl.options).some(o => o.value === val);
-            if (!exists) {
-                const opt = document.createElement('option');
-                opt.value = val;
-                opt.textContent = val;
-                selectEl.appendChild(opt);
+        // ---------------------------------------------------------------------
+        // ANTRIAN DATA B2B/B2C -> FORM PO / FORM RO
+        // ---------------------------------------------------------------------
+        window._b2bQueue = null;   // { mode, type, index, items:[{ row, form, parse, done }] }
+
+        function _b2bFormIds(mode) {
+            return mode === 'RO'
+                ? { nama: 'retur-nama', category: 'retur-category', shipTo: 'retur-allocated-to', from: 'retur-from-location', alamat: 'retur-alamat', phone: 'retur-phone', date: 'retur-shipping-date', note: 'retur-note-khusus', tbody: 'retur-item-table-body' }
+                : { nama: 'nama', category: 'category', shipTo: 'allocated-to', from: null, alamat: 'po-alamat', phone: 'po-phone', date: 'po-shipping-date', note: 'po-note-khusus', tbody: 'po-item-table-body' };
+        }
+
+        function _b2bDraftHasContent(mode) {
+            const d = _loadDraft(mode === 'RO' ? DRAFT_KEYS.formRetur : DRAFT_KEYS.formPO);
+            if (!d) return false;
+            return !!((d.items && d.items.some(i => i && (i.nama || i.id))) || d.nama || d.category || d.allocatedTo || d.fromLocation || d.alamat || d.phone || d.noteKhusus);
+        }
+
+        function _b2bPlainTokens(s) {
+            return String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+        }
+
+        /** Pilih <option> yang cocok dengan teks (persis / subset kata yang unik). Kalau tidak ada,
+         *  tambahkan sebagai opsi baru supaya nilainya tidak hilang. Return: 'exact' | 'fuzzy' | 'added' | ''. */
+        function _b2bSetSelectByText(sel, text) {
+            const t = String(text || '').trim();
+            if (!sel || !t) return '';
+            const tt = _b2bPlainTokens(t);
+            const opts = Array.from(sel.options).filter(o => o.value && !o.disabled);
+            let opt = opts.find(o => _b2bPlainTokens(o.value).join(' ') === tt.join(' '));
+            let how = 'exact';
+            if (!opt) {
+                const subs = opts.filter(o => {
+                    const ot = _b2bPlainTokens(o.value);
+                    if (!ot.length || !tt.length) return false;
+                    const [small, big] = ot.length <= tt.length ? [ot, tt] : [tt, ot];
+                    return small.every(w => big.includes(w));
+                });
+                if (subs.length === 1) { opt = subs[0]; how = 'fuzzy'; }
             }
-            selectEl.value = val;
-        }
-
-        /** Render tabel preview mentah "DELIVERY DETAILS" (Location Name + Delivery
-         *  Details) di atas tabel Detail Item Form PO/Form RO, supaya user bisa
-         *  memvalidasi hasil pencocokan otomatis di tabel Detail Item. */
-        function _renderRqDeliveryPreview(mode, rows) {
-            const wrapId = mode === 'RO' ? 'retur-delivery-preview-wrap' : 'po-delivery-preview-wrap';
-            const tbodyId = mode === 'RO' ? 'retur-delivery-preview-tbody' : 'po-delivery-preview-tbody';
-            const wrap = document.getElementById(wrapId);
-            const tbody = document.getElementById(tbodyId);
-            if (!wrap || !tbody) return;
-            tbody.innerHTML = rows.map(r => `
-                <tr class="border-b border-gray-100 align-top">
-                    <td class="p-2 text-xs font-semibold text-gray-700">${escapeHtml(r.locationName || '-')}</td>
-                    <td class="p-2 text-xs text-gray-600 whitespace-pre-line">${escapeHtml(r.deliveryDetails || '-')}</td>
-                </tr>`).join('');
-            wrap.classList.remove('hidden');
-        }
-
-        // =========================================================================
-        // [ADDON — Parser DELIVERY DETAILS Request B2B/B2C]
-        // Format asli kolom DELIVERY DETAILS di sheet B2B_Data/B2C_Data BEDA dengan
-        // format Import FAS ("Nama Item + Qty" polos). Contoh nyata:
-        //   Kirim :
-        //   1. NOD Izzio : 21 Unit
-        //
-        //   Capsule :
-        //   1. Aceh Gayo : 200pcs
-        //   2. NOD Blend : 200pcs
-        //   3. Bali Kintamani : 200pcs
-        // Ciri-cirinya:
-        //   - Baris "Kirim :" / "Capsule :" dst adalah judul SEKSI (tidak ada isi
-        //     setelah titik dua) -> bukan baris item, harus dilewati sepenuhnya.
-        //   - Baris item selalu diawali penomoran "1.", "2.", dst -> dibuang.
-        //   - Polanya "Nama Item : Qty[Satuan]" — qty & satuan bisa nempel tanpa
-        //     spasi ("200pcs") atau berspasi ("21 Unit"). Ini yang sebelumnya bikin
-        //     Qty ikut kebawa jadi bagian nama (karena parser lama pakai pola
-        //     "Nama - Qty" / "Qty x Nama", bukan pola "Nama : Qty").
-        // =========================================================================
-
-        /** True kalau satu baris adalah judul seksi ("Kirim :", "Capsule :", dst) —
-         *  yaitu diakhiri titik dua TANPA ada isi apa pun setelahnya. */
-        function _isRqDeliverySectionHeader(line) {
-            return /^[^:]+:\s*$/.test(line);
-        }
-
-        /** Parse satu baris DELIVERY DETAILS jadi {nama, qty, unit} atau null kalau
-         *  baris ini bukan baris item (judul seksi/baris kosong/tidak jelas). */
-        function _parseRqDeliveryLine(line) {
-            if (!line || line.length < 2) return null;
-            if (_isRqDeliverySectionHeader(line)) return null; // judul seksi, bukan item
-
-            // Buang penomoran list di depan: "1.", "2)", "3 -", dst.
-            let content = line.replace(/^\d{1,3}\s*[\.\)]\s*/, '');
-            if (content.length < 2) return null;
-
-            let nama = '', qty = 1, unit = '';
-
-            // Pola utama data B2B/B2C: "Nama Item : Qty[Satuan]" (satuan boleh nempel/berspasi/kosong).
-            let m = content.match(/^(.+?)\s*:\s*(\d{1,6})\s*([A-Za-z]*)\.?\s*$/);
-            if (m) {
-                nama = m[1].trim();
-                qty = parseInt(m[2], 10) || 1;
-                unit = (m[3] || '').trim();
-            } else {
-                // Fallback pola umum lain (kalau suatu saat format sedikit berbeda):
-                // "5 x Nama Item" / "5) Nama Item"
-                m = content.match(/^(\d{1,5})\s*[xX×]\s*(.+)$/);
-                if (m) {
-                    qty = parseInt(m[1], 10) || 1;
-                    nama = m[2].trim();
-                } else {
-                    // "Nama Item - 5" / "Nama Item 5pcs" (tanpa titik dua)
-                    m = content.match(/^(.+?)\s*[-xX×]?\s*(\d{1,5})\s*([A-Za-z]*)\s*$/);
-                    if (m && m[1].trim().length >= 2) {
-                        nama = m[1].trim();
-                        qty = parseInt(m[2], 10) || 1;
-                        unit = (m[3] || '').trim();
-                    } else {
-                        nama = content; // tidak ketemu angka sama sekali -> qty default 1
-                        qty = 1;
-                    }
-                }
+            if (!opt) {
+                opt = document.createElement('option');
+                opt.value = t; opt.textContent = t;
+                sel.appendChild(opt);
+                how = 'added';
             }
-
-            nama = nama.replace(/^[\-\u2022\*\s]+/, '').replace(/[\-\u2022\*:\s]+$/, '').trim();
-            if (!nama || nama.length < 2) return null;
-            return { nama, qty: qty || 1, unit };
+            sel.value = opt.value;
+            return how;
         }
 
-        /** Parse teks DELIVERY DETAILS (bisa gabungan beberapa baris tercentang,
-         *  dengan beberapa seksi "Kirim :" / "Capsule :" dst di dalamnya) jadi
-         *  daftar {nama, qty, unit}. Baris judul seksi otomatis dilewati. */
-        function _parseRqDeliveryDetailsItems(rawText) {
-            const lines = String(rawText || '')
-                .split(/\r?\n/)
-                .map(l => l.replace(/[\u00A0]+/g, ' ').trim())
-                .filter(Boolean);
+        function _b2bBuildHeader(mode, type, row) {
+            const loc = String(row.locationName || '').trim();
+            const pic = String(row.sitePic || '').trim();
+            const joined = [loc, pic].filter(Boolean).join(B2B_SHIPTO_SEPARATOR);
+            const base = {
+                nama: String(row.pic || '').trim(),          // PIC -> Ordered By
+                category: type,                              // "B2B" / "B2C" sesuai halaman asal
+                alamat: String(row.address || '').trim(),    // DELIVERY / PICK UP ADDRESS
+                phone: String(row.sitePhone || '').trim(),   // SITE PIC PHONE NO.
+                noteKhusus: String(row.remarks || '').trim(),// Remarks/Special Requirements
+                shippingDate: '', preOrder: false
+            };
+            return mode === 'RO'
+                ? Object.assign(base, { fromLocation: joined, allocatedTo: B2B_RO_SHIPTO })   // Form Location + Ship To tetap
+                : Object.assign(base, { fromLocation: '', allocatedTo: joined });               // Ship To
+        }
 
-            const items = [];
-            for (const line of lines) {
-                const parsed = _parseRqDeliveryLine(line);
-                if (parsed) items.push(parsed);
-            }
+        async function _b2bLoadListItems() {
+            let items = await getSourceItems();
+            if (!items.length) { _sourceItemsCache = null; items = await getSourceItems(); }   // getSourceItems() menyimpan hasil gagal di cache
             return items;
         }
 
-        /** Cari opsi UOM (dropdown ".po-item-uom") yang cocok (case-insensitive)
-         *  dengan satuan hasil parsing, mis. "pcs" -> "Pcs", "unit" -> "Unit". */
-        function _matchUomOption(uomEl, unitText) {
-            if (!uomEl || !unitText) return false;
-            const target = String(unitText).trim().toLowerCase();
-            const match = Array.from(uomEl.options).find(o => o.value.toLowerCase() === target)
-                || Array.from(uomEl.options).find(o => o.value.toLowerCase().startsWith(target) || target.startsWith(o.value.toLowerCase()));
-            if (match) { uomEl.value = match.value; return true; }
-            return false;
+        /** Susun isian form (header + baris Detail Item) untuk 1 baris B2B/B2C. */
+        async function _b2bBuildItem(q, it) {
+            const items = await _b2bLoadListItems();
+            const maps = await getItemAutoFillData();
+            const rows = _smartReadDetails(it.row.deliveryDetails || '', items, maps);
+            it.parse = { raw: String(it.row.deliveryDetails || ''), rows, listOk: items.length > 0 };
+            it.form = {
+                header: _b2bBuildHeader(q.mode, q.type, it.row),
+                items: rows.filter(r => r.kind === 'item').map(r => ({
+                    uid: r.uid,
+                    id: r.match ? (r.match.id || '') : '',
+                    nama: r.match ? r.match.nama : r.name,
+                    qty: String(r.qty || 1),
+                    uom: r.uom || '', desc: r.desc || '', note: '',
+                    flag: r.status === 'check' ? 'check' : (r.status === 'none' ? 'none' : '')
+                }))
+            };
         }
 
-        /** Gabungkan DELIVERY DETAILS semua baris tercentang, parse dengan
-         *  _parseRqDeliveryDetailsItems (paham format "Nama : Qty[Satuan]" +
-         *  judul seksi), cocokkan tiap nama ke sheet "LIST" via
-         *  _lookupItemByNamaBarang, lalu isi tabel Detail Item Form PO/Form RO
-         *  secara otomatis (Item, Qty, dan UOM kalau satuannya cocok). */
-        async function _fillItemTableFromRqDeliveryDetails(mode, rows) {
-            const combinedRaw = rows.map(r => r.deliveryDetails || '').filter(Boolean).join('\n');
-            const parsedItems = _parseRqDeliveryDetailsItems(combinedRaw);
-            if (parsedItems.length === 0) return;
-
-            const tbodyId = mode === 'RO' ? 'retur-item-table-body' : 'po-item-table-body';
-            const addRowFn = mode === 'RO' ? tambahBarisFormRetur : tambahBarisFormPO;
-            const tbody = document.getElementById(tbodyId);
-            if (tbody) tbody.innerHTML = '';
-
-            let tidakKetemu = 0;
-            for (const it of parsedItems) {
-                const tr = addRowFn(false);
-                if (!tr) continue;
-                const idEl = tr.querySelector('.po-item-id');
-                const namaEl = tr.querySelector('.po-item-nama');
-                const qtyEl = tr.querySelector('.po-item-qty');
-                const uomEl = tr.querySelector('.po-item-uom');
-
-                const matched = await _lookupItemByNamaBarang(it.nama);
-                if (!matched) tidakKetemu++;
-                const finalNama = matched ? matched.nama : it.nama;
-                if (namaEl) { namaEl.value = finalNama; namaEl.title = finalNama; }
-                if (idEl) idEl.value = matched ? (matched.id || '') : '';
-                if (qtyEl) qtyEl.value = it.qty || 1;
-                if (uomEl) _matchUomOption(uomEl, it.unit);
-                const listEl = tr.querySelector('.autocomplete-list');
-                if (listEl) listEl.classList.add('hidden');
-            }
-
-            if (tidakKetemu > 0) {
-                showToastAlert('warning', 'Sebagian Item Tidak Ketemu Persis',
-                    `${tidakKetemu} dari ${parsedItems.length} item tidak ketemu persis di sheet "LIST" — nama tetap diisi apa adanya dari Delivery Details, cek & sesuaikan manual.`);
-            }
-
-            if (mode === 'RO') {
-                if (typeof _formReturAutosaveHandler === 'function') _formReturAutosaveHandler();
-            } else {
-                if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
-            }
+        function _b2bCollectForm(mode) {
+            const ids = _b2bFormIds(mode), isRO = mode === 'RO';
+            const g = id => document.getElementById(id);
+            const tbody = g(ids.tbody);
+            const items = [];
+            if (tbody) tbody.querySelectorAll('tr:not([data-placeholder])').forEach(tr => {
+                items.push({
+                    uid: tr.dataset.b2bUid || '', flag: tr.dataset.b2bFlag || '',
+                    id: tr.querySelector('.po-item-id')?.value || '', nama: tr.querySelector('.po-item-nama')?.value || '',
+                    qty: tr.querySelector('.po-item-qty')?.value || '', uom: tr.querySelector('.po-item-uom')?.value || '',
+                    desc: tr.querySelector('.po-item-desc')?.value || '', note: tr.querySelector('.po-item-note')?.value || ''
+                });
+            });
+            return {
+                header: {
+                    nama: g(ids.nama)?.value || '', category: g(ids.category)?.value || '',
+                    allocatedTo: g(ids.shipTo)?.value || '', fromLocation: isRO ? (g(ids.from)?.value || '') : '',
+                    alamat: g(ids.alamat)?.value || '', phone: g(ids.phone)?.value || '',
+                    noteKhusus: g(ids.note)?.value || '', shippingDate: g(ids.date)?.value || '',
+                    preOrder: !isRO && !!g('po-preorder-toggle')?.checked
+                },
+                items
+            };
         }
 
-        /**
-         * Kirim SEMUA baris Request B2B/B2C yang tercentang ke "Form PO" atau
-         * "Form RO" (sesuai _rqSelectionMode), dengan mapping field:
-         *   - PIC                          -> Ordered By
-         *   - Kategori                     -> otomatis "B2B"/"B2C" (asal data)
-         *   - LOCATION NAME + SITE PIC     -> Ship To (Form PO) / From Location (Form RO)
-         *   - DELIVERY / PICK UP ADDRESS   -> Alamat (Form PO) / Alamat Penarikan (Form RO)
-         *   - Ship To Form RO              -> otomatis "Jumpstart Warehouse Pulogadung"
-         *   - SITE PIC PHONE NO.           -> No. Telepon
-         *   - Remarks/Special Requirements -> Note Khusus
-         *   - DELIVERY DETAILS             -> tabel Detail Item (dicocokkan ke sheet "LIST")
-         * Header form (PIC/Ship To/Alamat/Phone) diambil dari baris PERTAMA yang
-         * dicentang kalau lebih dari satu baris dipilih; seluruh DELIVERY DETAILS
-         * & Remarks tetap digabung dari semua baris tercentang.
-         */
-        async function sendRqSelectionToForm() {
-            const rows = Array.from(_rqSelection.values());
-            if (rows.length === 0) {
-                showAlert('warning', 'Belum Ada Data', 'Centang minimal satu data untuk dikirim.');
-                return;
+        /** Isi Form PO / Form RO dari snapshot. Return status pencocokan "Ordered By". */
+        async function _b2bApplyForm(mode, snap) {
+            const ids = _b2bFormIds(mode), isRO = mode === 'RO';
+            const g = id => document.getElementById(id);
+            // Jangan sampai data B2B/B2C menimpa PO/RO lama lewat mode Revisi yang masih aktif.
+            if (isRO ? window._revisiROActive : window._revisiPOActive) { if (isRO) _exitRevisiROMode(); else _exitRevisiPOMode(); }
+            if (isRO) resetFormRetur(); else resetFormPO();
+
+            const h = snap.header;
+            const namaHow = _b2bSetSelectByText(g(ids.nama), h.nama);
+            const catEl = g(ids.category);
+            if (catEl && h.category && Array.from(catEl.options).some(o => o.value === h.category)) catEl.value = h.category;
+            if (isRO) await handleFormReturCategoryChange(); else await handleFormPOCategoryChange();
+
+            const setVal = (id, v) => { const el = g(id); if (el && v != null) el.value = v; };
+            setVal(ids.shipTo, h.allocatedTo);
+            if (isRO) setVal(ids.from, h.fromLocation);
+            setVal(ids.alamat, h.alamat);
+            setVal(ids.phone, h.phone);
+            setVal(ids.note, h.noteKhusus);
+            setVal(ids.date, h.shippingDate || '');
+            if (!isRO && h.preOrder && g('po-preorder-toggle')) g('po-preorder-toggle').checked = true;
+
+            const tbody = g(ids.tbody);
+            const addRow = isRO ? tambahBarisFormRetur : tambahBarisFormPO;
+            if (tbody) {
+                tbody.innerHTML = '';
+                for (const it of (snap.items || [])) {
+                    const tr = addRow(false);
+                    if (!tr) continue;
+                    const idEl = tr.querySelector('.po-item-id'), namaEl = tr.querySelector('.po-item-nama');
+                    const qtyEl = tr.querySelector('.po-item-qty'), uomEl = tr.querySelector('.po-item-uom');
+                    const descEl = tr.querySelector('.po-item-desc'), noteEl = tr.querySelector('.po-item-note');
+                    if (idEl) idEl.value = it.id || '';
+                    if (namaEl) { namaEl.value = it.nama || ''; namaEl.title = namaEl.value; }
+                    if (qtyEl) qtyEl.value = it.qty || '1';
+                    if (uomEl && it.uom) _setSelectValueCaseInsensitive(uomEl, it.uom);
+                    if (descEl && it.desc) _setSelectValueCaseInsensitive(descEl, it.desc);
+                    if (noteEl) { noteEl.value = it.note || ''; autoResizeTextarea(noteEl); }
+                    if (it.uid) tr.dataset.b2bUid = it.uid;
+                    _b2bMarkRowFlag(tr, it.flag);
+                }
+                if (!tbody.querySelector('tr')) {
+                    tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
+                }
             }
+            if (isRO) updateReturPreview(); else updatePOPreview();
+            if (isRO) { if (typeof _formReturAutosaveHandler === 'function') _formReturAutosaveHandler(); }
+            else if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
+            return namaHow;
+        }
 
-            const mode = _rqSelectionMode;
-            const sourceType = _requestB2BB2CType; // 'B2B' | 'B2C'
-            const first = rows[0];
-            const shipToConcat = [first.locationName, first.sitePic].filter(Boolean).join(' - ');
-            const notesCombined = Array.from(new Set(rows.map(r => r.remarks).filter(Boolean))).join(' | ');
+        /** Tandai baris Detail Item yang perlu dicek (garis kiri kuning) / tidak ketemu di LIST (merah). */
+        function _b2bMarkRowFlag(tr, flag) {
+            if (!tr) return;
+            if (flag === 'check') { tr.style.boxShadow = 'inset 4px 0 0 #f59e0b'; tr.dataset.b2bFlag = 'check'; }
+            else if (flag === 'none') { tr.style.boxShadow = 'inset 4px 0 0 #ef4444'; tr.dataset.b2bFlag = 'none'; }
+            else { tr.style.boxShadow = ''; delete tr.dataset.b2bFlag; }
+        }
 
-            const oldModal = document.getElementById('rq-preview-modal');
-            if (oldModal) oldModal.remove();
-
-            // Reset mode & pilihan supaya saat kembali ke Request B2B/B2C kondisinya bersih
-            cancelRqSelection();
-
-            const targetPage = mode === 'RO' ? 'Form Return Order' : 'Purchase Order';
-            document.getElementById('page-title').textContent = (mode === 'RO') ? 'Form Return Order' : 'Form Purchase Order';
-            setActiveNav(targetPage);
-            sessionStorage.setItem('currentPage', targetPage);
+        async function _b2bNavigateToForm(mode) {
+            const pageName = mode === 'RO' ? 'Form Return Order' : 'Purchase Order';
+            document.getElementById('page-title').textContent = mode === 'RO' ? 'Form Return Order' : 'Form Purchase Order';
+            setActiveNav(pageName);
+            sessionStorage.setItem('currentPage', pageName);
+            if (typeof updateMobileBackButton === 'function') updateMobileBackButton(pageName);
             if (window.innerWidth < 768 && sidebarOpen) toggleSidebar();
+            const mms = document.getElementById('mobile-menu-sheet');
+            if (mms && !mms.classList.contains('hidden') && typeof closeMobileMenuSheet === 'function') closeMobileMenuSheet();
+            if (typeof restoreSidebarNav === 'function') restoreSidebarNav();
+            await showPage(pageName);
+        }
 
-            if (mode === 'RO') {
-                await showFormRetur();
+        /** Tombol "Add" pada Preview Checklist. */
+        async function rqAddSelectedToForm() {
+            if (!_rqMode) return;
+            if (currentUserRole !== 'ADMIN') { showAlert('error', 'Akses Ditolak', 'Fitur ini hanya dapat diakses oleh Admin.'); return; }
+            const mode = _rqMode, type = _requestB2BB2CType, cfg = RQ_MODE_CONFIG[mode];
+            const rows = _requestB2BB2CRows.filter(r => _rqSelected.has(r._row));
+            if (!rows.length) { showAlert('warning', 'Belum Ada Data', 'Centang minimal satu data terlebih dahulu.'); return; }
+
+            const oldQueue = window._b2bQueue;
+            const pendingOld = !!(oldQueue && oldQueue.mode === mode && oldQueue.items.some(i => !i.done));
+            if (_b2bDraftHasContent(mode) || pendingOld) {
+                const ok = await showConfirm(`Ganti isi ${cfg.formLabel}?`,
+                    `${cfg.formLabel} masih berisi isian yang belum dikirim${pendingOld ? ' (dan antrian data B2B/B2C sebelumnya belum selesai)' : ''}. ` +
+                    `Menambahkan ${rows.length} data ${type} akan MENGGANTI isian tersebut. Lanjutkan?`);
+                if (!ok) return;
+            }
+            _clearDraft(mode === 'RO' ? DRAFT_KEYS.formRetur : DRAFT_KEYS.formPO);
+            window._b2bQueue = null;
+
+            await _b2bNavigateToForm(mode);
+            window._b2bQueue = { mode, type, index: 0, items: rows.map(r => ({ row: r, form: null, parse: null, done: false })) };
+            showProgressOverlay('Membaca DELIVERY DETAILS...');
+            try {
+                await _b2bQueueShow(0);
+            } catch (err) {
+                console.error('[B2B add Form]', err);
+                showAlert('error', 'Gagal Mengisi Form', err.message || String(err));
+            } finally {
+                hideProgressOverlay(true);
+            }
+        }
+
+        async function _b2bQueueShow(ni) {
+            const q = window._b2bQueue;
+            if (!q || !q.items[ni]) return;
+            const ids = _b2bFormIds(q.mode);
+            const cur = q.items[q.index];
+            if (q.index !== ni && cur && !cur.done && document.getElementById(ids.tbody)) cur.form = _b2bCollectForm(q.mode);
+            q.index = ni;
+            const it = q.items[ni];
+            if (!it.form) await _b2bBuildItem(q, it);
+            const how = await _b2bApplyForm(q.mode, it.form);
+            _b2bRenderQueueUI();
+            const picName = it.form.header.nama;
+            if (how === 'added' && picName) {
+                showToastAlert('warning', 'PIC tidak ada di daftar Ordered By', `"${escapeHtml(picName)}" dipakai apa adanya. Periksa kembali kolom Ordered By.`);
+            }
+            if (it.parse && !it.parse.listOk) {
+                showToastAlert('warning', 'Daftar item (sheet LIST) gagal dimuat', 'Koreksi otomatis nama item tidak aktif. Periksa koneksi lalu tambahkan ulang, atau isi manual.');
+            }
+        }
+
+        async function _b2bQueueGo(delta) {
+            const q = window._b2bQueue;
+            if (!q) return;
+            const ni = q.index + delta;
+            if (ni < 0 || ni >= q.items.length) return;
+            showProgressOverlay('Memuat data...');
+            try { await _b2bQueueShow(ni); }
+            catch (err) { showAlert('error', 'Gagal Memuat Data', err.message || String(err)); }
+            finally { hideProgressOverlay(true); }
+        }
+
+        function _b2bQueueClose() {
+            window._b2bQueue = null;
+            _b2bRenderQueueUI();
+        }
+
+        /** Dipanggil dari submitPO()/submitRetur() saat kirim BERHASIL (sebelum form di-reset). */
+        function _b2bQueueOnSubmitted(mode) {
+            const q = window._b2bQueue;
+            if (!q || q.mode !== mode) return;
+            const cur = q.items[q.index];
+            if (!cur || cur.done) return;
+            try { cur.form = _b2bCollectForm(mode); } catch (_) { }
+            cur.done = true;
+            const from = q.index;
+            setTimeout(async () => {   // setelah blok sukses (reset form + modal PDF) selesai
+                if (window._b2bQueue !== q) return;
+                let next = q.items.findIndex((x, i) => !x.done && i > from);
+                if (next < 0) next = q.items.findIndex(x => !x.done);
+                if (next < 0) {
+                    showToastAlert('success', 'Semua data selesai', `${q.items.length} data ${q.type} sudah dikirim ke ${RQ_MODE_CONFIG[q.mode].formLabel}.`);
+                    window._b2bQueue = null;
+                    _b2bRenderQueueUI();
+                    return;
+                }
+                try {
+                    await _b2bQueueShow(next);
+                    showToastAlert('info', 'Data berikutnya dimuat', `Data ${next + 1} dari ${q.items.length} sudah terisi di ${RQ_MODE_CONFIG[q.mode].formLabel}.`);
+                } catch (err) { console.error('[B2B queue next]', err); }
+            }, 0);
+        }
+
+        /** Dipanggil di akhir showFormPO()/showFormRetur(): pasang lagi banner & preview kalau antrian masih aktif. */
+        function _b2bAfterFormRender(mode) {
+            const q = window._b2bQueue;
+            if (q && q.mode === mode) _b2bRenderQueueUI();
+        }
+
+        function _b2bRenderQueueUI() {
+            const oldB = document.getElementById('b2b-queue-banner'); if (oldB) oldB.remove();
+            const oldP = document.getElementById('b2b-smart-panel'); if (oldP) oldP.remove();
+            const q = window._b2bQueue;
+            if (!q) return;
+            const ids = _b2bFormIds(q.mode);
+            const tbody = document.getElementById(ids.tbody);
+            const area = document.getElementById('content-area');
+            if (!tbody || !area) return;
+            const it = q.items[q.index], n = q.items.length;
+            if (!it) return;
+
+            const banner = document.createElement('div');
+            banner.id = 'b2b-queue-banner';
+            banner.className = 'b2b-queue';
+            banner.innerHTML = `
+                <div class="b2b-queue-main">
+                    <div><span class="rq-badge ${q.type === 'B2C' ? 'rq-badge-yellow' : 'rq-badge-green'}">${escapeHtml(q.type)}</span>
+                        <b>Data ${q.index + 1} dari ${n}</b> — ${escapeHtml(it.row.locationName || '-')}
+                        ${it.done ? '<span class="rq-badge rq-badge-gray">✓ Sudah dikirim — jangan kirim ulang</span>' : ''}</div>
+                    <div class="b2b-queue-note">Terisi otomatis dari ${escapeHtml(REQUEST_B2BB2C_CONFIG[q.type].sheetName)} (baris ${it.row._row}). Shipping Date belum terisi — lengkapi sebelum kirim.</div>
+                </div>
+                <div class="rq-actions">
+                    ${n > 1 ? `<button class="rq-btn rq-btn-ghost" ${q.index === 0 ? 'disabled' : ''} onclick="_b2bQueueGo(-1)">‹ Sebelumnya</button>
+                    <button class="rq-btn rq-btn-ghost" ${q.index === n - 1 ? 'disabled' : ''} onclick="_b2bQueueGo(1)">Berikutnya ›</button>` : ''}
+                    <button class="rq-btn rq-btn-ghost" onclick="_b2bQueueClose()">Sembunyikan</button>
+                </div>`;
+            area.insertBefore(banner, area.firstChild);
+
+            if (it.parse) {
+                const card = tbody.closest('.max-w-4xl');
+                if (card) card.insertAdjacentHTML('beforebegin', _b2bSmartPanelHtml(q, it));
+            }
+        }
+
+        function _b2bSmartPanelHtml(q, it) {
+            const rows = it.parse.rows;
+            const items = rows.filter(r => r.kind === 'item');
+            const cnt = s => items.filter(r => r.status === s).length;
+            const ignored = rows.filter(r => r.kind === 'ignored').length;
+            const badge = {
+                ok: '<span class="rq-badge rq-badge-green">✓ Cocok</span>',
+                check: '<span class="rq-badge rq-badge-yellow">⚠ Cek</span>',
+                none: '<span class="rq-badge rq-badge-red">✗ Tidak ketemu</span>',
+                manual: '<span class="rq-badge rq-badge-gray">✎ Dipilih manual</span>'
+            };
+            const body = rows.map((r, i) => {
+                if (r.kind === 'ignored') {
+                    return `<tr class="b2b-row-ign"><td>${i + 1}</td><td class="b2b-cell-raw">${escapeHtml(r.raw)}</td><td>—</td><td>—</td>
+                        <td><span class="rq-badge rq-badge-gray" title="${escapeHtml(r.reason || '')}">Diabaikan</span></td></tr>`;
+                }
+                let itemCell;
+                const alts = r.alts || [];
+                if (r.status === 'ok' && alts.length <= 1) {
+                    itemCell = escapeHtml(r.match ? r.match.nama : r.name);
+                } else {
+                    const selVal = r.sel || (r.status === 'none' ? 'raw' : '0');
+                    itemCell = `<select class="b2b-alt" onchange="_b2bPickAlt(${i}, this.value)">` +
+                        alts.map((a, k) => `<option value="${k}" ${selVal === String(k) ? 'selected' : ''}>${escapeHtml(a.item.nama)}${a.score < 1 ? ' (' + Math.round(a.score * 100) + '%)' : ''}</option>`).join('') +
+                        `<option value="raw" ${selVal === 'raw' ? 'selected' : ''}>Tetap pakai teks: ${escapeHtml(r.name)}</option></select>`;
+                }
+                let hint = '';
+                if (r.unit) {
+                    hint = `<div class="b2b-hint">teks: ${escapeHtml(r.qty)} ${escapeHtml(r.unit)}</div>`;
+                    if (r.uomHint && r.uom && r.uomHint.toLowerCase() !== String(r.uom).toLowerCase()) {
+                        hint += `<div class="b2b-hint b2b-hint-warn">≠ UOM master (${escapeHtml(r.uom)})</div>`;
+                    }
+                }
+                return `<tr><td>${i + 1}</td><td class="b2b-cell-raw">${escapeHtml(r.raw)}</td><td>${itemCell}</td>
+                    <td class="b2b-qty">${escapeHtml(r.qty)}${hint}</td><td>${badge[r.status] || ''}</td></tr>`;
+            }).join('');
+
+            return `
+            <div id="b2b-smart-panel" class="b2b-smart">
+                <h2 class="b2b-smart-title">Preview DELIVERY DETAILS <span class="rq-chip">pembacaan otomatis</span></h2>
+                <p class="b2b-smart-sub">Teks DELIVERY DETAILS dibaca otomatis lalu dicocokkan &amp; dikoreksi ke sheet "LIST", hasilnya masuk ke tabel Detail Item di bawah.
+                    Periksa dulu apakah sudah sesuai. Baris bertanda kuning/merah juga diberi garis warna di tabel Detail Item.</p>
+                <div class="b2b-raw">${it.parse.raw.trim() ? escapeHtml(it.parse.raw) : '<i>(DELIVERY DETAILS kosong)</i>'}</div>
+                <div class="b2b-chips">
+                    <span class="rq-badge rq-badge-green">✓ ${cnt('ok')} cocok</span>
+                    <span class="rq-badge rq-badge-yellow">⚠ ${cnt('check')} perlu dicek</span>
+                    <span class="rq-badge rq-badge-red">✗ ${cnt('none')} tidak ketemu</span>
+                    ${cnt('manual') ? `<span class="rq-badge rq-badge-gray">✎ ${cnt('manual')} dipilih manual</span>` : ''}
+                    ${ignored ? `<span class="rq-badge rq-badge-gray">${ignored} diabaikan</span>` : ''}
+                </div>
+                ${rows.length ? `<div class="overflow-x-auto"><table class="b2b-smart-table">
+                    <thead><tr><th>#</th><th>Teks di DELIVERY DETAILS</th><th>Dibaca sebagai Item (sheet LIST)</th><th>Qty</th><th>Status</th></tr></thead>
+                    <tbody>${body}</tbody></table></div>` : '<p class="b2b-smart-sub">Tidak ada baris item yang terbaca — isi tabel Detail Item secara manual.</p>'}
+                <p class="b2b-hint" style="margin-top:.5rem">Preview menampilkan hasil pembacaan awal. Perubahan manual di tabel Detail Item tidak ikut mengubah preview ini.</p>
+            </div>`;
+        }
+
+        /** User memilih item lain (atau teks asli) dari dropdown di preview -> ubah baris Detail Item terkait. */
+        async function _b2bPickAlt(rowIdx, val) {
+            const q = window._b2bQueue;
+            if (!q) return;
+            const it = q.items[q.index];
+            const pr = it && it.parse && it.parse.rows[rowIdx];
+            if (!pr) return;
+            const ids = _b2bFormIds(q.mode);
+            const tr = document.querySelector(`#${ids.tbody} tr[data-b2b-uid="${pr.uid}"]`);
+
+            let nama, id;
+            if (val === 'raw') { nama = pr.name; id = ''; pr.match = null; }
+            else {
+                const a = pr.alts[parseInt(val, 10)];
+                if (!a) return;
+                nama = a.item.nama; id = a.item.id || ''; pr.match = a.item;
+            }
+            if (!(val === '0' && pr.status === 'ok')) pr.status = 'manual';   // memilih ulang item yang sama pada baris "cocok" tidak mengubah status
+            pr.sel = String(val);
+
+            if (tr) {
+                const idEl = tr.querySelector('.po-item-id'), namaEl = tr.querySelector('.po-item-nama');
+                if (idEl) idEl.value = id;
+                if (namaEl) { namaEl.value = nama; namaEl.title = nama; }
+                _b2bMarkRowFlag(tr, '');
+                if (val !== 'raw') await autoFillUomDescForRow(tr, nama);
+                if (q.mode === 'RO') { if (typeof _formReturAutosaveHandler === 'function') _formReturAutosaveHandler(); }
+                else if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
             } else {
-                await showFormPO();
+                showToastAlert('warning', 'Baris tidak ditemukan', 'Baris Detail Item terkait sudah dihapus/dimuat ulang. Ubah langsung di tabel Detail Item.');
+            }
+            _b2bRenderQueueUI();
+        }
+
+        // =========================================================================
+        // SMART READER — baca kolom DELIVERY DETAILS (teks bebas) jadi baris item,
+        // lalu koreksi otomatis nama item ke master data sheet "LIST"
+        // (getSourceItems()). Murni JavaScript di browser (tanpa API/kunci AI
+        // eksternal): parsing pola qty + fuzzy matching bertoleransi typo.
+        // =========================================================================
+        const SMART_UNIT_SRC = '(?:pcs?|pieces?|buah|bh|biji|units?|box(?:es)?|dus|karton|ctn|carton|pack|pak|btl|botol|bottle|set|lusin|roll|sheet|lembar|kg|gram|gr|ltr|liter|litre|meter|mtr|sachet|sak|bag|cup|pouch|strip|tube|kaleng)';
+        const SMART_UNIT_TO_UOM = {
+            pc: 'Pcs', pcs: 'Pcs', piece: 'Pcs', pieces: 'Pcs', buah: 'Pcs', bh: 'Pcs', biji: 'Pcs',
+            unit: 'Unit', units: 'Unit', box: 'Box', boxes: 'Box', dus: 'Dus',
+            karton: 'Karton', ctn: 'Karton', carton: 'Karton', pack: 'Pack', pak: 'Pack',
+            btl: 'Btl', botol: 'Btl', bottle: 'Btl', set: 'Set', lusin: 'Lusin', roll: 'Roll',
+            sheet: 'Sheet', lembar: 'Sheet', kg: 'Kg', ltr: 'Ltr', liter: 'Ltr', litre: 'Ltr',
+            meter: 'Meter', mtr: 'Meter'
+        };
+        const SMART_SYNONYMS = { kapsul: 'capsule', capsul: 'capsule', kapsule: 'capsule', capsules: 'capsule', mesin: 'machine', machines: 'machine' };
+        const SMART_STOPWORDS = new Set(['and', 'dan', 'yg', 'yang', 'dgn', 'dengan', 'utk', 'untuk', 'the', 'of', 'dari']);
+
+        // Baris info (bukan item) — diabaikan. Baris "header" — labelnya dibuang, sisanya tetap dibaca.
+        const SMART_INFO_LABEL_RE = /^\s*(alamat|address|pic|site\s*pic|phone|telp|telepon|tlp|no\.?\s*(?:hp|telp|telepon|wa)|hp|wa|whatsapp|tanggal|tgl|date|jam|waktu|time|payment|pembayaran|total|harga|price|ongkir|biaya|catatan|note|notes|remarks?|contact|kontak|lokasi|location|customer|pelanggan)\s*[:=]/i;
+        const SMART_HEADER_LABEL_RE = /^\s*(delivery\s*details?|delivery|pick\s*up|details?(?:\s*(?:pengiriman|order|barang))?|list(?:\s*(?:barang|order|items?))?|daftar(?:\s*(?:barang|order|item))?|order|items?|barang|permintaan|request)\s*[:=]\s*/i;
+        const SMART_HEADER_WORDS = new Set(['no', 'nama', 'barang', 'item', 'items', 'qty', 'quantity', 'jumlah', 'keterangan', 'description', 'deskripsi', 'detail', 'details', 'delivery', 'list', 'daftar', 'order', 'uom', 'satuan']);
+
+        function _smartParseNum(str) {
+            const s = String(str).trim();
+            if (/^\d{1,3}([.,]\d{3})+$/.test(s)) return parseInt(s.replace(/[.,]/g, ''), 10);
+            const n = parseFloat(s.replace(',', '.'));
+            return isNaN(n) ? 0 : n;
+        }
+
+        /** Teks -> token (lowercase, tanpa aksen/tanda baca, sinonim & stopword dibuang). */
+        function _smartNorm(s) {
+            let t = String(s == null ? '' : s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            t = t.replace(/&/g, ' and ');
+            t = t.replace(/(\d)\s*(ml|cl|l|gr|g|kg|mg|cm|mm|oz|cc)\b/g, '$1 $2');
+            t = t.replace(/[^a-z0-9]+/g, ' ').trim();
+            if (!t) return [];
+            return t.split(' ').map(tok => SMART_SYNONYMS[tok] || tok).filter(tok => tok && !SMART_STOPWORDS.has(tok));
+        }
+
+        function _smartLev(a, b) {
+            const la = a.length, lb = b.length;
+            if (!la) return lb;
+            if (!lb) return la;
+            let prev = new Array(lb + 1), cur = new Array(lb + 1);
+            for (let j = 0; j <= lb; j++) prev[j] = j;
+            for (let i = 1; i <= la; i++) {
+                cur[0] = i;
+                for (let j = 1; j <= lb; j++) {
+                    const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+                    cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+                }
+                const tmp = prev; prev = cur; cur = tmp;
+            }
+            return prev[lb];
+        }
+
+        /** Kemiripan 2 token (0..1). Angka harus persis sama; typo ditoleransi sesuai panjang kata. */
+        function _smartTokSim(a, b) {
+            if (a === b) return 1;
+            if (/^\d+$/.test(a) || /^\d+$/.test(b)) return 0;
+            const mn = Math.min(a.length, b.length), mx = Math.max(a.length, b.length);
+            if (mn < 3) return 0;
+            if (a.startsWith(b) || b.startsWith(a)) return mn / mx >= 0.5 ? 0.9 : 0.75;
+            const maxEdit = mx <= 4 ? 0 : (mx <= 7 ? 1 : 2);
+            if (!maxEdit || mx - mn > maxEdit) return 0;
+            const d = _smartLev(a, b);
+            return d <= maxEdit ? 1 - d / mx : 0;
+        }
+
+        let _smartIndexCache = null;
+        function _smartGetIndex(items) {
+            if (_smartIndexCache && _smartIndexCache.src === items) return _smartIndexCache;
+            const entries = [], df = new Map(), inv = new Map();
+            items.forEach((it, i) => {
+                const toks = _smartNorm(it.nama);
+                const uniq = Array.from(new Set(toks));
+                entries.push({ item: it, toks: uniq, norm: toks.join(' ') });
+                uniq.forEach(t => {
+                    df.set(t, (df.get(t) || 0) + 1);
+                    if (!inv.has(t)) inv.set(t, []);
+                    inv.get(t).push(i);
+                });
+            });
+            _smartIndexCache = { src: items, entries, df, inv, vocab: Array.from(df.keys()), N: items.length, simCache: new Map() };
+            return _smartIndexCache;
+        }
+
+        function _smartVocabSim(idx, q) {
+            let m = idx.simCache.get(q);
+            if (m) return m;
+            m = new Map();
+            for (const v of idx.vocab) {
+                const s = _smartTokSim(q, v);
+                if (s > 0) m.set(v, s);
+            }
+            idx.simCache.set(q, m);
+            return m;
+        }
+
+        function _smartWeight(idx, tok) {
+            if (/^\d+$/.test(tok)) return 1.6;
+            return Math.log(2 + idx.N / (1 + (idx.df.get(tok) || 0)));
+        }
+
+        /** Cocokkan 1 nama item ke master data. status: 'ok' | 'check' | 'none'. */
+        function _smartMatchName(name, items) {
+            const idx = _smartGetIndex(items);
+            const qToks = _smartNorm(name);
+            if (!qToks.length || !idx.N) return { status: 'none', conf: 0, best: null, alts: [] };
+            const qNorm = qToks.join(' ');
+            const sims = qToks.map(q => _smartVocabSim(idx, q));
+            const qW = qToks.map(q => _smartWeight(idx, q));
+            const cand = new Set();
+            sims.forEach(m => m.forEach((s, v) => { const lst = idx.inv.get(v); if (lst) lst.forEach(i => cand.add(i)); }));
+
+            const scored = [];
+            cand.forEach(i => {
+                const e = idx.entries[i];
+                let sc;
+                if (e.norm === qNorm) sc = 1;
+                else {
+                    let num = 0, den = 0;
+                    for (let k = 0; k < qToks.length; k++) {
+                        let best = 0;
+                        for (const t of e.toks) { const s = sims[k].get(t); if (s && s > best) best = s; }
+                        num += qW[k] * best; den += qW[k];
+                    }
+                    const qCov = den ? num / den : 0;
+                    let num2 = 0, den2 = 0;
+                    for (const t of e.toks) {
+                        const w = _smartWeight(idx, t);
+                        let best = 0;
+                        for (let k = 0; k < qToks.length; k++) { const s = sims[k].get(t); if (s && s > best) best = s; }
+                        num2 += w * best; den2 += w;
+                    }
+                    const cCov = den2 ? num2 / den2 : 0;
+                    sc = 0.62 * qCov + 0.38 * cCov;
+                }
+                scored.push({ i, score: sc });
+            });
+            scored.sort((a, b) => b.score - a.score);
+
+            const seen = new Set(), top = [];
+            for (const s of scored) {
+                const e = idx.entries[s.i];
+                if (seen.has(e.norm)) continue;
+                seen.add(e.norm);
+                top.push({ item: e.item, score: s.score, norm: e.norm });
+                if (top.length >= 5) break;
+            }
+            const alts = top.filter(t => t.score >= 0.35);
+            const best = top[0], second = top[1];
+            if (!best || best.score < 0.6) return { status: 'none', conf: best ? best.score : 0, best: null, alts };
+            const margin = second ? best.score - second.score : 1;
+            const exact = best.norm === qNorm;
+            const status = (exact || (best.score >= 0.86 && margin >= 0.03) || (best.score >= 0.72 && margin >= 0.25)) ? 'ok' : 'check';
+            return { status, conf: best.score, best: best.item, alts };
+        }
+
+        // ---------- Pembacaan qty ----------
+        function _smartInterpret(seg) {
+            const U = SMART_UNIT_SRC;
+            const s = seg.trim();
+            let m;
+            const mk = (name, qty, unit) => ({ name: name.trim(), qty: _smartParseNum(qty) || 1, unit: (unit || '').toLowerCase() });
+            const ok = (o) => o.name && /[A-Za-z]/.test(o.name) && o.qty > 0 && o.qty <= 99999;
+
+            // "2x Nama" / "2 x Nama" / "2xNama"
+            if ((m = s.match(/^(\d[\d.,]*)\s*[x×]\s+(.+)$/i) || s.match(/^(\d[\d.,]*)[x×](?=\S)(.+)$/i))) {
+                const o = mk(m[2], m[1]); if (ok(o)) return { pattern: 'x-prefix', options: [o] };
+            }
+            // "2 unit Nama"
+            if ((m = s.match(new RegExp('^(\\d[\\d.,]*)\\s*(' + U + ')\\b\\.?\\s+(.+)$', 'i')))) {
+                const o = mk(m[3], m[1], m[2]); if (ok(o)) return { pattern: 'unit-prefix', options: [o] };
+            }
+            // "Nama x2" / "Nama x 2 pcs"
+            if ((m = s.match(new RegExp('^(.+?)(?:\\s+[xX]|\\s*[×])\\s*(\\d[\\d.,]*)\\s*(' + U + ')?\\s*$', 'i')))) {
+                const o = mk(m[1], m[2], m[3]); if (ok(o)) return { pattern: 'x-suffix', options: [o] };
+            }
+            // "Nama qty 2"
+            if ((m = s.match(new RegExp('^(.+?)\\s+(?:qty|quantity|jumlah|jml)\\s*[:.=]?\\s*(\\d[\\d.,]*)\\s*(' + U + ')?\\s*$', 'i')))) {
+                const o = mk(m[1], m[2], m[3]); if (ok(o)) return { pattern: 'qty-label', options: [o] };
+            }
+            // "Nama - 2 pcs" / "Nama : 2" / "Nama = 2"
+            if ((m = s.match(new RegExp('^(.+?)\\s*[-–:=@]\\s*(\\d[\\d.,]*)\\s*(' + U + ')?\\s*$', 'i')))) {
+                const o = mk(m[1], m[2], m[3]); if (ok(o)) return { pattern: 'sep-suffix', options: [o] };
+            }
+            // "Nama (2 pcs)"
+            if ((m = s.match(new RegExp('^(.+?)\\s*\\(\\s*(\\d[\\d.,]*)\\s*(' + U + ')?\\s*\\)\\s*$', 'i')))) {
+                const o = mk(m[1], m[2], m[3]); if (ok(o)) return { pattern: 'paren', options: [o] };
+            }
+            // "Nama 2 pcs"
+            if ((m = s.match(new RegExp('^(.+?)\\s+(\\d[\\d.,]*)\\s*(' + U + ')\\b\\.?\\s*$', 'i')))) {
+                const o = mk(m[1], m[2], m[3]); if (ok(o)) return { pattern: 'unit-suffix', options: [o] };
+            }
+            // "2 Nama" (angka di depan tanpa satuan) — ambigu
+            if ((m = s.match(/^(\d[\d.,]*)\s+(?=[A-Za-z(])(.+)$/))) {
+                const o = mk(m[2], m[1]);
+                if (ok(o)) return { pattern: 'bare-prefix', options: [o, { name: s, qty: 1, unit: '' }] };
+            }
+            // "Nama 2" (angka di belakang tanpa satuan) — ambigu
+            if ((m = s.match(/^(.+?)\s+(\d[\d.,]*)\s*$/))) {
+                const o = mk(m[1], m[2]);
+                if (ok(o)) return { pattern: 'bare-suffix', options: [o, { name: s, qty: 1, unit: '' }] };
+            }
+            return { pattern: 'none', options: [{ name: s, qty: 1, unit: '' }] };
+        }
+
+        /** Pecah 1 baris yang berisi beberapa item sekaligus. */
+        function _smartSplitMulti(line) {
+            const U = SMART_UNIT_SRC;
+            const parts = line.split(/\s*(?:,|\s\+\s|\s&\s|\s(?:dan|serta)\s)\s*/i).map(p => p.trim()).filter(Boolean);
+            if (parts.length >= 2 && parts.every(p => /\d/.test(p) && /[A-Za-z]/.test(p))) return parts;
+            const leading = new RegExp('^\\d[\\d.,]*\\s*' + U + '\\b', 'i').test(line);
+            const globalRe = new RegExp('\\d[\\d.,]*\\s*' + U + '\\b\\.?', 'gi');
+            const hits = line.match(globalRe) || [];
+            if (hits.length >= 2) {
+                if (leading) {
+                    const segs = line.split(new RegExp('\\s+(?=\\d[\\d.,]*\\s*' + U + '\\b)', 'i')).map(p => p.trim()).filter(Boolean);
+                    if (segs.length >= 2) return segs;
+                } else {
+                    const segs = [];
+                    let last = 0, mm;
+                    const re = new RegExp('\\d[\\d.,]*\\s*' + U + '\\b\\.?', 'gi');
+                    while ((mm = re.exec(line)) !== null) {
+                        segs.push(line.slice(last, mm.index + mm[0].length).trim());
+                        last = mm.index + mm[0].length;
+                    }
+                    const rest = line.slice(last).trim();
+                    if (rest && /[A-Za-z]/.test(rest)) segs.push(rest);
+                    else if (rest && segs.length) segs[segs.length - 1] += ' ' + rest;
+                    const clean = segs.map(x => x.replace(/^[\s,;+&-]+/, '').trim()).filter(Boolean);
+                    if (clean.length >= 2) return clean;
+                }
+            }
+            return [line];
+        }
+
+        /** Teks DELIVERY DETAILS -> daftar segmen mentah {raw, kind, ...} sebelum dicocokkan ke LIST. */
+        function _smartSegments(rawText) {
+            const text = String(rawText == null ? '' : rawText).replace(/\r/g, '').replace(/[\u00A0\u2007\u202F]/g, ' ');
+            const lines = [];
+            text.split(/\n+/).forEach(l => l.split(/\s*[;|]\s*/).forEach(p => { p = p.trim(); if (p) lines.push(p); }));
+
+            // Deteksi daftar bernomor "1. ... 2. ..." (nomor urut, bukan qty)
+            const nums = [];
+            lines.forEach(l => { const m = /^\s*(?:[-•*]\s*)?(\d{1,3})\s*[.)]\s+\S/.exec(l); if (m) nums.push(parseInt(m[1], 10)); });
+            let numbered = false;
+            if (nums.length >= 2) {
+                let asc = 0;
+                for (let i = 1; i < nums.length; i++) if (nums[i] === nums[i - 1] + 1) asc++;
+                numbered = asc >= Math.ceil((nums.length - 1) * 0.6);
             }
 
-            if (mode === 'RO') {
-                const categoryEl = document.getElementById('retur-category');
-                if (categoryEl && CATEGORY_CODE[sourceType]) { categoryEl.value = sourceType; await handleFormReturCategoryChange(); }
-                _rqSetSelectValue(document.getElementById('retur-nama'), first.pic);
-                const fromLocEl = document.getElementById('retur-from-location');
-                if (fromLocEl) fromLocEl.value = shipToConcat;
-                const alamatEl = document.getElementById('retur-alamat');
-                if (alamatEl) alamatEl.value = first.address || '';
-                const shipToEl = document.getElementById('retur-allocated-to');
-                if (shipToEl) shipToEl.value = 'Jumpstart Warehouse Pulogadung';
-                const phoneEl = document.getElementById('retur-phone');
-                if (phoneEl) phoneEl.value = first.sitePhone || '';
-                const noteEl = document.getElementById('retur-note-khusus');
-                if (noteEl) noteEl.value = notesCombined;
-                if (typeof updateReturPreview === 'function') updateReturPreview();
-                if (typeof _formReturAutosaveHandler === 'function') _formReturAutosaveHandler();
-            } else {
-                const categoryEl = document.getElementById('category');
-                if (categoryEl && CATEGORY_CODE[sourceType]) { categoryEl.value = sourceType; await handleFormPOCategoryChange(); }
-                _rqSetSelectValue(document.getElementById('nama'), first.pic);
-                const shipToEl = document.getElementById('allocated-to');
-                if (shipToEl) shipToEl.value = shipToConcat;
-                const alamatEl = document.getElementById('po-alamat');
-                if (alamatEl) alamatEl.value = first.address || '';
-                const phoneEl = document.getElementById('po-phone');
-                if (phoneEl) phoneEl.value = first.sitePhone || '';
-                const noteEl = document.getElementById('po-note-khusus');
-                if (noteEl) noteEl.value = notesCombined;
-                if (typeof updatePOPreview === 'function') updatePOPreview();
-                if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
+            const out = [];
+            for (const original of lines) {
+                let s = original.replace(/^[\-–—•·*►▪●○■□>\u2022]+\s+/, '').replace(/^\[\s?[xX]?\s?\]\s*/, '').trim();
+                if (numbered) s = s.replace(/^\d{1,3}\s*[.)]\s+/, '');
+                s = s.replace(/[.,;:]+$/, '').trim();
+                if (!s) continue;
+
+                if (SMART_INFO_LABEL_RE.test(s)) { out.push({ raw: original, kind: 'ignored', reason: 'Baris info (bukan item)' }); continue; }
+                if (SMART_HEADER_LABEL_RE.test(s)) s = s.replace(SMART_HEADER_LABEL_RE, '').trim();
+                if (!s) { out.push({ raw: original, kind: 'ignored', reason: 'Judul/label' }); continue; }
+                const words = s.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
+                if (words.length && words.every(w => SMART_HEADER_WORDS.has(w))) { out.push({ raw: original, kind: 'ignored', reason: 'Judul kolom' }); continue; }
+                if (!/[A-Za-z]/.test(s)) { out.push({ raw: original, kind: 'ignored', reason: 'Tidak ada nama item' }); continue; }
+
+                // "2) Nama" tanpa pola qty lain: angka di depan dianggap qty
+                let pieces = _smartSplitMulti(s);
+                pieces.forEach((p, k) => {
+                    const num = p.match(/^(\d{1,3})\s*[.)]\s+(.+)$/);
+                    if (num) {
+                        if (_smartInterpret(num[2]).pattern !== 'none') p = num[2];
+                        else p = num[1] + ' ' + num[2];
+                    }
+                    out.push({ raw: pieces.length > 1 ? p : original, kind: 'item', text: p });
+                });
             }
+            return out;
+        }
 
-            _renderRqDeliveryPreview(mode, rows);
-            await _fillItemTableFromRqDeliveryDetails(mode, rows);
-
-            showToastAlert('success', 'Data Ditambahkan', `${rows.length} data dari Request ${sourceType} berhasil ditambahkan ke ${mode === 'RO' ? 'Form RO' : 'Form PO'}.`);
+        /** Baca DELIVERY DETAILS lalu cocokkan tiap item ke master data. Hasil: baris preview. */
+        function _smartReadDetails(rawText, items, maps) {
+            const segs = _smartSegments(rawText);
+            const uomMap = (maps && maps.uomMap) || {}, descMap = (maps && maps.descriptionMap) || {};
+            const stamp = Date.now().toString(36);
+            const rows = [];
+            segs.forEach((sg, i) => {
+                if (sg.kind !== 'item') { rows.push({ raw: sg.raw, kind: 'ignored', reason: sg.reason }); return; }
+                const interp = _smartInterpret(sg.text);
+                let chosen = interp.options[0];
+                let match = _smartMatchName(chosen.name, items);
+                if (interp.options.length > 1) {
+                    const whole = interp.options[1];
+                    const wm = _smartMatchName(whole.name, items);
+                    const wholeExact = wm.status === 'ok' && wm.best && _smartNorm(wm.best.nama).join(' ') === _smartNorm(whole.name).join(' ');
+                    if (wholeExact || (wm.conf - match.conf >= 0.12 && wm.status !== 'none')) { chosen = whole; match = wm; }
+                }
+                const uidRow = { raw: sg.raw, kind: 'item', name: chosen.name, qty: chosen.qty, unit: chosen.unit, status: match.status, conf: match.conf, match: match.best, alts: match.alts, uid: 'b2b_' + stamp + '_' + i, sel: '' };
+                const nama = match.best ? match.best.nama : chosen.name;
+                const key = String(nama).trim().toLowerCase();
+                const hint = chosen.unit ? (SMART_UNIT_TO_UOM[chosen.unit] || '') : '';
+                uidRow.uom = uomMap[key] || hint || '';
+                uidRow.uomHint = hint;
+                uidRow.desc = descMap[key] || '';
+                rows.push(uidRow);
+            });
+            return rows;
         }
 
         // =========================================================================
@@ -15062,23 +15557,6 @@
                 </div>
             </div>
 
-            <!-- [ADDON — Preview DELIVERY DETAILS dari Request B2B/B2C] -->
-            <div id="po-delivery-preview-wrap" class="hidden max-w-4xl mx-auto mt-6 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-                <h2 class="text-lg font-bold text-gray-700 mb-1 border-b pb-2">Preview Delivery Details</h2>
-                <p class="text-xs text-gray-400 mb-3">Data mentah dari Request B2B/B2C yang dipilih — gunakan untuk memvalidasi tabel Detail Item di bawah.</p>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100 text-gray-600">
-                                <th class="p-2 text-left" style="width:220px">Location Name</th>
-                                <th class="p-2 text-left">Delivery Details</th>
-                            </tr>
-                        </thead>
-                        <tbody id="po-delivery-preview-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-
             <!-- Tabel Item PO -->
             <div class="max-w-4xl mx-auto mt-6 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
                 <h2 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">Detail Item</h2>
@@ -15136,6 +15614,9 @@
 
             // Muat daftar No. PO bulan berjalan untuk dropdown "Revisi PO"
             _loadRevisiPODropdown();
+
+            // Kalau ada antrian data dari Request B2B/B2C, pasang lagi banner & preview DELIVERY DETAILS
+            if (typeof _b2bAfterFormRender === 'function') _b2bAfterFormRender('PO');
         }
 
         /** Kamus shortcut Alamat: ketik key-nya di field Alamat, otomatis diganti alamat lengkap.
@@ -15811,6 +16292,7 @@
                     : result.status === 'Need Approval'
                         ? ' (status: Need Approval — menunggu Release dari Finance)'
                         : '';
+                _b2bQueueOnSubmitted('PO'); // antrian Request B2B/B2C: tandai selesai & lanjut ke data berikutnya
                 resetFormPO();
                 _clearDraft(DRAFT_KEYS.formPO);
                 showPdfPreviewModal(
@@ -15964,23 +16446,6 @@
                 </div>
             </div>
 
-            <!-- [ADDON — Preview DELIVERY DETAILS dari Request B2B/B2C] -->
-            <div id="retur-delivery-preview-wrap" class="hidden max-w-4xl mx-auto mt-6 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-                <h2 class="text-lg font-bold text-gray-700 mb-1 border-b pb-2">Preview Delivery Details</h2>
-                <p class="text-xs text-gray-400 mb-3">Data mentah dari Request B2B/B2C yang dipilih — gunakan untuk memvalidasi tabel Detail Item di bawah.</p>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-xs border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100 text-gray-600">
-                                <th class="p-2 text-left" style="width:220px">Location Name</th>
-                                <th class="p-2 text-left">Delivery Details</th>
-                            </tr>
-                        </thead>
-                        <tbody id="retur-delivery-preview-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-
             <!-- Tabel Item Retur -->
             <div class="max-w-4xl mx-auto mt-6 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
                 <h2 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">Detail Item</h2>
@@ -16035,6 +16500,9 @@
 
             // Muat daftar No. RO bulan berjalan untuk dropdown "Revisi RO"
             _loadRevisiRODropdown();
+
+            // Kalau ada antrian data dari Request B2B/B2C, pasang lagi banner & preview DELIVERY DETAILS
+            if (typeof _b2bAfterFormRender === 'function') _b2bAfterFormRender('RO');
         }
 
         function updateReturPreview() {
@@ -16433,6 +16901,7 @@
                 });
                 if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim Retur.');
                 setProgressOverlay(100, 'Selesai!');
+                _b2bQueueOnSubmitted('RO'); // antrian Request B2B/B2C: tandai selesai & lanjut ke data berikutnya
                 resetFormRetur();
                 _clearDraft(DRAFT_KEYS.formRetur);
                 showPdfPreviewModal(
