@@ -310,6 +310,42 @@
         }
     </style>
 
+    <!-- [MENU BARU — Request B2B/B2C] Style khusus badge "Remaining", toolbar filter, & sel
+         tabel. Sengaja ditulis sebagai CSS biasa (bukan class Tailwind) supaya tampil benar
+         TANPA perlu build ulang tailwind.min.css — class warna badge (mis. kuning/merah muda)
+         belum tentu ikut ter-compile karena Tailwind CLI hanya memindai class yang sudah ada
+         di file saat build terakhir. -->
+    <style id="request-b2b-b2c-style">
+        .rq-toolbar { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1.5rem; align-items: stretch; }
+        .rq-search-wrap { position: relative; flex: 1 1 260px; min-width: 0; }
+        .rq-search-wrap > svg { left: .875rem; } /* class left-3.5 tidak ada di tailwind.min.css hasil compile */
+        .rq-select {
+            flex: 0 1 240px; min-width: 160px; padding: .625rem 2rem .625rem .875rem;
+            border: 1px solid #e5e7eb; border-radius: .75rem; background-color: #fff;
+            font-size: .875rem; color: #374151; cursor: pointer;
+        }
+        .rq-select:focus { outline: none; box-shadow: 0 0 0 2px #fbbf24; border-color: #fbbf24; }
+        .rq-badge {
+            display: inline-block; padding: .2rem .65rem; border-radius: 9999px; border: 1px solid transparent;
+            font-size: .75rem; font-weight: 700; line-height: 1.25; white-space: nowrap;
+        }
+        .rq-badge-red    { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+        .rq-badge-green  { background: #d1fae5; color: #047857; border-color: #a7f3d0; }
+        .rq-badge-yellow { background: #fef9c3; color: #a16207; border-color: #fde047; }
+        .rq-badge-gray   { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; font-weight: 600; }
+        .rq-status {
+            display: inline-block; padding: .2rem .6rem; border-radius: .5rem; background: #f3f4f6;
+            color: #374151; font-size: .75rem; font-weight: 600; white-space: nowrap;
+        }
+        .rq-cell-long { min-width: 200px; max-width: 340px; white-space: pre-line; overflow-wrap: anywhere; }
+        .rq-more-wrap { display: flex; justify-content: center; padding: .875rem; border-top: 1px solid #f3f4f6; }
+        .rq-more-btn {
+            padding: .5rem 1.25rem; border-radius: .75rem; border: 1px solid #e5e7eb; background: #fff;
+            color: #374151; font-size: .75rem; font-weight: 700; cursor: pointer;
+        }
+        .rq-more-btn:hover { background: #f9fafb; }
+    </style>
+
     <!-- [FIX PERF LOGIN — Agustus 2026] Semua library berat di bawah ini TIDAK dipakai
          di halaman login, hanya dipakai di menu-menu setelah login (Process PO, Warranty OCR,
          Route scanner, Pool Driver map, Share PDF). Sebelumnya di-load sinkron (blocking) di
@@ -2171,6 +2207,29 @@
                         List Paket
                     </button>
 
+                    <!-- Request B2B/B2C Baru (khusus ADMIN) -->
+                    <div id="menu-request-b2b-b2c" class="hidden">
+                        <button onclick="toggleSubMenu('request-b2b-b2c-sub','arrow-request-b2b-b2c')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                </svg>
+                                <span>Request B2B/B2C</span>
+                            </div>
+                            <span id="arrow-request-b2b-b2c" class="text-xs">▼</span>
+                        </button>
+                        <div id="request-b2b-b2c-sub"
+                            class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button id="sub-request-b2b" onclick="navTo('Request B2B')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">B2B</button>
+                            <button id="sub-request-b2c" onclick="navTo('Request B2C')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">B2C</button>
+                        </div>
+                    </div>
+
                 </nav>
 
                 <!-- Footer sidebar: role info -->
@@ -3446,7 +3505,7 @@
             // seharusnya tidak boleh. Pola deny-by-default ini menutup celah itu.
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
                 'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
-                'menu-catalogue', 'menu-service-center', 'menu-list-paket'
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c'
             ].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -3574,6 +3633,8 @@
                 document.getElementById('menu-service-center').classList.remove('hidden');
                 // List Paket hanya untuk ADMIN
                 document.getElementById('menu-list-paket').classList.remove('hidden');
+                // Request B2B/B2C (sub-menu B2B & B2C) hanya untuk ADMIN
+                document.getElementById('menu-request-b2b-b2c').classList.remove('hidden');
                 navTo(_getRestorePage('Dashboard'));
             }
 
@@ -3652,6 +3713,9 @@
             if (saved === 'Product Registration' && currentUserRole !== 'ADMIN') {
                 return defaultPage;
             }
+            if ((saved === 'Request B2B' || saved === 'Request B2C') && currentUserRole !== 'ADMIN') {
+                return defaultPage;
+            }
             if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(saved) &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi')) {
                 return defaultPage;
@@ -3708,7 +3772,7 @@
             // berikutnya (mis. sekilas ke-flash sebelum startApp() menata ulang).
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
                 'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
-                'menu-catalogue', 'menu-service-center', 'menu-list-paket'
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c'
             ].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -4662,7 +4726,9 @@
                 if (el.textContent.trim() === pageName ||
                     (pageName === 'Purchase Order' && el.textContent.trim() === 'Form PO') ||
                     (pageName === 'Form Return Order' && el.textContent.trim() === 'Form Return Order') ||
-                    (pageName === 'Dashboard' && el.textContent.trim() === 'Dashboard')) {
+                    (pageName === 'Dashboard' && el.textContent.trim() === 'Dashboard') ||
+                    (pageName === 'Request B2B' && el.id === 'sub-request-b2b') ||
+                    (pageName === 'Request B2C' && el.id === 'sub-request-b2c')) {
                     el.classList.add('bg-amber-500', 'text-white', 'font-bold');
                     el.classList.remove('text-gray-700', 'text-gray-500');
                 }
@@ -4737,6 +4803,11 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "List Paket" hanya dapat diakses oleh Admin.');
                 return;
             }
+            // ── AKSES KONTROL: Request B2B/B2C (B2B & B2C) hanya untuk ADMIN ──
+            if ((pageName === 'Request B2B' || pageName === 'Request B2C') && currentUserRole !== 'ADMIN') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Request B2B/B2C" hanya dapat diakses oleh Admin.');
+                return;
+            }
             // ── AKSES KONTROL: List PO Pre-Order/Need Approval hanya untuk ADMIN & Finance ──
             if (pageName === 'PO PreOrder Approval' && !(currentUserRole === 'ADMIN' || currentUserRole === 'Finance')) {
                 showAlert('error', 'Akses Ditolak', 'Menu "List PO Pre-Order/Need Approval" hanya dapat diakses oleh Admin dan Finance.');
@@ -4772,7 +4843,9 @@
                 'Report Status Repair': 'Service Center - Report Status Repair',
                 'Task Technician': 'Service Center - Task Technician',
                 'Form Service': 'Service Center - Form Service',
-                'List Paket': 'List Paket - Drop Off Mandiri'
+                'List Paket': 'List Paket - Drop Off Mandiri',
+                'Request B2B': 'Request B2B/B2C - B2B',
+                'Request B2C': 'Request B2B/B2C - B2C'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -4845,6 +4918,8 @@
                 case 'Report Status Repair': await showReportStatusRepair(); break;
                 case 'Form Service': await showFormService(); break;
                 case 'List Paket': await showListPaket(); break;
+                case 'Request B2B': await showRequestB2BB2C('B2B'); break;
+                case 'Request B2C': await showRequestB2BB2C('B2C'); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -6763,6 +6838,306 @@
 
             // Muat daftar No. Tiket bulan berjalan untuk dropdown "Revisi Form Service"
             _loadRevisiFormServiceDropdown();
+        }
+
+        // =========================================================================
+        // MENU: REQUEST B2B/B2C (khusus ADMIN) — sub-menu "B2B" & "B2C"
+        // Data diambil dari GAS yang sama dengan Purchase Order (PO_GAS_URL):
+        //   - sub-menu B2B -> action 'getB2BData' (sheet "B2B_Data")
+        //   - sub-menu B2C -> action 'getB2CData' (sheet "B2C_Data")
+        // pada spreadsheet "Purchase Order nod.". Backend hanya mengirim kolom yang
+        // ditampilkan di bawah, dan menolak role selain ADMIN (bukan cuma disembunyikan).
+        //
+        // Kolom "Remaining" dihitung DI SINI (frontend) dari kolom DATE tiap kali tabel
+        // dirender, supaya selalu mengikuti hari ini:
+        //   - sudah >= 1 bulan sejak DATE  -> "Overdue"        (merah)
+        //   - <= 14 hari sejak DATE        -> "N hari"         (hijau)
+        //   - 15 hari s/d < 1 bulan        -> "N hari"         (kuning)
+        // =========================================================================
+        const REQUEST_B2BB2C_CONFIG = {
+            B2B: {
+                action: 'getB2BData',
+                title: 'Request B2B',
+                sheetName: 'B2B_Data',
+                cols: [
+                    { key: 'date', label: 'DATE', kind: 'date' },
+                    { key: '_remaining', label: 'Remaining', kind: 'remaining' },
+                    { key: 'pic', label: 'PIC' },
+                    { key: 'actionPlan', label: 'ACTION PLAN' },
+                    { key: 'locationName', label: 'LOCATION NAME', kind: 'long' },
+                    { key: 'deliveryDetails', label: 'DELIVERY DETAILS', kind: 'long' },
+                    { key: 'planDate', label: 'DELIVERY / PICK UP PLAN DATE', kind: 'date' },
+                    { key: 'remarks', label: 'Remarks/Special Requirements', kind: 'long' },
+                    { key: 'sitePic', label: 'SITE PIC' },
+                    { key: 'sitePhone', label: 'SITE PIC PHONE NO.' },
+                    { key: 'address', label: 'DELIVERY / PICK UP ADDRESS', kind: 'long' },
+                    { key: 'statusOrder', label: 'STATUS ORDER', kind: 'status' }
+                ]
+            },
+            B2C: {
+                action: 'getB2CData',
+                title: 'Request B2C',
+                sheetName: 'B2C_Data',
+                cols: [
+                    { key: 'date', label: 'DATE', kind: 'date' },
+                    { key: '_remaining', label: 'Remaining', kind: 'remaining' },
+                    { key: 'pic', label: 'PIC' },
+                    { key: 'actionPlan', label: 'ACTION PLAN' },
+                    { key: 'locationName', label: 'LOCATION NAME', kind: 'long' },
+                    { key: 'deliveryDetails', label: 'DELIVERY DETAILS', kind: 'long' },
+                    { key: 'planDate', label: 'DELIVERY / PICK UP PLAN DATE', kind: 'date' },
+                    { key: 'remarks', label: 'Remarks/Special Requirements', kind: 'long' },
+                    { key: 'orderType', label: 'ORDER TYPE' },
+                    { key: 'paymentTerm', label: 'PAYMENT TERM' },
+                    { key: 'sitePic', label: 'SITE PIC' },
+                    { key: 'sitePhone', label: 'SITE PIC PHONE NO.' },
+                    { key: 'address', label: 'DELIVERY / PICK UP ADDRESS', kind: 'long' },
+                    { key: 'statusOrder', label: 'STATUS ORDER', kind: 'status' }
+                ]
+            }
+        };
+
+        const RQ_PAGE_SIZE = 100;          // jumlah baris yang dirender per "halaman" (tombol "Tampilkan lebih banyak")
+        const RQ_EMPTY_STATUS = '__EMPTY__'; // nilai filter untuk baris tanpa STATUS ORDER
+        const _RQ_MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+        let _requestB2BB2CType = 'B2B';
+        let _requestB2BB2CRows = [];
+        let _requestB2BB2CLimit = RQ_PAGE_SIZE;
+        let _requestB2BB2CLoadSeq = 0;     // penanda request terbaru (cegah hasil B2B menimpa halaman B2C bila user pindah cepat)
+
+        /** "yyyy-MM-dd" -> "5 Sep 2026". Kalau bukan tanggal valid, tampilkan teks mentahnya (atau "-"). */
+        function _rqFormatDate(iso, raw) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+            if (!m) return raw ? String(raw) : '-';
+            return `${parseInt(m[3], 10)} ${_RQ_MONTHS_ID[parseInt(m[2], 10) - 1]} ${m[1]}`;
+        }
+
+        /** Tambah 1 bulan kalender (31 Jan + 1 bulan -> 28/29 Feb, bukan meloncat ke Maret). */
+        function _rqAddOneMonth(d) {
+            const first = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+            const lastDay = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+            first.setDate(Math.min(d.getDate(), lastDay));
+            return first;
+        }
+
+        /** Hitung status "Remaining" dari tanggal DATE ("yyyy-MM-dd") sampai hari ini. */
+        function _rqRemainingInfo(iso) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+            if (!m) return { kind: 'none' };
+            const start = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            if (today >= _rqAddOneMonth(start)) return { kind: 'overdue' };
+            const days = Math.max(0, Math.round((today - start) / 86400000));
+            return { kind: days <= 14 ? 'ok' : 'warn', days: days };
+        }
+
+        function _rqRemainingBadgeHtml(iso) {
+            const info = _rqRemainingInfo(iso);
+            if (info.kind === 'overdue') return '<span class="rq-badge rq-badge-red">Overdue</span>';
+            if (info.kind === 'ok') return `<span class="rq-badge rq-badge-green">${info.days} hari</span>`;
+            if (info.kind === 'warn') return `<span class="rq-badge rq-badge-yellow">${info.days} hari</span>`;
+            return '<span class="rq-badge rq-badge-gray">-</span>';
+        }
+
+        async function showRequestB2BB2C(type) {
+            const cfg = REQUEST_B2BB2C_CONFIG[type];
+            if (!cfg) return;
+            // Lapis kedua di sisi tampilan (lapis utama ada di navTo() & backend checkAccess()).
+            if (currentUserRole !== 'ADMIN') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Request B2B/B2C" hanya dapat diakses oleh Admin.');
+                return;
+            }
+            _requestB2BB2CType = type;
+            _requestB2BB2CRows = [];
+            _requestB2BB2CLimit = RQ_PAGE_SIZE;
+
+            const headCells = cfg.cols.map(c =>
+                `<th class="px-4 py-3 text-left font-semibold whitespace-nowrap">${escapeHtml(c.label)}</th>`).join('');
+
+            document.getElementById('content-area').innerHTML = `
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700">${escapeHtml(cfg.title)}</h1>
+                <button id="rq-refresh-btn" onclick="loadRequestB2BB2C(_requestB2BB2CType)"
+                    class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold shadow-sm transition">
+                    ⟳ Refresh
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">Data dari sheet "${escapeHtml(cfg.sheetName)}" (spreadsheet "Purchase Order nod."). Remaining dihitung dari kolom DATE sampai hari ini.</p>
+
+            <div class="rq-toolbar">
+                <div class="rq-search-wrap">
+                    <svg class="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input type="text" id="rq-search" oninput="filterRequestB2BB2C()"
+                        placeholder="Cari PIC, lokasi, detail, alamat, status, dll..."
+                        class="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition">
+                    <button id="rq-search-clear" onclick="document.getElementById('rq-search').value=''; filterRequestB2BB2C();"
+                        class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+                </div>
+                <select id="rq-status-filter" class="rq-select" onchange="filterRequestB2BB2C()" aria-label="Filter STATUS ORDER">
+                    <option value="">Semua Status Order</option>
+                </select>
+            </div>
+
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <h2 class="text-base font-bold text-gray-700">${escapeHtml(cfg.sheetName)}</h2>
+                <span id="rq-count" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">0 data</span>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-800 text-white text-xs uppercase tracking-wide">${headCells}</tr>
+                        </thead>
+                        <tbody id="rq-tbody">
+                            <tr><td colspan="${cfg.cols.length}" class="px-4 py-10 text-center text-gray-400">
+                                <div class="flex items-center justify-center gap-3">
+                                    <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+                                    Memuat data...
+                                </div>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="rq-more-wrap" class="rq-more-wrap hidden">
+                    <button class="rq-more-btn" onclick="showMoreRequestB2BB2C()">Tampilkan lebih banyak</button>
+                </div>
+            </div>`;
+
+            await loadRequestB2BB2C(type);
+        }
+
+        /** Ambil data dari backend & render tabel. Selalu ambil ulang (tanpa cache browser) —
+         *  backend sendiri sudah punya cache singkat 6 detik yang dibagi ke semua user. */
+        async function loadRequestB2BB2C(type) {
+            const cfg = REQUEST_B2BB2C_CONFIG[type];
+            const tbody = document.getElementById('rq-tbody');
+            const btn = document.getElementById('rq-refresh-btn');
+            if (!cfg || !tbody) return;
+
+            const mySeq = ++_requestB2BB2CLoadSeq;
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Memuat...'; }
+            try {
+                const res = await fetchWithRetry(PO_GAS_URL + '?action=' + cfg.action, {}, 25000);
+                const result = await res.json();
+                if (mySeq !== _requestB2BB2CLoadSeq || _requestB2BB2CType !== type) return; // sudah pindah halaman/menu lain
+                if (result.error || result.success === false) {
+                    throw new Error(result.error || result.message || 'Gagal mengambil data.');
+                }
+
+                const rows = Array.isArray(result.rows) ? result.rows : [];
+                // Terbaru dulu berdasarkan DATE; baris tanpa tanggal valid di paling bawah.
+                rows.sort((a, b) => {
+                    const da = a.date || '', db = b.date || '';
+                    if (da !== db) return da < db ? 1 : -1; // "yyyy-MM-dd" bisa dibandingkan sebagai teks; '' otomatis paling kecil
+                    return (b._row || 0) - (a._row || 0);
+                });
+                // Teks pencarian per baris (dibuat sekali di sini, bukan tiap ketikan).
+                rows.forEach(r => {
+                    const parts = cfg.cols.filter(c => c.kind !== 'remaining').map(c =>
+                        c.kind === 'date' ? _rqFormatDate(r[c.key], r[c.key + 'Raw']) : (r[c.key] || ''));
+                    r._search = parts.join(' | ').toLowerCase();
+                });
+                _requestB2BB2CRows = rows;
+                _requestB2BB2CLimit = RQ_PAGE_SIZE;
+
+                // Isi dropdown filter STATUS ORDER dari data (pertahankan pilihan yang sedang aktif).
+                const sel = document.getElementById('rq-status-filter');
+                if (sel) {
+                    const prev = sel.value;
+                    const statuses = Array.from(new Set(rows.map(r => r.statusOrder).filter(Boolean)))
+                        .sort((a, b) => a.localeCompare(b, 'id'));
+                    const hasEmpty = rows.some(r => !r.statusOrder);
+                    sel.innerHTML = '<option value="">Semua Status Order</option>' +
+                        statuses.map(st => `<option value="${escapeHtml(st)}">${escapeHtml(st)}</option>`).join('') +
+                        (hasEmpty ? `<option value="${RQ_EMPTY_STATUS}">(Belum ada status)</option>` : '');
+                    sel.value = Array.from(sel.options).some(o => o.value === prev) ? prev : '';
+                }
+
+                renderRequestB2BB2C();
+            } catch (err) {
+                if (mySeq !== _requestB2BB2CLoadSeq || _requestB2BB2CType !== type) return;
+                const cur = document.getElementById('rq-tbody');
+                if (cur) {
+                    cur.innerHTML = `<tr><td colspan="${cfg.cols.length}" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                }
+                const countEl = document.getElementById('rq-count');
+                if (countEl) countEl.textContent = '0 data';
+            } finally {
+                const curBtn = document.getElementById('rq-refresh-btn');
+                if (curBtn && mySeq === _requestB2BB2CLoadSeq) { curBtn.disabled = false; curBtn.textContent = '⟳ Refresh'; }
+            }
+        }
+
+        /** Dipanggil saat kata kunci / filter status berubah: balik ke halaman pertama lalu render ulang. */
+        function filterRequestB2BB2C() {
+            _requestB2BB2CLimit = RQ_PAGE_SIZE;
+            renderRequestB2BB2C();
+        }
+
+        function showMoreRequestB2BB2C() {
+            _requestB2BB2CLimit += RQ_PAGE_SIZE;
+            renderRequestB2BB2C();
+        }
+
+        function renderRequestB2BB2C() {
+            const cfg = REQUEST_B2BB2C_CONFIG[_requestB2BB2CType];
+            const tbody = document.getElementById('rq-tbody');
+            if (!cfg || !tbody) return;
+
+            const searchEl = document.getElementById('rq-search');
+            const statusEl = document.getElementById('rq-status-filter');
+            const clearBtn = document.getElementById('rq-search-clear');
+            const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+            const st = statusEl ? statusEl.value : '';
+            if (clearBtn) clearBtn.classList.toggle('hidden', !q);
+
+            const filtered = _requestB2BB2CRows.filter(r => {
+                if (st === RQ_EMPTY_STATUS) { if (r.statusOrder) return false; }
+                else if (st && r.statusOrder !== st) return false;
+                return !q || (r._search || '').includes(q);
+            });
+
+            const countEl = document.getElementById('rq-count');
+            if (countEl) {
+                countEl.textContent = filtered.length === _requestB2BB2CRows.length
+                    ? `${filtered.length} data`
+                    : `${filtered.length} dari ${_requestB2BB2CRows.length} data`;
+            }
+
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="${cfg.cols.length}" class="px-4 py-10 text-center text-gray-400 text-sm">${
+                    _requestB2BB2CRows.length ? 'Tidak ada data yang cocok dengan pencarian/filter.' : 'Belum ada data.'}</td></tr>`;
+                const moreEmpty = document.getElementById('rq-more-wrap');
+                if (moreEmpty) moreEmpty.classList.add('hidden');
+                return;
+            }
+
+            const visible = filtered.slice(0, _requestB2BB2CLimit);
+            tbody.innerHTML = visible.map(r => {
+                const tds = cfg.cols.map(c => {
+                    if (c.kind === 'remaining') {
+                        return `<td class="px-4 py-3 whitespace-nowrap">${_rqRemainingBadgeHtml(r.date)}</td>`;
+                    }
+                    if (c.kind === 'date') {
+                        return `<td class="px-4 py-3 text-gray-600 whitespace-nowrap">${escapeHtml(_rqFormatDate(r[c.key], r[c.key + 'Raw']))}</td>`;
+                    }
+                    if (c.kind === 'status') {
+                        return `<td class="px-4 py-3">${r[c.key] ? `<span class="rq-status">${escapeHtml(r[c.key])}</span>` : '<span class="text-gray-400">-</span>'}</td>`;
+                    }
+                    if (c.kind === 'long') {
+                        return `<td class="px-4 py-3 text-gray-600 rq-cell-long">${escapeHtml(r[c.key] || '-')}</td>`;
+                    }
+                    return `<td class="px-4 py-3 text-gray-600 whitespace-nowrap">${escapeHtml(r[c.key] || '-')}</td>`;
+                }).join('');
+                return `<tr class="border-t border-gray-100 hover:bg-gray-50">${tds}</tr>`;
+            }).join('');
+
+            const moreWrap = document.getElementById('rq-more-wrap');
+            if (moreWrap) moreWrap.classList.toggle('hidden', filtered.length <= visible.length);
         }
 
         // =========================================================================
