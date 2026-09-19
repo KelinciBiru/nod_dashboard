@@ -2066,6 +2066,29 @@
                         </div>
                     </div>
 
+                    <!-- Request B2B/B2C Baru (khusus ADMIN) -->
+                    <div id="menu-request-b2b-b2c" class="hidden">
+                        <button onclick="toggleSubMenu('request-b2b-b2c-sub','arrow-request-b2b-b2c')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                </svg>
+                                <span>Request B2B/B2C</span>
+                            </div>
+                            <span id="arrow-request-b2b-b2c" class="text-xs">▼</span>
+                        </button>
+                        <div id="request-b2b-b2c-sub"
+                            class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button id="sub-request-b2b" onclick="navTo('Request B2B')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">B2B</button>
+                            <button id="sub-request-b2c" onclick="navTo('Request B2C')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">B2C</button>
+                        </div>
+                    </div>
+
                     <!-- Purchase Order -->
                     <div id="menu-po">
                         <button onclick="toggleSubMenu('po-sub','arrow-po')"
@@ -2206,29 +2229,6 @@
                         </svg>
                         List Paket
                     </button>
-
-                    <!-- Request B2B/B2C Baru (khusus ADMIN) -->
-                    <div id="menu-request-b2b-b2c" class="hidden">
-                        <button onclick="toggleSubMenu('request-b2b-b2c-sub','arrow-request-b2b-b2c')"
-                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
-                            <div class="flex items-center gap-3">
-                                <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24"
-                                    stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                                </svg>
-                                <span>Request B2B/B2C</span>
-                            </div>
-                            <span id="arrow-request-b2b-b2c" class="text-xs">▼</span>
-                        </button>
-                        <div id="request-b2b-b2c-sub"
-                            class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
-                            <button id="sub-request-b2b" onclick="navTo('Request B2B')"
-                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">B2B</button>
-                            <button id="sub-request-b2c" onclick="navTo('Request B2C')"
-                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">B2C</button>
-                        </div>
-                    </div>
 
                 </nav>
 
