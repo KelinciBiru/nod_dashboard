@@ -3818,6 +3818,7 @@
             sessionStorage.removeItem('currentPage');
             sessionStorage.removeItem('currentDriverName');
             _clearAllDraftForms();
+            _requestB2BB2CCache = { B2B: null, B2C: null };   // cache Request B2B/B2C ikut dibuang saat logout
 
             // Reset form password
             document.getElementById('passwordInput').value = '';
@@ -6971,6 +6972,7 @@
         let _requestB2BB2CType = 'B2B';
         let _requestB2BB2CRows = [];
         let _requestB2BB2CLimit = RQ_PAGE_SIZE;
+        let _requestB2BB2CCache = { B2B: null, B2C: null };   // { rows, loadedAt } — data yang sudah dimuat, dipakai lagi saat user kembali ke halaman (tanpa fetch ulang)
         let _requestB2BB2CLoadSeq = 0;     // penanda request terbaru (cegah hasil B2B menimpa halaman B2C bila user pindah cepat)
 
         /** "yyyy-MM-dd" -> "5 Sep 2026". Kalau bukan tanggal valid, tampilkan teks mentahnya (atau "-"). */
@@ -7017,7 +7019,8 @@
                 return;
             }
             _requestB2BB2CType = type;
-            _requestB2BB2CRows = [];
+            const cached = _requestB2BB2CCache[type];   // sudah pernah dimuat? pakai lagi, tidak perlu fetch ulang
+            _requestB2BB2CRows = cached ? cached.rows : [];
             _requestB2BB2CLimit = RQ_PAGE_SIZE;
             _rqMode = null;               // keluar dari mode checklist tiap kali halaman dibuka ulang
             _rqSelected = new Map();
@@ -7033,7 +7036,7 @@
                     ⟳ Refresh
                 </button>
             </div>
-            <p class="text-sm text-gray-500 mb-4">Data dari sheet "${escapeHtml(cfg.sheetName)}" (spreadsheet "Purchase Order nod."). Remaining dihitung dari kolom DATE sampai hari ini.</p>
+            <p class="text-sm text-gray-500 mb-4">Data dari sheet "${escapeHtml(cfg.sheetName)}" (spreadsheet "Purchase Order nod."). Remaining dihitung dari kolom DATE sampai hari ini.<span id="rq-loaded-at" class="text-gray-400"></span></p>
 
             <div class="rq-actions" style="margin-bottom:1rem">
                 <button id="rq-btn-add-po" class="rq-btn rq-btn-po" onclick="rqStartAddMode('PO')">add Form PO</button>
@@ -7083,7 +7086,35 @@
                 </div>
             </div>`;
 
-            await loadRequestB2BB2C(type);
+            if (cached) {
+                _rqFillStatusFilter(cached.rows);
+                _rqUpdateLoadedAt(type);
+                renderRequestB2BB2C();
+            } else {
+                await loadRequestB2BB2C(type);
+            }
+        }
+
+        /** Isi dropdown filter STATUS ORDER dari data (pertahankan pilihan yang sedang aktif). */
+        function _rqFillStatusFilter(rows) {
+            const sel = document.getElementById('rq-status-filter');
+            if (!sel) return;
+            const prev = sel.value;
+            const statuses = Array.from(new Set(rows.map(r => r.statusOrder).filter(Boolean)))
+                .sort((a, b) => a.localeCompare(b, 'id'));
+            const hasEmpty = rows.some(r => !r.statusOrder);
+            sel.innerHTML = '<option value="">Semua Status Order</option>' +
+                statuses.map(st => `<option value="${escapeHtml(st)}">${escapeHtml(st)}</option>`).join('') +
+                (hasEmpty ? `<option value="${RQ_EMPTY_STATUS}">(Belum ada status)</option>` : '');
+            sel.value = Array.from(sel.options).some(o => o.value === prev) ? prev : '';
+        }
+
+        function _rqUpdateLoadedAt(type) {
+            const el = document.getElementById('rq-loaded-at');
+            const c = _requestB2BB2CCache[type];
+            if (!el || !c) return;
+            const t = new Date(c.loadedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            el.textContent = ` Dimuat pukul ${t} — klik Refresh untuk mengambil data terbaru.`;
         }
 
         /** Ambil data dari backend & render tabel. Selalu ambil ulang (tanpa cache browser) —
@@ -7099,8 +7130,9 @@
             try {
                 const res = await fetchWithRetry(PO_GAS_URL + '?action=' + cfg.action, {}, 25000);
                 const result = await res.json();
-                if (mySeq !== _requestB2BB2CLoadSeq || _requestB2BB2CType !== type) return; // sudah pindah halaman/menu lain
+                const stale = (mySeq !== _requestB2BB2CLoadSeq || _requestB2BB2CType !== type); // sudah pindah halaman/menu lain
                 if (result.error || result.success === false) {
+                    if (stale) return;
                     throw new Error(result.error || result.message || 'Gagal mengambil data.');
                 }
 
@@ -7117,26 +7149,22 @@
                         c.kind === 'date' ? _rqFormatDate(r[c.key], r[c.key + 'Raw']) : (r[c.key] || ''));
                     r._search = parts.join(' | ').toLowerCase();
                 });
+                // Simpan ke cache walau user sudah pindah halaman — data tetap valid untuk kunjungan berikutnya.
+                _requestB2BB2CCache[type] = { rows, loadedAt: Date.now() };
+                if (stale) return;
                 _requestB2BB2CRows = rows;
                 _requestB2BB2CLimit = RQ_PAGE_SIZE;
                 _rqSyncSelectionAfterLoad();
-
-                // Isi dropdown filter STATUS ORDER dari data (pertahankan pilihan yang sedang aktif).
-                const sel = document.getElementById('rq-status-filter');
-                if (sel) {
-                    const prev = sel.value;
-                    const statuses = Array.from(new Set(rows.map(r => r.statusOrder).filter(Boolean)))
-                        .sort((a, b) => a.localeCompare(b, 'id'));
-                    const hasEmpty = rows.some(r => !r.statusOrder);
-                    sel.innerHTML = '<option value="">Semua Status Order</option>' +
-                        statuses.map(st => `<option value="${escapeHtml(st)}">${escapeHtml(st)}</option>`).join('') +
-                        (hasEmpty ? `<option value="${RQ_EMPTY_STATUS}">(Belum ada status)</option>` : '');
-                    sel.value = Array.from(sel.options).some(o => o.value === prev) ? prev : '';
-                }
-
+                _rqFillStatusFilter(rows);
+                _rqUpdateLoadedAt(type);
                 renderRequestB2BB2C();
             } catch (err) {
                 if (mySeq !== _requestB2BB2CLoadSeq || _requestB2BB2CType !== type) return;
+                if (_requestB2BB2CCache[type]) {
+                    // Refresh gagal tapi data lama masih ada: pertahankan tabel, cukup beri tahu.
+                    showToastAlert('error', 'Gagal memuat ulang', err.message || String(err));
+                    return;
+                }
                 const cur = document.getElementById('rq-tbody');
                 if (cur) {
                     cur.innerHTML = `<tr><td colspan="${cfg.cols.length}" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
@@ -7773,6 +7801,50 @@
                     <tbody>${body}</tbody></table></div>` : '<p class="b2b-smart-sub">Tidak ada baris item yang terbaca — isi tabel Detail Item secara manual.</p>'}
                 <p class="b2b-hint" style="margin-top:.5rem">Preview menampilkan hasil pembacaan awal. Perubahan manual di tabel Detail Item tidak ikut mengubah preview ini.</p>
             </div>`;
+        }
+
+        // ---------------------------------------------------------------------
+        // BERSIHKAN HALAMAN — Form PO / Form RO
+        // ---------------------------------------------------------------------
+        function _formPageHasContent(mode) {
+            const isRO = mode === 'RO';
+            if (isRO ? window._revisiROActive : window._revisiPOActive) return true;
+            if (window._b2bQueue && window._b2bQueue.mode === mode) return true;
+            const f = _b2bCollectForm(mode), h = f.header;
+            if (h.nama || h.category || h.allocatedTo || h.fromLocation || h.alamat || h.phone || h.noteKhusus || h.shippingDate || h.preOrder) return true;
+            return f.items.some(i => i.id || i.nama || i.note);
+        }
+
+        /** Kosongkan seluruh isian Form PO / Form RO (termasuk mode Revisi, draft & antrian data B2B/B2C). */
+        async function clearFormHalaman(mode) {
+            const isRO = mode === 'RO';
+            if (isRO ? _isSubmittingFormRetur : _isSubmittingFormPO) return;   // jangan ganggu proses kirim
+            const label = isRO ? 'Form RO' : 'Form PO';
+            if (!document.getElementById(isRO ? 'retur-item-table-body' : 'po-item-table-body')) return;
+
+            const queueActive = !!(window._b2bQueue && window._b2bQueue.mode === mode);
+            if (_formPageHasContent(mode)) {
+                const ok = await showConfirm(`Bersihkan ${label}?`,
+                    `Semua isian ${label} yang belum dikirim akan dihapus${queueActive ? ', dan antrian data B2B/B2C yang belum diproses ikut dibatalkan' : ''}. Lanjutkan?`);
+                if (!ok) return;
+            }
+
+            // 1) Antrian data B2B/B2C (banner + preview DELIVERY DETAILS)
+            if (queueActive) _b2bQueueClose();
+            // 2) Mode Revisi
+            if (isRO ? window._revisiROActive : window._revisiPOActive) { if (isRO) _exitRevisiROMode(); else _exitRevisiPOMode(); }
+            // 3) Toggle Staff Outlet -> kembalikan daftar Ordered By normal
+            const tog = document.getElementById(isRO ? 'ro-staff-outlet-toggle' : 'po-staff-outlet-toggle');
+            if (tog && tog.checked) { tog.checked = false; try { await handleStaffOutletToggle(isRO ? 'ro' : 'po'); } catch (_) { } }
+            // 4) Isian form + draft tersimpan
+            if (isRO) resetFormRetur(); else resetFormPO();
+            _clearDraft(isRO ? DRAFT_KEYS.formRetur : DRAFT_KEYS.formPO);
+            // 5) Sisa status import FAS (Form PO)
+            if (!isRO) {
+                const st = document.getElementById('po-fas-import-status'); if (st) st.textContent = '';
+                const fi = document.getElementById('po-fas-import-file'); if (fi) fi.value = '';
+            }
+            showToastAlert('success', 'Halaman dibersihkan', `${label} sudah dikosongkan.`);
         }
 
         /** User memilih item lain (atau teks asli) dari dropdown di preview -> ubah baris Detail Item terkait. */
@@ -15535,9 +15607,9 @@
                         <p class="text-xs text-amber-600 mb-2">Upload PDF atau foto daftar permintaan FAS (format per baris: Nama Item + Qty). Tabel Detail Item di bawah akan otomatis terisi — Description default "Supplies" dan Nama Item dicocokkan ke sheet "LIST".</p>
                         <div class="flex flex-col sm:flex-row gap-2">
                             <input type="file" id="po-fas-import-file" accept="application/pdf,image/*"
-                                class="flex-1 min-w-0 text-sm border border-amber-300 rounded p-1.5 bg-white">
+                                class="flex-1 min-w-0 text-sm border border-amber-200 rounded p-1.5 bg-white">
                             <button id="btn-po-fas-import" onclick="handleFormPOFasImport()"
-                                class="flex-shrink-0 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition disabled:opacity-60 disabled:cursor-not-allowed">
+                                class="flex-shrink-0 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold px-4 py-2 rounded-lg transition disabled:opacity-60 disabled:cursor-not-allowed">
                                 <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                                 </svg>
@@ -15595,6 +15667,8 @@
                     class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm resize-y"
                     placeholder="Tuliskan catatan khusus untuk permintaan order ini..."></textarea>
                 <div class="flex flex-col sm:flex-row gap-3 mt-4">
+                    <button id="clear-form-po-btn" type="button" onclick="clearFormHalaman('PO')"
+                        class="flex-1 bg-gray-200 text-gray-700 py-3 px-3 rounded-lg font-bold hover:bg-gray-300 transition duration-200 shadow-sm text-center">Bersihkan Halaman</button>
                     <button id="submitBtn" onclick="submitPO()"
                         class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
                         <span id="submitBtnLabel" class="whitespace-nowrap">Kirim PO</span>
@@ -16484,6 +16558,8 @@
                     class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none text-sm resize-y"
                     placeholder="Tuliskan catatan khusus untuk pengembalian barang ini..."></textarea>
                 <div class="flex flex-col sm:flex-row gap-3 mt-4">
+                    <button id="clear-form-ro-btn" type="button" onclick="clearFormHalaman('RO')"
+                        class="flex-1 bg-gray-200 text-gray-700 py-3 px-3 rounded-lg font-bold hover:bg-gray-300 transition duration-200 shadow-sm text-center">Bersihkan Halaman</button>
                     <button id="retur-submitBtn" onclick="submitRetur()"
                         class="flex-1 bg-amber-500 text-white py-3 px-3 rounded-lg font-bold hover:bg-amber-600 transition duration-200 shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-center leading-tight">
                         <span id="retur-submitBtnLabel" class="whitespace-nowrap">Kirim Retur</span>
