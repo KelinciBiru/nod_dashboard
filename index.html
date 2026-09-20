@@ -1431,11 +1431,31 @@
                 padding: .5rem !important;
             }
 
+            /* Header tabel disamakan dengan header tabel menu Request B2B/B2C:
+                 latar abu gelap (gray-800), teks putih uppercase kecil + tracking lebar,
+                 semibold, sudut datar (hanya ujung kiri/kanan strip yang membulat). */
             #content-area table thead tr th {
-                background: var(--neu-surface) !important;
-                box-shadow: var(--neu-raised-sm) !important;
-                border-radius: .6rem;
-                color: #33415c !important;
+                background: #1f2937 !important;
+                color: #ffffff !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                font-size: .75rem !important;
+                font-weight: 600 !important;
+                line-height: 1rem !important;
+                text-transform: uppercase !important;
+                letter-spacing: .025em !important;
+                padding-top: .75rem !important;
+                padding-bottom: .75rem !important;
+            }
+
+            #content-area table thead tr th:first-child {
+                border-top-left-radius: .6rem !important;
+                border-bottom-left-radius: .6rem !important;
+            }
+
+            #content-area table thead tr th:last-child {
+                border-top-right-radius: .6rem !important;
+                border-bottom-right-radius: .6rem !important;
             }
 
             /* Zebra baris diselaraskan ke tone neumorphic (bukan abu polos) */
