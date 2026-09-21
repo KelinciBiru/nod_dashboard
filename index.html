@@ -558,6 +558,192 @@
         .pl-soon { margin-left: .5rem; padding: .05rem .45rem; border-radius: 9999px; background: #f3f4f6; color: #9ca3af; font-size: .625rem; font-weight: 700; letter-spacing: .02em; vertical-align: middle; }
     </style>
 
+    <!-- [MENU BARU — Print Label > Marking Pengiriman] Style halaman "print setup" bergaya dialog Print Adobe
+         Illustrator (panel gelap: setelan di kiri, pasteboard + artboard preview di kanan). CSS biasa dengan
+         prefix .mk- (BUKAN class Tailwind) supaya tampil benar tanpa build ulang tailwind.min.css — pola sama
+         seperti blok print-label-style. Judul/breadcrumb halaman memakai ulang class .pl-head/.pl-crumb/.pl-title/.pl-sub. -->
+    <style id="marking-pengiriman-style">
+        .mk-hide { display: none !important; }
+        .mk-page { max-width: 1240px; margin: 0 auto; }
+
+        /* jendela dialog */
+        .mk-win { background: #323232; border: 1px solid #1e1e1e; border-radius: .75rem; box-shadow: 0 14px 36px rgba(15, 23, 42, .28); color: #e6e6e6; }
+        .mk-titlebar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .6rem .9rem; background: #252525; border-bottom: 1px solid #191919; border-radius: .75rem .75rem 0 0; }
+        .mk-tb-l { display: flex; align-items: center; gap: .55rem; font-size: .8125rem; font-weight: 600; color: #dcdcdc; min-width: 0; }
+        .mk-tb-l svg { width: 1rem; height: 1rem; color: #7db4f3; flex: 0 0 auto; }
+        .mk-tb-r { font-size: .6875rem; color: #8d8d8d; white-space: nowrap; }
+
+        /* grid: HP = 1 kolom (urutan lewat order), desktop = setelan (kiri) | preview (kanan) */
+        .mk-body { display: grid; grid-template-columns: minmax(0, 1fr); }
+        .mk-col { display: contents; }
+        .mk-c-printer { order: 1; } .mk-c-paper { order: 2; } .mk-c-dest { order: 3; } .mk-c-preview { order: 4; } .mk-c-actions { order: 5; }
+        @media (min-width: 1024px) {
+            .mk-body { grid-template-columns: 430px minmax(0, 1fr); }
+            .mk-col { display: flex; flex-direction: column; min-width: 0; }
+            .mk-c-printer, .mk-c-paper, .mk-c-dest, .mk-c-preview, .mk-c-actions { order: 0; }
+            .mk-col-r { background: #535353; border-radius: 0 0 .75rem 0; }
+            .mk-c-preview { position: sticky; top: .75rem; }
+            .mk-c-actions { border-radius: 0 0 0 .75rem; }
+        }
+
+        /* seksi setelan */
+        .mk-sec { padding: .8rem .95rem .45rem; background: #323232; border-bottom: 1px solid #454545; min-width: 0; }
+        .mk-sec-h { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .65rem; font-size: .6875rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9a9a9a; }
+        .mk-sec-h > span:first-child { display: inline-flex; align-items: center; gap: .45rem; }
+        .mk-sec-h svg { width: .95rem; height: .95rem; color: #7db4f3; }
+        .mk-row { display: grid; grid-template-columns: 6.4rem minmax(0, 1fr); gap: .5rem; align-items: center; margin-bottom: .6rem; }
+        .mk-row > label, .mk-lab { font-size: .75rem; color: #bdbdbd; line-height: 1.25; }
+        .mk-row-top { align-items: start; }
+        .mk-row-top > label { padding-top: .45rem; }
+        .mk-note { margin: -.2rem 0 .65rem; font-size: .6875rem; color: #9a9a9a; line-height: 1.45; overflow-wrap: anywhere; }
+        .mk-note b { color: #cfcfcf; }
+
+        .mk-in { width: 100%; padding: .42rem .6rem; background: #1f1f1f; border: 1px solid #4d4d4d; border-radius: .3rem; color: #eaeaea; font-size: .8125rem; min-width: 0; }
+        .mk-in::placeholder { color: #7d7d7d; }
+        .mk-in:focus { outline: none; border-color: #2d8ceb; box-shadow: 0 0 0 1px #2d8ceb; }
+        .mk-in:disabled { color: #7d7d7d; background: #2a2a2a; }
+        textarea.mk-in { resize: vertical; min-height: 4.6rem; line-height: 1.4; }
+        select.mk-in { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 1.9rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23bdbdbd' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .6rem center; }
+        select.mk-in option, select.mk-in optgroup { background: #262626; color: #eaeaea; }
+        .mk-selwrap { position: relative; }
+        .mk-selwrap select.mk-in { padding-left: 1.7rem; }
+        .mk-seldot { position: absolute; left: .62rem; top: 50%; width: .6rem; height: .6rem; margin-top: -.3rem; border-radius: 9999px; background: #8a8a8a; pointer-events: none; }
+        .mk-2col { display: grid; grid-template-columns: 1fr auto 1fr; gap: .5rem; align-items: center; margin: -.15rem 0 .6rem; }
+        .mk-2col span { font-size: .8125rem; color: #9a9a9a; }
+
+        /* indikator printer */
+        .mk-dot-gray { background: #8a8a8a; }
+        .mk-dot-green { background: #34d399; box-shadow: 0 0 0 3px rgba(52, 211, 153, .25); animation: mk-pulse 1.8s ease-in-out infinite; }
+        .mk-dot-amber { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251, 191, 36, .25); animation: mk-pulse 1s ease-in-out infinite; }
+        .mk-dot-red { background: #f87171; box-shadow: 0 0 0 3px rgba(248, 113, 113, .25); }
+        .mk-dot-blue { background: #60a5fa; box-shadow: 0 0 0 3px rgba(96, 165, 250, .25); }
+        @keyframes mk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+        .mk-status { display: flex; align-items: flex-start; gap: .65rem; padding: .6rem .75rem; margin-bottom: .6rem; border-radius: .4rem; background: #262626; border: 1px solid #444; }
+        .mk-status > .mk-seldot { position: static; flex: 0 0 auto; margin-top: .3rem; }
+        .mk-st-title { display: block; font-size: .8125rem; font-weight: 700; color: #ececec; }
+        .mk-st-sub { display: block; margin-top: .1rem; font-size: .6875rem; color: #a5a5a5; overflow-wrap: anywhere; line-height: 1.4; }
+        .mk-st-green { border-color: #1f6b52; } .mk-st-green .mk-st-title { color: #6ee7b7; }
+        .mk-st-amber { border-color: #7a5b14; } .mk-st-amber .mk-st-title { color: #fcd34d; }
+        .mk-st-red { border-color: #7f2d2d; } .mk-st-red .mk-st-title { color: #fca5a5; }
+        .mk-st-blue { border-color: #2b4f7d; } .mk-st-blue .mk-st-title { color: #93c5fd; }
+
+        /* perangkat terdeteksi */
+        .mk-detected { margin: .1rem 0 .65rem; padding: .55rem .65rem; border: 1px dashed #555; border-radius: .4rem; }
+        .mk-detect-h { margin-bottom: .35rem; font-size: .625rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #8d8d8d; }
+        .mk-detect-empty { font-size: .6875rem; color: #a5a5a5; line-height: 1.45; }
+        .mk-dev { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .4rem .5rem; margin-top: .25rem; background: #262626; border: 1px solid #444; border-radius: .3rem; color: #e6e6e6; text-align: left; cursor: pointer; }
+        .mk-dev:hover { border-color: #2d8ceb; }
+        .mk-dev .mk-seldot { position: static; margin: 0; flex: 0 0 auto; }
+        .mk-dev.on { border-color: #1f6b52; }
+        .mk-dev-n { flex: 1 1 auto; min-width: 0; font-size: .75rem; font-weight: 600; overflow-wrap: anywhere; }
+        .mk-dev-s { font-size: .625rem; color: #9a9a9a; white-space: nowrap; }
+        .mk-dev.on .mk-dev-s { color: #6ee7b7; }
+
+        /* tombol */
+        .mk-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .5rem .95rem; border-radius: .3rem; border: 1px solid transparent; font-size: .8125rem; font-weight: 600; line-height: 1.2; cursor: pointer; transition: background-color .15s, border-color .15s; }
+        .mk-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .mk-btn svg { width: .95rem; height: .95rem; flex: 0 0 auto; }
+        .mk-btn.is-loading svg { animation: mk-rot .8s linear infinite; }
+        .mk-btn-primary { background: #2d8ceb; color: #fff; } .mk-btn-primary:hover:not(:disabled) { background: #1f78d1; }
+        .mk-btn-ghost { background: #3f3f3f; color: #e6e6e6; border-color: #575757; } .mk-btn-ghost:hover:not(:disabled) { background: #4a4a4a; }
+        .mk-btn-block { width: 100%; }
+        .mk-btn-sm { padding: .3rem .6rem; font-size: .6875rem; }
+        .mk-connect { margin-bottom: .65rem; }
+        @keyframes mk-rot { to { transform: rotate(360deg); } }
+        .mk-spin { display: inline-block; width: 1rem; height: 1rem; margin-right: .5rem; border: 2px solid #555; border-top-color: #2d8ceb; border-radius: 9999px; animation: mk-rot .8s linear infinite; vertical-align: middle; }
+
+        /* segmented & stepper */
+        .mk-seg { display: flex; gap: 2px; padding: 2px; background: #1f1f1f; border: 1px solid #4d4d4d; border-radius: .3rem; }
+        .mk-seg button { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; padding: .35rem .4rem; border: 0; border-radius: .22rem; background: transparent; color: #b5b5b5; font-size: .75rem; font-weight: 600; cursor: pointer; }
+        .mk-seg button.on { background: #2d8ceb; color: #fff; }
+        .mk-seg button:disabled { opacity: .38; cursor: not-allowed; }
+        .mk-seg svg { width: .9rem; height: .9rem; }
+        .mk-step { display: flex; align-items: stretch; border: 1px solid #4d4d4d; border-radius: .3rem; overflow: hidden; background: #1f1f1f; }
+        .mk-step button { width: 2.3rem; border: 0; background: #3f3f3f; color: #e0e0e0; cursor: pointer; }
+        .mk-step button:hover { background: #4a4a4a; }
+        .mk-step button svg { display: block; width: .9rem; height: .9rem; margin: 0 auto; }
+        .mk-step input { flex: 1 1 auto; min-width: 0; padding: .4rem 0; border: 0; background: transparent; color: #eaeaea; text-align: center; font-size: .875rem; font-weight: 700; }
+        .mk-step input:focus { outline: none; background: #262626; }
+
+        /* opsi lanjutan */
+        .mk-adv { margin: .1rem 0 .55rem; padding-top: .5rem; border-top: 1px dashed #4b4b4b; }
+        .mk-adv summary { display: flex; align-items: center; gap: .35rem; font-size: .75rem; font-weight: 600; color: #a8a8a8; cursor: pointer; list-style: none; }
+        .mk-adv summary::-webkit-details-marker { display: none; }
+        .mk-adv summary::before { content: ''; display: inline-block; width: .4rem; height: .4rem; margin: 0 .3rem 0 .1rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+        .mk-adv[open] summary::before { transform: rotate(45deg); }
+        .mk-adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .1rem .75rem; margin-top: .6rem; }
+        .mk-adv-grid > div > label { display: block; margin-bottom: .25rem; font-size: .6875rem; color: #bdbdbd; }
+        .mk-adv-grid > div { margin-bottom: .45rem; }
+        .mk-chk { display: flex; align-items: flex-start; gap: .5rem; margin: .5rem 0; font-size: .75rem; color: #d0d0d0; line-height: 1.35; cursor: pointer; }
+        .mk-chk input { flex: 0 0 auto; width: 1rem; height: 1rem; margin-top: .1rem; accent-color: #2d8ceb; }
+        .mk-chk small { display: block; font-size: .6875rem; color: #8d8d8d; }
+
+        /* combobox Ship To */
+        .mk-combo { position: relative; }
+        .mk-combo > input { padding-right: 2rem; }
+        .mk-combo-x { position: absolute; right: .35rem; top: .35rem; display: inline-flex; padding: .15rem; border: 0; background: transparent; color: #9a9a9a; cursor: pointer; }
+        .mk-combo-x:hover { color: #fff; }
+        .mk-combo-x svg { width: .9rem; height: .9rem; }
+        .mk-combo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 40; max-height: 17rem; overflow: auto; background: #262626; border: 1px solid #5c5c5c; border-radius: .35rem; box-shadow: 0 12px 28px rgba(0, 0, 0, .5); }
+        .mk-opt { display: block; position: relative; width: 100%; padding: .5rem .7rem; border: 0; border-bottom: 1px solid #383838; background: transparent; color: #e6e6e6; text-align: left; cursor: pointer; }
+        .mk-opt:last-child { border-bottom: 0; }
+        .mk-opt:hover, .mk-opt.hot { background: #2d5f9a; }
+        .mk-opt.sel { box-shadow: inset 3px 0 0 #2d8ceb; }
+        .mk-opt-n { display: block; padding-right: 3.2rem; font-size: .8125rem; font-weight: 700; overflow-wrap: anywhere; }
+        .mk-opt-a { display: block; margin-top: .1rem; font-size: .6875rem; color: #a8a8a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mk-opt:hover .mk-opt-a, .mk-opt.hot .mk-opt-a { color: #d6e6fa; }
+        .mk-opt-c { position: absolute; right: .6rem; top: .55rem; padding: .05rem .4rem; border-radius: .25rem; background: #444; color: #ddd; font-size: .625rem; font-weight: 700; }
+        .mk-combo-empty, .mk-combo-more { padding: .9rem .8rem; font-size: .75rem; color: #a5a5a5; text-align: center; line-height: 1.5; }
+        .mk-combo-more { padding: .5rem .8rem; font-size: .6875rem; border-top: 1px solid #383838; }
+        .mk-link { padding: 0; border: 0; background: transparent; color: #7db4f3; font-size: .75rem; font-weight: 600; text-decoration: underline; cursor: pointer; }
+        .mk-datanote { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin: -.1rem 0 .6rem; font-size: .6875rem; color: #9a9a9a; line-height: 1.4; }
+        .mk-datanote > span { min-width: 0; overflow-wrap: anywhere; }
+
+        /* preview (pasteboard + artboard) */
+        .mk-c-preview { background: #535353; border-bottom: 1px solid #444; min-width: 0; }
+        .mk-pane-h { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .65rem .95rem; background: #444; border-bottom: 1px solid #383838; font-size: .6875rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #c8c8c8; }
+        .mk-pane-h > span:first-child { display: inline-flex; align-items: center; gap: .45rem; }
+        .mk-pane-h svg { width: .95rem; height: .95rem; color: #7db4f3; }
+        .mk-chip { display: inline-block; padding: .1rem .5rem; border-radius: .25rem; background: #2d8ceb; color: #fff; font-size: .6875rem; font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap; }
+        .mk-chip-g { background: #3a3a3a; color: #d0d0d0; }
+        .mk-stage { display: flex; align-items: center; justify-content: center; min-height: 230px; padding: 1.4rem 1rem; }
+        .mk-pageblock { display: grid; grid-template-columns: 1.5rem auto; grid-template-rows: auto auto; gap: .4rem; max-width: 100%; }
+        .mk-dim { display: flex; align-items: center; gap: .4rem; color: #d2d2d2; font-size: .6875rem; font-weight: 600; }
+        .mk-dim i { display: block; flex: 1 1 auto; background: #8f8f8f; }
+        .mk-dim-top { grid-column: 2; grid-row: 1; }
+        .mk-dim-top i { height: 1px; }
+        .mk-dim-left { grid-column: 1; grid-row: 2; flex-direction: column; }
+        .mk-dim-left i { width: 1px; }
+        .mk-dim-left span { writing-mode: vertical-rl; transform: rotate(180deg); }
+        .mk-dim span { white-space: nowrap; }
+        .mk-paper { grid-column: 2; grid-row: 2; background: #fff; line-height: 0; box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
+        .mk-paper canvas { display: block; }
+        .mk-meta { padding: 0 .95rem .6rem; font-size: .6875rem; color: #d0d0d0; text-align: center; overflow-wrap: anywhere; }
+        .mk-tips { margin: 0 .95rem .9rem; padding: .55rem .7rem; border-radius: .35rem; background: #3e3a2c; border: 1px solid #6b5a22; font-size: .6875rem; color: #f3dc9a; }
+        .mk-tips b { display: flex; align-items: center; gap: .35rem; margin-bottom: .2rem; font-size: .625rem; letter-spacing: .06em; text-transform: uppercase; }
+        .mk-tips b svg { width: .9rem; height: .9rem; }
+        .mk-tips ul { margin: 0; padding-left: 1rem; } .mk-tips li { margin: .15rem 0; }
+
+        /* aksi cetak */
+        .mk-c-actions { padding: .85rem .95rem; background: #2b2b2b; }
+        .mk-actions { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+        @media (min-width: 380px) { .mk-actions { grid-template-columns: 1fr 1.4fr; } }
+        .mk-btn-lg { padding: .7rem 1rem; font-size: .875rem; }
+
+        /* HP: CSS mobile milik aplikasi (#content-area input/select/textarea { background ... !important }) menimpa
+           kolom isian jadi terang. Kembalikan ke tema gelap dialog dengan spesifisitas lebih tinggi. */
+        @media (max-width: 767px) {
+            #content-area .mk-page input.mk-in, #content-area .mk-page select.mk-in, #content-area .mk-page textarea.mk-in {
+                background-color: #1f1f1f !important; color: #eaeaea !important; border-color: #4d4d4d !important; box-shadow: none !important; border-radius: .3rem !important;
+            }
+            #content-area .mk-page input.mk-in:focus, #content-area .mk-page select.mk-in:focus, #content-area .mk-page textarea.mk-in:focus {
+                border-color: #2d8ceb !important; box-shadow: 0 0 0 1px #2d8ceb !important;
+            }
+            #content-area .mk-page .mk-step input { background: transparent !important; color: #eaeaea !important; border: 0 !important; box-shadow: none !important; }
+            #content-area .mk-page .mk-in::placeholder { color: #7d7d7d !important; }
+        }
+    </style>
+
 
     <!-- [FIX PERF LOGIN — Agustus 2026] Semua library berat di bawah ini TIDAK dipakai
          di halaman login, hanya dipakai di menu-menu setelah login (Process PO, Warranty OCR,
@@ -2419,7 +2605,7 @@
                         Catalogue
                     </button>
 
-                    <!-- Print Label Baru (untuk ADMIN & WAREHOUSE) — sub-menu "Resi" sementara non-aktif -->
+                    <!-- Print Label Baru (untuk ADMIN & WAREHOUSE) — sub-menu "Label Produk" & "Marking Pengiriman" aktif, "Resi" sementara non-aktif -->
                     <div id="menu-print-label" class="hidden">
                         <button onclick="toggleSubMenu('print-label-sub', 'arrow-print-label')"
                             class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
@@ -2435,6 +2621,8 @@
                         <div id="print-label-sub" class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
                             <button onclick="navTo('Label Produk')"
                                 class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Label Produk</button>
+                            <button onclick="navTo('Marking Pengiriman')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Marking Pengiriman</button>
                             <button type="button" disabled aria-disabled="true" title="Segera hadir — belum diaktifkan"
                                 class="sub-item w-full text-left px-2 py-2 text-sm rounded-lg">Resi<span class="pl-soon">Segera</span></button>
                         </div>
@@ -3974,7 +4162,7 @@
             if ((saved === 'Request B2B' || saved === 'Request B2C') && currentUserRole !== 'ADMIN') {
                 return defaultPage;
             }
-            if (saved === 'Label Produk' && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
+            if ((saved === 'Label Produk' || saved === 'Marking Pengiriman') && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
                 return defaultPage;
             }
             if (saved === 'Resi') {   // sub-menu Resi belum aktif
@@ -4017,6 +4205,7 @@
             _clearAllDraftForms();
             _requestB2BB2CCache = { B2B: null, B2C: null };   // cache Request B2B/B2C ikut dibuang saat logout
             if (typeof plResetOnLogout === 'function') plResetOnLogout();   // data Print Label ikut dibuang saat logout
+            if (typeof mkResetOnLogout === 'function') mkResetOnLogout();   // data Marking Pengiriman ikut dibuang saat logout
 
             // Reset form password
             document.getElementById('passwordInput').value = '';
@@ -5079,7 +5268,7 @@
                 showToastAlert('info', 'Segera hadir', 'Sub-menu \"Resi\" belum diaktifkan.');
                 return;
             }
-            if (pageName === 'Label Produk' && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
+            if ((pageName === 'Label Produk' || pageName === 'Marking Pengiriman') && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
                 showAlert('error', 'Akses Ditolak', 'Menu \"Print Label\" hanya dapat diakses oleh Admin dan Team Warehouse.');
                 return;
             }
@@ -5121,7 +5310,8 @@
                 'List Paket': 'List Paket - Drop Off Mandiri',
                 'Request B2B': 'Request B2B/B2C - B2B',
                 'Request B2C': 'Request B2B/B2C - B2C',
-                'Label Produk': 'Print Label - Label Produk'
+                'Label Produk': 'Print Label - Label Produk',
+                'Marking Pengiriman': 'Print Label - Marking Pengiriman'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -5197,6 +5387,7 @@
                 case 'Request B2B': await showRequestB2BB2C('B2B'); break;
                 case 'Request B2C': await showRequestB2BB2C('B2C'); break;
                 case 'Label Produk': await showPrintLabel(); break;
+                case 'Marking Pengiriman': await showMarkingPengiriman(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -25520,7 +25711,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 if (_plUsb.device && ev.device === _plUsb.device) {
                     _plUsb = { state: 'idle', device: null, itf: 0, ep: 0, name: '', detail: '', manualOff: false };
                     plRenderStatus();
-                    if (document.getElementById('pl-status')) showToastAlert('warning', 'Printer terputus', 'Kabel USB dicabut. Colok lagi — akan tersambung otomatis.');
+                    if (document.getElementById('pl-status') || document.getElementById('mk-status')) showToastAlert('warning', 'Printer terputus', 'Kabel USB dicabut. Colok lagi — akan tersambung otomatis.');
                 }
             });
         }
@@ -25557,7 +25748,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     if (_plBle.device === dev) {
                         _plBle = { state: 'idle', device: null, ch: null, name: '', detail: '', chunk: 180 };
                         plRenderStatus();
-                        if (document.getElementById('pl-status')) showToastAlert('warning', 'Bluetooth terputus', 'Koneksi ke printer terputus. Klik Hubungkan Printer untuk menyambung lagi.');
+                        if (document.getElementById('pl-status') || document.getElementById('mk-status')) showToastAlert('warning', 'Bluetooth terputus', 'Koneksi ke printer terputus. Klik Hubungkan Printer untuk menyambung lagi.');
                     }
                 });
                 const server = await dev.gatt.connect();
@@ -26058,6 +26249,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             return { cls: 'pl-st-gray', title: 'Belum ada printer terhubung', sub: isUsb ? 'Colokkan printer via USB. Pertama kali: klik Hubungkan Printer & beri izin.' : 'Nyalakan Bluetooth printer, lalu klik Hubungkan Printer.', btn: 'connect' };
         }
         function plRenderStatus() {
+            if (typeof mkRenderStatus === 'function') mkRenderStatus();   // [MARKING PENGIRIMAN] koneksi printer dipakai bersama — ikut perbarui indikator di halaman itu
             const box = document.getElementById('pl-status'); if (!box) return;
             const m = plStatusModel();
             box.className = 'pl-status ' + m.cls;
@@ -26265,6 +26457,940 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         /** Dipanggil saat logout: buang data yang sudah dimuat (koneksi printer fisik dibiarkan). */
         function plResetOnLogout() {
             _plRows = { sheet: null, import: [] }; _plSelId = null; _plItem = null; _plSearch = ''; _plTab = 'sheet';
+        }
+    </script>
+
+    <!-- [MENU BARU — Print Label > Marking Pengiriman] Modul halaman "print setup" bergaya Adobe Illustrator.
+         Dipisah dari script utama & dari modul Label Produk supaya error di sini tidak mengganggu menu lain.
+         Memakai ulang (tanpa menduplikasi) mesin cetak milik modul Label Produk: koneksi USB/Bluetooth (_plUsb,
+         _plBle), bahasa printer TSPL/ZPL/ESC-POS (plBuildJob), konversi bitmap (plPackBitmap, plRotate). -->
+    <script id="marking-pengiriman-module">
+        // =====================================================================
+        // [MENU BARU — PRINT LABEL > MARKING PENGIRIMAN]
+        // ---------------------------------------------------------------------
+        // Mencetak label "Marking Pengiriman" (Ship To + Alamat) untuk ditempel di
+        // paket/dus. Alur:
+        //   1. Pilih tipe printer (dropdown; ada indikator hijau kalau sudah
+        //      terhubung; printer USB yang sudah terpasang di device terdeteksi
+        //      otomatis dan tipenya dicocokkan dari nama perangkat).
+        //   2. Pilih tipe kertas label (default Tom & Jerry No. 121 = 38 × 75 mm).
+        //   3. Pilih Ship To — datanya ditarik dari sheet PO_Data spreadsheet
+        //      "Purchase Order nod." (kolom D = Ship To, kolom H = Alamat) HANYA
+        //      untuk baris yang Status-nya (kolom E) masih kosong. Alamat terisi
+        //      otomatis dan tetap bisa diedit.
+        //   4. Preview = gambar yang SAMA PERSIS dengan yang dicetak. Ukuran font
+        //      Ship To & Alamat dihitung otomatis supaya pas di ukuran label.
+        //   5. Cetak: TSPL/ZPL/ESC-POS langsung via USB/Bluetooth, atau lewat
+        //      dialog cetak browser (mode Driver — untuk printer inkjet/laser).
+        // =====================================================================
+        const MK_STORAGE_KEY = 'nodMarkingSettingsV1';
+
+        // Printer thermal = daftar milik Label Produk; ditambah printer inkjet/laser
+        // yang lazim dipakai untuk mencetak stiker Tom & Jerry (lewat driver).
+        const MK_PRINTERS = PL_PRINTERS.concat([
+            {
+                group: 'Printer Inkjet / Laser (via Driver)', items: [
+                    { id: 'sys-epson', name: 'Epson EcoTank L-Series (L121 / L3110 / L3210 / L3250 / L5290)', lang: 'system', dpi: 300 },
+                    { id: 'sys-canon', name: 'Canon PIXMA G-Series (G1010 / G2010 / G3010 / G4010)', lang: 'system', dpi: 300 },
+                    { id: 'sys-hp', name: 'HP DeskJet Ink Tank / Smart Tank / LaserJet Pro', lang: 'system', dpi: 300 },
+                    { id: 'sys-brother', name: 'Brother DCP-T / HL-L Series', lang: 'system', dpi: 300 },
+                    { id: 'sys-other', name: 'Printer inkjet / laser lain (via Driver)', lang: 'system', dpi: 300 }
+                ]
+            }
+        ]);
+
+        // Kertas label. w × h = ukuran fisik stiker (mm) sesuai kemasan.
+        // g: tj = Tom & Jerry, th = thermal gap, ot = lainnya. h = 0 -> kertas kontinu (tinggi otomatis).
+        const MK_PAPER_GROUPS = [
+            { g: 'tj', label: 'Label Tom & Jerry (stiker kertas)' },
+            { g: 'th', label: 'Label Thermal (roll / gap)' },
+            { g: 'ot', label: 'Kertas kontinu / lainnya' }
+        ];
+        const MK_PAPERS = [
+            { id: 'tj121', g: 'tj', w: 38, h: 75, label: 'Tom & Jerry No. 121 — 38 × 75 mm' },
+            { id: 'tj103', g: 'tj', w: 32, h: 64, label: 'Tom & Jerry No. 103 — 32 × 64 mm' },
+            { id: 'tj100', g: 'tj', w: 38, h: 100, label: 'Tom & Jerry No. 100 — 38 × 100 mm' },
+            { id: 'tj127', g: 'tj', w: 35, h: 70, label: 'Tom & Jerry No. 127 — 35 × 70 mm' },
+            { id: 'tj102', g: 'tj', w: 50, h: 50, label: 'Tom & Jerry No. 102 — 50 × 50 mm' },
+            { id: 'tj101', g: 'tj', w: 50, h: 100, label: 'Tom & Jerry No. 101 — 50 × 100 mm' },
+            { id: 'tj120', g: 'tj', w: 78, h: 118, label: 'Tom & Jerry No. 120 — 78 × 118 mm' },
+            { id: '40x30', g: 'th', w: 40, h: 30, label: '40 × 30 mm' },
+            { id: '50x30', g: 'th', w: 50, h: 30, label: '50 × 30 mm' },
+            { id: '60x40', g: 'th', w: 60, h: 40, label: '60 × 40 mm' },
+            { id: '100x50', g: 'th', w: 100, h: 50, label: '100 × 50 mm' },
+            { id: '100x100', g: 'th', w: 100, h: 100, label: '100 × 100 mm' },
+            { id: '100x150', g: 'th', w: 100, h: 150, label: '100 × 150 mm (label resi)' },
+            { id: 'a6', g: 'ot', w: 105, h: 148, label: 'A6 — 105 × 148 mm' },
+            { id: 'rcpt58', g: 'ot', w: 48, h: 0, label: 'Struk 58 mm — area cetak 48 mm (tinggi otomatis)' },
+            { id: 'rcpt80', g: 'ot', w: 72, h: 0, label: 'Struk 80 mm — area cetak 72 mm (tinggi otomatis)' },
+            { id: 'custom', g: 'ot', w: 0, h: 0, label: 'Kustom (isi sendiri)…' }
+        ];
+
+        const MK_SAMPLE = { shipTo: 'OUTLET CONTOH SUKSES JAYA', alamat: 'Jl. Contoh Raya No. 12, RT 03/RW 04, Kel. Contoh, Kec. Contoh, Jakarta Timur 13210. Telp 0812-3456-7890' };
+        const MK_DEFAULTS = {
+            printerId: 'xp-365b', conn: 'usb', paperId: 'tj121', cw: 75, ch: 38, orientation: 'landscape',
+            copies: 1, dpi: 203, lang: 'auto', margin: 2, gap: 2, rot180: false, invert: false
+        };
+        const MK_COMBO_MAX = 60;
+
+        let _mkS = null;                                   // pengaturan aktif
+        let _mkData = null;                                // { rows, loadedAt, totalPO } | null
+        let _mkLoad = { state: 'idle', msg: '' };          // idle | loading | ok | error
+        let _mkLoadSeq = 0;
+        let _mkItem = { shipTo: '', alamat: '' };          // data yang sedang dipratinjau / dicetak
+        let _mkSelId = null;
+        let _mkQuery = '';
+        let _mkIdx = -1;
+        let _mkBusy = false;
+        let _mkDetected = [];                              // printer USB yang sudah diizinkan browser
+        let _mkLastDev = '';
+        let _mkUsbBound = false, _mkDocBound = false, _mkResizeTimer = null;
+
+        // ---------------------------------------------------------------
+        // Pengaturan
+        // ---------------------------------------------------------------
+        function mkFindPrinter(id) {
+            for (const g of MK_PRINTERS) { const p = g.items.find(function (x) { return x.id === id; }); if (p) return p; }
+            return null;
+        }
+        function mkFindPaper(id) { return MK_PAPERS.find(function (p) { return p.id === id; }) || null; }
+        function mkNaturalOrientation(p) { return p.g === 'tj' ? 'landscape' : plNaturalOrientation(p.w, p.h); }
+
+        function mkLoadSettings() {
+            let s = {};
+            try { s = JSON.parse(localStorage.getItem(MK_STORAGE_KEY) || '{}') || {}; } catch (_) { s = {}; }
+            const d = Object.assign({}, MK_DEFAULTS, s);
+            if (!mkFindPrinter(d.printerId)) d.printerId = MK_DEFAULTS.printerId;
+            if (!mkFindPaper(d.paperId)) d.paperId = MK_DEFAULTS.paperId;
+            if (['usb', 'bluetooth', 'system'].indexOf(d.conn) < 0) d.conn = 'usb';
+            if (['portrait', 'landscape'].indexOf(d.orientation) < 0) d.orientation = 'landscape';
+            if (['auto', 'tspl', 'zpl', 'escpos'].indexOf(d.lang) < 0) d.lang = 'auto';
+            d.dpi = (Number(d.dpi) === 300) ? 300 : 203;
+            d.copies = Math.round(plClamp(d.copies, 1, 500));
+            d.cw = plClamp(d.cw, 10, 300); d.ch = plClamp(d.ch, 10, 400);
+            d.margin = plClamp(d.margin, 0, 10); d.gap = plClamp(d.gap, 0, 10);
+            d.rot180 = !!d.rot180; d.invert = !!d.invert;
+            if (mkFindPrinter(d.printerId).lang === 'system') d.conn = 'system';
+            _mkS = d;
+        }
+        function mkSaveSettings() { try { localStorage.setItem(MK_STORAGE_KEY, JSON.stringify(_mkS)); } catch (_) { } }
+
+        function mkPrinter() { return mkFindPrinter(_mkS.printerId) || mkFindPrinter(MK_DEFAULTS.printerId); }
+        function mkLang() { return _mkS.lang === 'auto' ? mkPrinter().lang : _mkS.lang; }
+        function mkPaperInfo() {
+            const p = mkFindPaper(_mkS.paperId) || MK_PAPERS[0];
+            if (p.id === 'custom') return { id: 'custom', w: _mkS.cw, h: _mkS.ch, auto: false, g: 'ot' };
+            return { id: p.id, w: p.w, h: p.h, auto: !(p.h > 0), g: p.g, label: p.label };
+        }
+        /** Ukuran desain sesuai orientasi + apakah bitmap harus diputar 90° agar pas ke kertas fisik. */
+        function mkLayoutDims() {
+            const p = mkPaperInfo();
+            if (p.auto) return { lw: p.w, lh: 0, needRotate: false, auto: true, physW: p.w, physH: 0, fixedShape: true };
+            const mn = Math.min(p.w, p.h), mx = Math.max(p.w, p.h);
+            if (p.w === p.h) return { lw: p.w, lh: p.h, needRotate: false, auto: false, physW: p.w, physH: p.h, fixedShape: true };
+            const lw = _mkS.orientation === 'portrait' ? mn : mx;
+            const lh = _mkS.orientation === 'portrait' ? mx : mn;
+            return { lw: lw, lh: lh, needRotate: lw !== p.w, auto: false, physW: p.w, physH: p.h, fixedShape: false };
+        }
+        function mkRenderOpts() {
+            const d = mkLayoutDims();
+            return { dims: d, render: { lw: d.lw, lh: d.lh, dpi: _mkS.dpi, margin: _mkS.margin, binarize: _mkS.conn !== 'system' } };
+        }
+
+        // ---------------------------------------------------------------
+        // Render label -> canvas (dipakai untuk preview DAN cetak)
+        // ---------------------------------------------------------------
+        function mkClean(s) { return String(s == null ? '' : s).replace(/\s*[\r\n]+\s*/g, ' ').replace(/[ \t]+/g, ' ').trim(); }
+
+        /**
+         * Gambar 1 label: caption "SHIP TO" + nama (tebal, besar) · garis · caption "ALAMAT" + alamat.
+         * Ukuran font dicari otomatis (terbesar yang muat) sesuai ukuran label.
+         * o = { lw, lh (mm; lh 0 = tinggi otomatis), dpi, margin (mm), binarize, placeholder }
+         */
+        function mkRenderLabel(item, o) {
+            const mm = o.dpi / 25.4;
+            const W = Math.max(16, Math.round(o.lw * mm));
+            const margin = Math.max(0, Math.round(o.margin * mm));
+            const aw = Math.max(8, W - 2 * margin);
+            const auto = !(o.lh > 0);
+            const Hfixed = auto ? 0 : Math.max(16, Math.round(o.lh * mm));
+            const ah = auto ? Infinity : Math.max(8, Hfixed - 2 * margin);
+            const FONT = '"Arial", "Helvetica Neue", Helvetica, sans-serif';
+            const wName = 'bold', wAddr = o.binarize ? 'bold' : 'normal';
+            const fontOf = function (w, px) { return w + ' ' + Math.max(6, Math.round(px)) + 'px ' + FONT; };
+
+            const shipTo = mkClean(item && item.shipTo), alamat = mkClean(item && item.alamat);
+            const warnings = [];
+            const mc = document.createElement('canvas').getContext('2d');
+
+            const capPx = Math.max(8, Math.round(1.8 * mm));
+            const nameMax = 5.2 * mm, nameMin = 2.5 * mm, addrMax = 3.6 * mm, addrMin = 2.0 * mm;
+            const LH = 1.16;
+            const gapCap = Math.max(1, Math.round(0.4 * mm)), gapBlk = Math.max(2, Math.round(1.1 * mm)), rule = Math.max(1, Math.round(0.25 * mm));
+            const lhC = Math.round(capPx * 1.25);
+
+            function ellipsize(line, w) {
+                let t = line;
+                while (t.length > 1 && mc.measureText(t + '…').width > w) t = t.slice(0, -1);
+                return t + '…';
+            }
+            /** Susun tata letak pada skala s (1 = font terbesar). Mengembalikan null kalau tidak muat (dan trunc=false). */
+            function build(s, trunc) {
+                const namePx = Math.round(Math.max(nameMin, nameMax * s)), addrPx = Math.round(Math.max(addrMin, addrMax * s));
+                const lhN = Math.round(namePx * LH), lhA = Math.round(addrPx * LH);
+                let nl = [], al = [], cut = { name: false, addr: false };
+                if (shipTo) {
+                    mc.font = fontOf(wName, namePx);
+                    nl = plWrapText(mc, shipTo, aw);
+                    if (nl.length > 3) { if (!trunc) return null; nl = nl.slice(0, 3); nl[2] = ellipsize(nl[2], aw); cut.name = true; }
+                }
+                if (alamat) { mc.font = fontOf(wAddr, addrPx); al = plWrapText(mc, alamat, aw); }
+                const hHead = shipTo ? (lhC + gapCap + nl.length * lhN) : 0;
+                const hMid = (shipTo && alamat) ? (gapBlk + rule + gapBlk) : 0;
+                const hAddrFixed = alamat ? (lhC + gapCap) : 0;
+                const total = hHead + hMid + hAddrFixed + al.length * lhA;
+                if (total > ah) {
+                    if (!trunc) return null;
+                    // Sudah di ukuran font terkecil dan tetap tidak muat: potong alamat.
+                    const room = ah - hHead - hMid - hAddrFixed;
+                    const maxLines = Math.max(1, Math.floor(room / lhA));
+                    if (al.length > maxLines) {
+                        mc.font = fontOf(wAddr, addrPx);
+                        al = al.slice(0, maxLines); al[maxLines - 1] = ellipsize(al[maxLines - 1], aw); cut.addr = true;
+                    }
+                }
+                const h2 = hHead + hMid + hAddrFixed + al.length * lhA;
+                return { s: s, namePx: namePx, addrPx: addrPx, lhN: lhN, lhA: lhA, nl: nl, al: al, hHead: hHead, hMid: hMid, hAddrFixed: hAddrFixed, total: h2, cut: cut };
+            }
+
+            let L = null;
+            if (shipTo || alamat) {
+                for (let s = 1; s > 0.02 && !L; s -= 0.03) L = build(s, false);
+                if (!L) L = build(0, true);
+                if (L.cut.name) warnings.push('Ship To terlalu panjang — dipotong jadi 3 baris di label.');
+                if (L.cut.addr) warnings.push('Alamat terlalu panjang untuk ukuran label ini — dipotong. Pilih kertas lebih besar, atau persingkat alamat.');
+                if (L.namePx <= nameMin + 1 && L.addrPx <= addrMin + 1 && !L.cut.addr && !L.cut.name) warnings.push('Teks sangat panjang sehingga font mengecil ke batas terkecil — cek keterbacaannya di kertas asli.');
+            }
+
+            const H = auto ? (2 * margin + (L ? L.total : Math.round(10 * mm))) : Hfixed;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = Math.max(16, H);
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+
+            if (L) {
+                let y = margin + (auto ? 0 : Math.max(0, Math.floor((ah - L.total) / 2)));   // blok teks di tengah secara vertikal
+                if (shipTo) {
+                    ctx.font = fontOf('bold', capPx); ctx.fillText('SHIP TO', margin, y + lhC / 2); y += lhC + gapCap;
+                    ctx.font = fontOf(wName, L.namePx);
+                    L.nl.forEach(function (ln) { ctx.fillText(ln, margin, y + L.lhN / 2); y += L.lhN; });
+                }
+                if (shipTo && alamat) { y += gapBlk; ctx.fillRect(margin, y, aw, rule); y += rule + gapBlk; }
+                if (alamat) {
+                    ctx.font = fontOf('bold', capPx); ctx.fillText('ALAMAT', margin, y + lhC / 2); y += lhC + gapCap;
+                    ctx.font = fontOf(wAddr, L.addrPx);
+                    L.al.forEach(function (ln) { ctx.fillText(ln, margin, y + L.lhA / 2); y += L.lhA; });
+                }
+            }
+            if (o.binarize) plBinarize(canvas, 170);
+
+            if (!L && o.placeholder) {   // hanya preview
+                ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = 'bold ' + Math.max(10, Math.round(Math.min(W, canvas.height) * 0.075)) + 'px ' + FONT;
+                ctx.fillText('Pilih Ship To untuk preview', W / 2, canvas.height / 2);
+            }
+            return {
+                canvas: canvas, W: canvas.width, H: canvas.height,
+                info: { warnings: warnings, empty: !L, namePt: L ? L.namePx / o.dpi * 72 : 0, addrPt: L ? L.addrPx / o.dpi * 72 : 0, nameLines: L ? L.nl.length : 0, addrLines: L ? L.al.length : 0 }
+            };
+        }
+
+        /** Canvas desain -> canvas fisik (sesuai arah kertas di printer). */
+        function mkToPhysical(canvas, dims) {
+            let c = canvas;
+            if (dims.needRotate) c = plRotate(c, 90);
+            if (_mkS.rot180) c = plRotate(c, 180);
+            return c;
+        }
+
+        // ---------------------------------------------------------------
+        // Deteksi & koneksi printer (memakai koneksi bersama milik modul Label Produk)
+        // ---------------------------------------------------------------
+        function mkNorm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+        /** Cocokkan nama perangkat USB/Bluetooth ke tipe printer di dropdown (dari kode model, mis. XP-365B). */
+        function mkMatchPrinter(devName, vendorId) {
+            const n = mkNorm(devName);
+            let best = null, bestLen = 0;
+            MK_PRINTERS.forEach(function (g) {
+                g.items.forEach(function (p) {
+                    if (p.lang === 'system') return;
+                    const toks = (p.name.replace(/\(.*?\)/g, ' ').match(/[A-Za-z]{1,4}-?\d{2,4}[A-Za-z]{0,3}/g) || []).map(mkNorm);
+                    toks.forEach(function (t) { if (t.length >= 4 && n.indexOf(t) >= 0 && t.length > bestLen) { best = p; bestLen = t.length; } });
+                });
+            });
+            if (best) return best;
+            const v = PL_USB_VENDORS[vendorId];
+            if (v) return mkFindPrinter(v.lang === 'zpl' ? 'zpl-generic' : 'tspl-generic');
+            return null;
+        }
+        /** "Xprinter Xprinter XP-365B" (pabrikan + produk sama-sama memuat merek) -> "Xprinter XP-365B". */
+        function mkTidyName(n) { return String(n || '').replace(/^(.+?)\s+\1(?=\s|$)/i, '$1').trim(); }
+        function mkDevName(dev) {
+            return mkTidyName([dev.manufacturerName, dev.productName].filter(Boolean).join(' ')) || ('USB Printer ' + dev.vendorId.toString(16).toUpperCase() + ':' + dev.productId.toString(16).toUpperCase());
+        }
+        function mkSameDev(a, b) {
+            if (!a || !b) return false;
+            if (a === b) return true;
+            return a.vendorId === b.vendorId && a.productId === b.productId && (a.serialNumber || '') === (b.serialNumber || '');
+        }
+        function mkConnected() {
+            if (_mkS.conn === 'usb') return _plUsb.state === 'connected';
+            if (_mkS.conn === 'bluetooth') return _plBle.state === 'connected';
+            return true;
+        }
+        async function mkEnsureConnected() {
+            if (mkConnected()) return true;
+            if (_mkS.conn === 'usb') {
+                _plUsb.manualOff = false;
+                await plUsbAutoConnect();                       // 1) coba printer USB yang sudah pernah diizinkan
+                if (_plUsb.state === 'connected') return true;
+                return plUsbRequest();                           // 2) belum ada -> tampilkan daftar perangkat USB
+            }
+            if (_mkS.conn === 'bluetooth') return plBleConnect();
+            return true;
+        }
+        function mkSendBytes(bytes, onProgress) { return _mkS.conn === 'bluetooth' ? plBleWrite(bytes, onProgress) : plUsbWrite(bytes, onProgress); }
+
+        /** Tombol "Deteksi & Hubungkan Printer" / "Putuskan Printer". */
+        async function mkConnectClick() {
+            if (_mkS.conn === 'usb') {
+                if (_plUsb.state === 'connected') { await plUsbDisconnect(); mkRefreshDetected(); return; }
+                await mkEnsureConnected();
+                mkRefreshDetected();
+            } else if (_mkS.conn === 'bluetooth') {
+                if (_plBle.state === 'connected') return plBleDisconnect();
+                return plBleConnect();
+            }
+        }
+        async function mkRefreshDetected() {
+            if (!document.getElementById('mk-detected')) return;
+            let list = [];
+            if (plUsbSupported()) { try { list = await navigator.usb.getDevices(); } catch (_) { list = []; } }
+            _mkDetected = list.filter(plUsbLooksLikePrinter);
+            mkRenderDetected();
+        }
+        function mkRenderDetected() {
+            const box = document.getElementById('mk-detected'); if (!box || !_mkS) return;
+            if (_mkS.conn !== 'usb' || !plUsbSupported()) { box.classList.add('mk-hide'); box.innerHTML = ''; return; }
+            box.classList.remove('mk-hide');
+            const head = '<div class="mk-detect-h">Printer USB terdeteksi di perangkat ini</div>';
+            if (!_mkDetected.length) {
+                box.innerHTML = head + '<div class="mk-detect-empty">Belum ada printer USB yang diizinkan browser. Colok printer, lalu klik <b>Deteksi &amp; Hubungkan Printer</b> dan pilih printernya di daftar (izin cukup sekali — selanjutnya tersambung otomatis).</div>';
+                return;
+            }
+            box.innerHTML = head + _mkDetected.map(function (d, i) {
+                const on = _plUsb.state === 'connected' && mkSameDev(_plUsb.device, d);
+                return '<button type="button" class="mk-dev' + (on ? ' on' : '') + '" data-i="' + i + '"><span class="mk-seldot ' + (on ? 'mk-dot-green' : 'mk-dot-gray') + '"></span><span class="mk-dev-n">' + escapeHtml(mkDevName(d)) + '</span><span class="mk-dev-s">' + (on ? 'Terhubung' : 'Klik untuk hubungkan') + '</span></button>';
+            }).join('');
+        }
+        async function mkDetectedClick(ev) {
+            const t = ev.target.closest ? ev.target.closest('[data-i]') : null; if (!t) return;
+            const dev = _mkDetected[parseInt(t.getAttribute('data-i'), 10)]; if (!dev) return;
+            if (_plUsb.state === 'connected' && mkSameDev(_plUsb.device, dev)) return;
+            if (_plUsb.state === 'connected') await plUsbDisconnect();
+            _plUsb.manualOff = false;
+            await plUsbConnect(dev, false);
+            mkRefreshDetected();
+        }
+        function mkBindUsbEvents() {
+            if (_mkUsbBound || !plUsbSupported()) return;
+            _mkUsbBound = true;
+            const again = function () { setTimeout(mkRefreshDetected, 400); };
+            navigator.usb.addEventListener('connect', again);
+            navigator.usb.addEventListener('disconnect', again);
+        }
+
+        function mkStatusModel() {
+            const c = _mkS.conn;
+            if (c === 'system') return { tone: 'blue', title: 'Mode Driver / Dialog Cetak', sub: 'Printer yang sudah terpasang di komputer dipilih di dialog cetak browser. Ukuran kertas otomatis mengikuti label.', btn: null };
+            const isUsb = c === 'usb';
+            const st = isUsb ? _plUsb : _plBle;
+            const via = isUsb ? 'USB' : 'Bluetooth';
+            if (isUsb && !plUsbSupported()) return { tone: 'red', title: 'USB langsung tidak didukung browser ini', sub: 'Gunakan Chrome / Edge (desktop atau Android), atau pindah ke mode Driver.', btn: null };
+            if (!isUsb && !plBleSupported()) return { tone: 'red', title: 'Bluetooth tidak didukung browser ini', sub: 'Gunakan Chrome / Edge (desktop atau Android), atau pindah ke mode Driver.', btn: null };
+            if (st.state === 'connected') return { tone: 'green', title: 'Printer terhubung', sub: st.name + ' · ' + via, btn: 'disconnect' };
+            if (st.state === 'connecting') return { tone: 'amber', title: 'Menghubungkan…', sub: 'Menunggu printer merespons.', btn: 'wait' };
+            if (st.state === 'error') return { tone: 'red', title: 'Gagal terhubung', sub: st.detail || 'Coba lagi.', btn: 'connect' };
+            return { tone: 'gray', title: 'Belum ada printer terhubung', sub: isUsb ? 'Colokkan printer via USB lalu klik Deteksi & Hubungkan Printer.' : 'Nyalakan Bluetooth printer, lalu klik Deteksi & Hubungkan Printer.', btn: 'connect' };
+        }
+
+        /** Dipanggil juga oleh plRenderStatus() milik Label Produk (koneksi dipakai bersama). */
+        function mkRenderStatus() {
+            const box = document.getElementById('mk-status'); if (!box || !_mkS) return;
+            const m = mkStatusModel();
+            box.className = 'mk-status mk-st-' + m.tone;
+            document.getElementById('mk-st-dot').className = 'mk-seldot mk-dot-' + m.tone;
+            document.getElementById('mk-st-title').textContent = m.title;
+            document.getElementById('mk-st-sub').textContent = mkTidyName(m.sub);
+            const sd = document.getElementById('mk-printer-dot');
+            const st = _mkS.conn === 'usb' ? _plUsb : (_mkS.conn === 'bluetooth' ? _plBle : null);
+            const live = !!(st && st.state === 'connected');
+            if (sd) sd.className = 'mk-seldot mk-dot-' + (m.tone === 'blue' ? 'blue' : m.tone);
+            const b = document.getElementById('mk-btn-connect');
+            if (b) {
+                b.classList.toggle('mk-hide', !m.btn);
+                b.disabled = m.btn === 'wait';
+                b.className = 'mk-btn mk-btn-block mk-connect ' + (m.btn === 'disconnect' ? 'mk-btn-ghost' : 'mk-btn-primary') + (m.btn ? '' : ' mk-hide');
+                b.textContent = m.btn === 'disconnect' ? 'Putuskan Printer' : (m.btn === 'wait' ? 'Menghubungkan…' : 'Deteksi & Hubungkan Printer');
+            }
+            const sel = document.getElementById('mk-printer');
+            if (sel) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    const o = sel.options[i], p = mkFindPrinter(o.value);
+                    if (p) o.textContent = ((live && o.value === _mkS.printerId) ? '●  ' : '') + p.name + ((live && o.value === _mkS.printerId) ? '  (Terhubung)' : '');
+                }
+            }
+            mkRenderDetected();
+            // perangkat baru terhubung -> cocokkan tipe printer otomatis
+            if (live) {
+                const key = _mkS.conn + ':' + st.name;
+                if (_mkLastDev !== key) { _mkLastDev = key; mkAutoMatch(st); }
+            } else if (_mkLastDev) { _mkLastDev = ''; }
+        }
+        function mkAutoMatch(st) {
+            const hit = mkMatchPrinter(st.name, st.device && st.device.vendorId);
+            if (hit && hit.id !== _mkS.printerId && hit.lang !== 'system') {
+                _mkS.printerId = hit.id; _mkS.dpi = hit.dpi || _mkS.dpi; mkSaveSettings();
+                showToastAlert('info', 'Tipe printer terdeteksi', escapeHtml(hit.name));
+                mkRefreshAll();
+            } else if (!hit) {
+                showToastAlert('info', 'Printer terdeteksi', escapeHtml(mkTidyName(st.name)) + ' — pilih Type Printer yang paling sesuai di dropdown.');
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Cetak
+        // ---------------------------------------------------------------
+        /** Mode "Driver": cetak lewat dialog cetak browser (printer inkjet/laser atau thermal ber-driver). */
+        function mkPrintViaSystem(canvas, lw, lh, qty) {
+            return new Promise(function (resolve, reject) {
+                const hMm = lh > 0 ? lh : Math.round(canvas.height / (_mkS.dpi / 25.4) * 100) / 100;
+                canvas.toBlob(function (blob) {
+                    if (!blob) { reject(new Error('Gagal menyiapkan gambar label.')); return; }
+                    const url = URL.createObjectURL(blob);
+                    let imgs = '';
+                    for (let i = 0; i < qty; i++) imgs += '<div class="p"><img src="' + url + '" alt=""></div>';
+                    const ifr = document.createElement('iframe');
+                    ifr.setAttribute('aria-hidden', 'true');
+                    ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+                    document.body.appendChild(ifr);
+                    const doc = ifr.contentDocument || ifr.contentWindow.document;
+                    doc.open();
+                    doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Marking Pengiriman</title><style>' +
+                        '@page{size:' + lw + 'mm ' + hMm + 'mm;margin:0}html,body{margin:0;padding:0;background:#fff}' +
+                        '.p{width:' + lw + 'mm;height:' + hMm + 'mm;overflow:hidden;page-break-after:always;break-after:page}' +
+                        '.p:last-child{page-break-after:auto;break-after:auto}' +
+                        'img{display:block;width:' + lw + 'mm;height:' + hMm + 'mm}' +
+                        '</style></head><body>' + imgs + '</body></html>');
+                    doc.close();
+                    const cleanup = function () { setTimeout(function () { try { ifr.remove(); } catch (_) { } try { URL.revokeObjectURL(url); } catch (_) { } }, 1000); };
+                    const go = function () {
+                        try {
+                            const w = ifr.contentWindow;
+                            w.addEventListener('afterprint', cleanup);
+                            w.focus(); w.print();
+                            setTimeout(cleanup, 120000);
+                            resolve();
+                        } catch (e) { cleanup(); reject(e); }
+                    };
+                    const im = doc.querySelector('img');
+                    if (im && !im.complete) { im.onload = go; im.onerror = function () { cleanup(); reject(new Error('Gagal menyiapkan gambar label.')); }; }
+                    else setTimeout(go, 50);
+                }, 'image/png');
+            });
+        }
+
+        async function mkPrint(isTest) {
+            if (_mkBusy) return;
+            const item = isTest ? MK_SAMPLE : _mkItem;
+            if (!item || !mkClean(item.shipTo)) {
+                showAlert('warning', 'Belum ada data', 'Pilih Ship To dari daftar (atau ketik manual) dulu. Kotak Ship To wajib terisi.');
+                return;
+            }
+            const qty = isTest ? 1 : Math.round(plClamp(_mkS.copies, 1, 500));
+            const btn = document.getElementById('mk-print-btn');
+            const setBtn = function (t) { if (btn) btn.textContent = t; };
+            const oldText = btn ? btn.textContent : '';
+            _mkBusy = true; mkSyncButtons();
+            try {
+                if (_mkS.conn !== 'system') {
+                    setBtn('Menghubungkan…');
+                    if (!(await mkEnsureConnected())) return;   // user batal / gagal (pesan sudah tampil)
+                }
+                setBtn('Menyiapkan label…');
+                await plSleep(20);
+                const ro = mkRenderOpts();
+                const lay = mkRenderLabel(item, ro.render);
+                if (lay.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(lay.info.warnings[0]));
+                if (_mkS.conn === 'system') {
+                    setBtn('Membuka dialog cetak…');
+                    await mkPrintViaSystem(lay.canvas, ro.dims.lw, ro.dims.lh, qty);
+                } else {
+                    const lang = mkLang();
+                    if (lang === 'system') throw new Error('Tipe printer ini hanya bisa dicetak lewat mode Driver.');
+                    const phys = mkToPhysical(lay.canvas, ro.dims);
+                    const bmp = plPackBitmap(phys);
+                    const mmPx = _mkS.dpi / 25.4;
+                    const bytes = plBuildJob(lang, bmp, {
+                        wMm: ro.dims.physW, hMm: ro.dims.physH > 0 ? ro.dims.physH : Math.ceil(phys.height / mmPx),
+                        gapMm: _mkS.gap, qty: qty, invert: _mkS.invert
+                    });
+                    await mkSendBytes(bytes, function (p) { setBtn('Mengirim… ' + Math.round(p * 100) + '%'); });
+                    showToastAlert('success', isTest ? 'Cetak tes terkirim' : 'Label terkirim ke printer', escapeHtml(mkClean(item.shipTo)) + (isTest ? '' : ' × ' + qty));
+                }
+                if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak marking pengiriman: ' + mkClean(item.shipTo) + ' ×' + qty);
+            } catch (e) {
+                showAlert('error', 'Gagal mencetak', plErrMsg(e));
+            } finally {
+                _mkBusy = false;
+                if (btn) btn.textContent = oldText || 'Cetak Label';
+                mkSyncButtons();
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Data: Ship To & Alamat dari PO_Data (status kosong)
+        // ---------------------------------------------------------------
+        function mkBuildRows(raw) {
+            const map = new Map();
+            (raw || []).forEach(function (r) {
+                const shipTo = mkClean(r.shipTo), alamat = mkClean(r.alamat);
+                if (!shipTo) return;
+                const key = (shipTo + '|' + alamat).toLowerCase();
+                let e = map.get(key);
+                if (!e) { e = { id: 'm' + r._row, shipTo: shipTo, alamat: alamat, pos: [], maxRow: r._row || 0 }; map.set(key, e); }
+                if (r.noPO) e.pos.push(String(r.noPO));
+                if ((r._row || 0) > e.maxRow) { e.maxRow = r._row; e.id = 'm' + r._row; }
+            });
+            const rows = Array.from(map.values()).sort(function (a, b) { return b.maxRow - a.maxRow; });   // PO terbaru di atas
+            rows.forEach(function (e) { e._q = (e.shipTo + ' ' + e.alamat + ' ' + e.pos.join(' ')).toLowerCase(); });
+            return rows;
+        }
+
+        async function mkLoadData() {
+            const mySeq = ++_mkLoadSeq;
+            _mkLoad = { state: 'loading', msg: '' };
+            const btn = document.getElementById('mk-refresh');
+            if (btn) { btn.disabled = true; btn.classList.add('is-loading'); }
+            mkRenderDataNote(); mkRenderCombo();
+            try {
+                const res = await fetchWithRetry(PO_GAS_URL + '?action=getMarkingPengirimanData', {}, 25000);
+                const result = await res.json();
+                if (result.error || result.success === false) throw new Error(result.error || result.message || 'Gagal mengambil data PO_Data.');
+                if (mySeq !== _mkLoadSeq) return;
+                const raw = Array.isArray(result.rows) ? result.rows : [];
+                _mkData = { rows: mkBuildRows(raw), loadedAt: Date.now(), totalPO: raw.length };
+                _mkLoad = { state: 'ok', msg: '' };
+            } catch (err) {
+                if (mySeq !== _mkLoadSeq) return;
+                _mkLoad = { state: 'error', msg: (err && err.message) ? err.message : String(err) };
+                if (_mkData) showToastAlert('error', 'Gagal memuat ulang', escapeHtml(_mkLoad.msg));
+            } finally {
+                const b2 = document.getElementById('mk-refresh');
+                if (b2 && mySeq === _mkLoadSeq) { b2.disabled = false; b2.classList.remove('is-loading'); }
+                if (mySeq === _mkLoadSeq) { mkRenderDataNote(); mkRenderCombo(); }
+            }
+        }
+
+        function mkRenderDataNote() {
+            const el = document.getElementById('mk-datanote-t'); if (!el) return;
+            if (_mkLoad.state === 'loading') { el.textContent = 'Memuat Ship To dari PO_Data…'; return; }
+            if (_mkLoad.state === 'error' && !_mkData) { el.textContent = 'Gagal memuat data — ' + _mkLoad.msg; return; }
+            if (!_mkData) { el.textContent = ''; return; }
+            const t = new Date(_mkData.loadedAt);
+            const hh = ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2);
+            el.textContent = _mkData.rows.length + ' Ship To dari ' + _mkData.totalPO + ' PO berstatus kosong · diperbarui ' + hh;
+        }
+
+        function mkFilteredRows() {
+            const rows = _mkData ? _mkData.rows : [];
+            const q = _mkQuery.trim().toLowerCase();
+            return q ? rows.filter(function (r) { return r._q.indexOf(q) >= 0; }) : rows;
+        }
+        function mkRenderCombo() {
+            const box = document.getElementById('mk-combo-list'); if (!box) return;
+            if (!_mkData) {
+                if (_mkLoad.state === 'error') box.innerHTML = '<div class="mk-combo-empty" style="color:#fca5a5">Gagal memuat data: ' + escapeHtml(_mkLoad.msg) + '<br><button type="button" class="mk-link" onclick="mkLoadData()">Coba lagi</button></div>';
+                else box.innerHTML = '<div class="mk-combo-empty"><span class="mk-spin"></span>Memuat data PO_Data…</div>';
+                return;
+            }
+            const list = mkFilteredRows();
+            if (!list.length) { box.innerHTML = '<div class="mk-combo-empty">' + (_mkData.rows.length ? 'Tidak ada Ship To yang cocok. Teks yang diketik tetap bisa dipakai apa adanya.' : 'Tidak ada PO dengan status kosong di PO_Data.') + '</div>'; return; }
+            const vis = list.slice(0, MK_COMBO_MAX);
+            if (_mkIdx >= vis.length) _mkIdx = vis.length - 1;
+            box.innerHTML = vis.map(function (r, i) {
+                return '<button type="button" class="mk-opt' + (i === _mkIdx ? ' hot' : '') + (r.id === _mkSelId ? ' sel' : '') + '" data-id="' + escapeHtml(r.id) + '">' +
+                    '<span class="mk-opt-n">' + escapeHtml(r.shipTo) + '</span><span class="mk-opt-a">' + escapeHtml(r.alamat || '— tanpa alamat —') + '</span>' +
+                    (r.pos.length > 1 ? '<span class="mk-opt-c">' + r.pos.length + ' PO</span>' : '') + '</button>';
+            }).join('') + (list.length > vis.length ? '<div class="mk-combo-more">…dan ' + (list.length - vis.length) + ' lainnya — ketik untuk mempersempit</div>' : '');
+        }
+        function mkOpenCombo() {
+            const l = document.getElementById('mk-combo-list'); if (!l) return;
+            _mkQuery = ''; _mkIdx = -1;
+            l.classList.remove('mk-hide'); mkRenderCombo();
+        }
+        function mkCloseCombo() { const l = document.getElementById('mk-combo-list'); if (l) l.classList.add('mk-hide'); _mkIdx = -1; }
+        function mkOnShipInput() {
+            const inp = document.getElementById('mk-shipto');
+            // Ship To diubah setelah memilih dari daftar -> Alamat lama sudah tidak sesuai: kosongkan supaya
+            // tidak tercetak alamat milik outlet lain. (Pilih ulang dari daftar untuk mengisi Alamat otomatis.)
+            if (_mkSelId) {
+                _mkItem.alamat = '';
+                const ta = document.getElementById('mk-alamat'); if (ta) ta.value = '';
+            }
+            _mkItem.shipTo = inp.value; _mkSelId = null; _mkQuery = inp.value; _mkIdx = -1;
+            const x = document.getElementById('mk-shipto-x'); if (x) x.classList.toggle('mk-hide', !inp.value);
+            const l = document.getElementById('mk-combo-list'); if (l) l.classList.remove('mk-hide');
+            mkRenderCombo(); mkRenderPreview();
+        }
+        function mkOnAddrInput() { _mkItem.alamat = document.getElementById('mk-alamat').value; mkRenderPreview(); }
+        function mkComboKey(ev) {
+            const l = document.getElementById('mk-combo-list');
+            const open = l && !l.classList.contains('mk-hide');
+            const vis = mkFilteredRows().slice(0, MK_COMBO_MAX);
+            if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+                ev.preventDefault();
+                if (!open) { mkOpenCombo(); return; }
+                if (!vis.length) return;
+                _mkIdx = ev.key === 'ArrowDown' ? Math.min(_mkIdx + 1, vis.length - 1) : Math.max(_mkIdx - 1, 0);
+                mkRenderCombo();
+                const hot = l.querySelector('.mk-opt.hot'); if (hot && hot.scrollIntoView) hot.scrollIntoView({ block: 'nearest' });
+            } else if (ev.key === 'Enter') {
+                if (open && _mkIdx >= 0 && vis[_mkIdx]) { ev.preventDefault(); mkPick(vis[_mkIdx].id); }
+            } else if (ev.key === 'Escape') { mkCloseCombo(); }
+        }
+        function mkComboClick(ev) {
+            const t = ev.target.closest ? ev.target.closest('[data-id]') : null;
+            if (t) mkPick(t.getAttribute('data-id'));
+        }
+        function mkPick(id) {
+            const row = _mkData && _mkData.rows.find(function (r) { return r.id === id; });
+            if (!row) return;
+            _mkSelId = id;
+            _mkItem = { shipTo: row.shipTo, alamat: row.alamat };
+            document.getElementById('mk-shipto').value = row.shipTo;
+            document.getElementById('mk-alamat').value = row.alamat;
+            const x = document.getElementById('mk-shipto-x'); if (x) x.classList.remove('mk-hide');
+            mkCloseCombo();
+            mkRenderPreview();
+            if (window.innerWidth < 1024) { const pc = document.querySelector('.mk-c-preview'); if (pc && pc.scrollIntoView) pc.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        }
+        function mkClearShip() {
+            _mkItem = { shipTo: '', alamat: '' }; _mkSelId = null;
+            const a = document.getElementById('mk-shipto'), b = document.getElementById('mk-alamat');
+            if (a) a.value = ''; if (b) b.value = '';
+            const x = document.getElementById('mk-shipto-x'); if (x) x.classList.add('mk-hide');
+            mkCloseCombo(); mkRenderPreview();
+            if (a) a.focus();
+        }
+
+        // ---------------------------------------------------------------
+        // Preview
+        // ---------------------------------------------------------------
+        function mkRenderPreview() {
+            const canvas = document.getElementById('mk-canvas'); if (!canvas || !_mkS) return;
+            const ro = mkRenderOpts();
+            const o = Object.assign({}, ro.render, { placeholder: true });
+            const lay = mkRenderLabel(_mkItem, o);
+            canvas.width = lay.W; canvas.height = lay.H;
+            canvas.getContext('2d').drawImage(lay.canvas, 0, 0);
+            const stage = document.getElementById('mk-stage');
+            const availW = Math.max(120, (stage ? stage.clientWidth : 360) - 32 - 40);
+            const maxH = window.innerWidth < 640 ? 300 : 400;
+            const scale = Math.min(availW / lay.W, maxH / lay.H);
+            canvas.style.width = Math.round(lay.W * scale) + 'px';
+            canvas.style.height = Math.round(lay.H * scale) + 'px';
+            canvas.style.imageRendering = scale > 1 ? 'pixelated' : 'auto';
+
+            const dims = ro.dims;
+            const mmPx = _mkS.dpi / 25.4;
+            const hMm = dims.auto ? Math.round(lay.H / mmPx * 10) / 10 : dims.lh;
+            const setT = function (id, t) { const e = document.getElementById(id); if (e) e.textContent = t; };
+            setT('mk-chip-size', dims.lw + ' × ' + hMm + ' mm');
+            setT('mk-chip-orient', dims.auto ? 'Kontinu' : (dims.lw > dims.lh ? 'Lanskap' : (dims.lw < dims.lh ? 'Potret' : 'Persegi')));
+            setT('mk-dim-w', dims.lw + ' mm');
+            setT('mk-dim-h', hMm + ' mm');
+            setT('mk-meta', lay.W + ' × ' + lay.H + ' dot · ' + _mkS.dpi + ' dpi' + (lay.info.empty ? '' : ' · font otomatis: Ship To ' + Math.round(lay.info.namePt * 10) / 10 + ' pt, Alamat ' + Math.round(lay.info.addrPt * 10) / 10 + ' pt'));
+
+            // saran otomatis
+            const tips = lay.info.warnings.slice();
+            const pr = mkPrinter();
+            if (_mkS.conn === 'system') {
+                tips.push('Di dialog cetak browser: pilih printer, set Scale/Skala = 100% (Actual size) dan Margins = None supaya ukuran label persis ' + dims.lw + ' × ' + hMm + ' mm.');
+                if (pr.lang === 'system') tips.push('Printer inkjet/laser tidak bisa mencetak sampai ke tepi kertas — kalau teks di pinggir terpotong, naikkan Margin di Pengaturan lanjutan (mis. 3–4 mm).');
+            } else {
+                if (mkLang() === 'escpos' && pr.maxDots && Math.round(dims.physW * mmPx) > pr.maxDots) tips.push('Lebar kertas (' + Math.round(dims.physW * mmPx) + ' dot) melebihi lebar cetak printer (' + pr.maxDots + ' dot) — sisi kanan bisa terpotong.');
+                if (mkLang() === 'escpos' && !dims.auto) tips.push('Printer struk (ESC/POS) tidak membaca gap stiker — pastikan kertas pas, atau pakai kertas kontinu.');
+            }
+            const tb = document.getElementById('mk-tips');
+            if (tb) {
+                if (tips.length) { tb.classList.remove('mk-hide'); tb.innerHTML = '<b>' + PL_IC.bulb + 'Saran otomatis</b><ul>' + tips.map(function (t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('') + '</ul>'; }
+                else { tb.classList.add('mk-hide'); tb.innerHTML = ''; }
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Halaman
+        // ---------------------------------------------------------------
+        function mkPaperOptions() {
+            return MK_PAPER_GROUPS.map(function (g) {
+                const items = MK_PAPERS.filter(function (p) { return p.g === g.g; });
+                return '<optgroup label="' + escapeHtml(g.label) + '">' + items.map(function (p) { return '<option value="' + p.id + '">' + escapeHtml(p.label) + '</option>'; }).join('') + '</optgroup>';
+            }).join('');
+        }
+
+        async function showMarkingPengiriman() {
+            if (!(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
+                showAlert('error', 'Akses Ditolak', 'Menu "Print Label" hanya dapat diakses oleh Admin dan Team Warehouse.');
+                return;
+            }
+            if (!_plS) plLoadSettings();          // modul Label Produk (koneksi printer bersama) butuh pengaturannya terisi
+            mkLoadSettings();
+
+            const printerOpts = MK_PRINTERS.map(function (g) {
+                return '<optgroup label="' + escapeHtml(g.group) + '">' + g.items.map(function (p) { return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>'; }).join('') + '</optgroup>';
+            }).join('');
+
+            document.getElementById('content-area').innerHTML = `
+            <div class="mk-page">
+                <div class="pl-head">
+                    <div>
+                        <div class="pl-crumb">Print Label</div>
+                        <h1 class="pl-title">Marking Pengiriman</h1>
+                        <p class="pl-sub">Pilih printer &amp; kertas label, pilih Ship To — label langsung menyesuaikan ukuran kertas dan siap dicetak.</p>
+                    </div>
+                </div>
+                <div class="mk-win">
+                    <div class="mk-titlebar">
+                        <div class="mk-tb-l">${PL_IC.printer}<span>Print — Marking Pengiriman</span></div>
+                    </div>
+                    <div class="mk-body">
+                        <div class="mk-col mk-col-l">
+                            <section class="mk-sec mk-c-printer" aria-label="Printer">
+                                <div class="mk-sec-h"><span>${PL_IC.printer}Printer</span></div>
+                                <div class="mk-row"><label for="mk-printer">Type Printer</label>
+                                    <div class="mk-selwrap"><span id="mk-printer-dot" class="mk-seldot"></span><select id="mk-printer" class="mk-in" onchange="mkOnPrinterChange()">${printerOpts}</select></div></div>
+                                <div id="mk-printer-note" class="mk-note"></div>
+                                <div class="mk-row"><span class="mk-lab">Koneksi</span>
+                                    <div class="mk-seg" id="mk-conn-seg">
+                                        <button type="button" data-v="usb" onclick="mkSetConn('usb')">USB</button>
+                                        <button type="button" data-v="bluetooth" onclick="mkSetConn('bluetooth')">Bluetooth</button>
+                                        <button type="button" data-v="system" onclick="mkSetConn('system')">Driver</button>
+                                    </div></div>
+                                <div id="mk-conn-hint" class="mk-note"></div>
+                                <div id="mk-status" class="mk-status"><span id="mk-st-dot" class="mk-seldot"></span><div><span id="mk-st-title" class="mk-st-title"></span><span id="mk-st-sub" class="mk-st-sub"></span></div></div>
+                                <button type="button" id="mk-btn-connect" class="mk-btn mk-btn-primary mk-btn-block mk-connect" onclick="mkConnectClick()">Deteksi &amp; Hubungkan Printer</button>
+                                <div id="mk-detected" class="mk-detected mk-hide" onclick="mkDetectedClick(event)"></div>
+                            </section>
+
+                            <section class="mk-sec mk-c-paper" aria-label="Kertas label">
+                                <div class="mk-sec-h"><span>${PL_IC.layout}Media</span></div>
+                                <div class="mk-row"><label for="mk-paper">Type Paper Label</label><select id="mk-paper" class="mk-in" onchange="mkOnPaperChange()">${mkPaperOptions()}</select></div>
+                                <div id="mk-custom" class="mk-2col mk-hide">
+                                    <input id="mk-cw" type="number" min="10" max="300" step="0.5" class="mk-in" oninput="mkOnCustomSize()" aria-label="Lebar (mm)" placeholder="Lebar">
+                                    <span>×</span>
+                                    <input id="mk-ch" type="number" min="10" max="400" step="0.5" class="mk-in" oninput="mkOnCustomSize()" aria-label="Tinggi (mm)" placeholder="Tinggi">
+                                </div>
+                                <div id="mk-paper-note" class="mk-note"></div>
+                                <div class="mk-row"><span class="mk-lab">Orientasi</span>
+                                    <div class="mk-seg" id="mk-orient-seg">
+                                        <button type="button" data-v="portrait" onclick="mkSetOrient('portrait')">${PL_ICON_PORTRAIT}Potret</button>
+                                        <button type="button" data-v="landscape" onclick="mkSetOrient('landscape')">${PL_ICON_LANDSCAPE}Lanskap</button>
+                                    </div></div>
+                                <div id="mk-orient-note" class="mk-note"></div>
+                                <div class="mk-row"><label for="mk-qty">Jumlah cetak</label>
+                                    <div class="mk-step">
+                                        <button type="button" onclick="mkQtyStep(-1)" aria-label="Kurangi">${PL_IC.minus}</button>
+                                        <input id="mk-qty" type="number" min="1" max="500" step="1" inputmode="numeric" oninput="mkOnQtyInput()" onblur="mkOnQtyBlur()">
+                                        <button type="button" onclick="mkQtyStep(1)" aria-label="Tambah">${PL_IC.plus}</button>
+                                    </div></div>
+                                <details class="mk-adv" id="mk-adv">
+                                    <summary>Pengaturan lanjutan</summary>
+                                    <div class="mk-adv-grid">
+                                        <div><label for="mk-lang">Bahasa printer</label>
+                                            <select id="mk-lang" class="mk-in" onchange="mkOnAdv()"><option value="auto">Otomatis (ikut tipe)</option><option value="tspl">TSPL</option><option value="zpl">ZPL</option><option value="escpos">ESC/POS</option></select></div>
+                                        <div><label for="mk-dpi">Resolusi</label>
+                                            <select id="mk-dpi" class="mk-in" onchange="mkOnAdv()"><option value="203">203 dpi</option><option value="300">300 dpi</option></select></div>
+                                        <div><label for="mk-margin">Margin (mm)</label>
+                                            <input id="mk-margin" type="number" min="0" max="10" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                        <div><label for="mk-gap">Gap label (mm)</label>
+                                            <input id="mk-gap" type="number" min="0" max="10" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                    </div>
+                                    <div class="mk-note">Gap: jarak antar stiker (TSPL). Isi 0 untuk kertas kontinu.</div>
+                                    <label class="mk-chk"><input id="mk-rot180" type="checkbox" onchange="mkOnAdv()"><span>Putar hasil cetak 180°<small>Jika label keluar terbalik (kertas terpasang berlawanan arah).</small></span></label>
+                                    <label class="mk-chk"><input id="mk-invert" type="checkbox" onchange="mkOnAdv()"><span>Balik polaritas bitmap<small>Aktifkan jika hasil cetak negatif (latar hitam) atau kosong.</small></span></label>
+                                </details>
+                            </section>
+
+                            <section class="mk-sec mk-c-dest" aria-label="Tujuan pengiriman">
+                                <div class="mk-sec-h"><span>${PL_IC.pin}Tujuan Pengiriman</span>
+                                    <button type="button" id="mk-refresh" class="mk-btn mk-btn-ghost mk-btn-sm" onclick="mkLoadData()">${PL_IC.refresh}Refresh</button></div>
+                                <div class="mk-row mk-row-top"><label for="mk-shipto">Ship To</label>
+                                    <div class="mk-combo" id="mk-combo">
+                                        <input id="mk-shipto" class="mk-in" type="text" autocomplete="off" placeholder="Pilih dari daftar atau ketik manual…" oninput="mkOnShipInput()" onfocus="mkOpenCombo()" onkeydown="mkComboKey(event)">
+                                        <button type="button" id="mk-shipto-x" class="mk-combo-x mk-hide" onclick="mkClearShip()" aria-label="Kosongkan">${PL_IC.x}</button>
+                                        <div id="mk-combo-list" class="mk-combo-list mk-hide" onmousedown="event.preventDefault()" onclick="mkComboClick(event)"></div>
+                                    </div></div>
+                                <div class="mk-row mk-row-top"><label for="mk-alamat">Alamat</label>
+                                    <textarea id="mk-alamat" class="mk-in" rows="4" placeholder="Terisi otomatis saat Ship To dipilih — bisa diedit" oninput="mkOnAddrInput()"></textarea></div>
+                                <div class="mk-datanote"><span id="mk-datanote-t"></span></div>
+                                <div class="mk-note">Sumber: sheet <b>PO_Data</b> (kolom D = Ship To, kolom H = Alamat), hanya PO yang statusnya masih kosong. Perubahan di kotak Alamat hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>
+                            </section>
+
+                            <section class="mk-sec mk-c-actions" aria-label="Cetak">
+                                <div class="mk-actions">
+                                    <button type="button" id="mk-test-btn" class="mk-btn mk-btn-ghost mk-btn-lg" onclick="mkPrint(true)">Cetak Tes</button>
+                                    <button type="button" id="mk-print-btn" class="mk-btn mk-btn-primary mk-btn-lg" onclick="mkPrint(false)">Cetak Label</button>
+                                </div>
+                                <div class="mk-note" style="margin:.6rem 0 0">Cetak Tes memakai data contoh — untuk mengecek arah, ukuran, dan ketajaman cetak sebelum mencetak sungguhan.</div>
+                            </section>
+                        </div>
+
+                        <div class="mk-col mk-col-r">
+                            <section class="mk-c-preview" aria-label="Preview">
+                                <div class="mk-pane-h"><span>${PL_IC.eye}Preview</span><span><span id="mk-chip-size" class="mk-chip"></span> <span id="mk-chip-orient" class="mk-chip mk-chip-g"></span></span></div>
+                                <div class="mk-stage" id="mk-stage">
+                                    <div class="mk-pageblock">
+                                        <div class="mk-dim mk-dim-top"><i></i><span id="mk-dim-w"></span><i></i></div>
+                                        <div class="mk-dim mk-dim-left"><i></i><span id="mk-dim-h"></span><i></i></div>
+                                        <div class="mk-paper"><canvas id="mk-canvas" width="10" height="10"></canvas></div>
+                                    </div>
+                                </div>
+                                <div class="mk-meta" id="mk-meta"></div>
+                                <div id="mk-tips" class="mk-tips mk-hide"></div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+            // nilai awal kontrol
+            document.getElementById('mk-printer').value = _mkS.printerId;
+            document.getElementById('mk-paper').value = _mkS.paperId;
+            document.getElementById('mk-cw').value = _mkS.cw;
+            document.getElementById('mk-ch').value = _mkS.ch;
+            document.getElementById('mk-qty').value = _mkS.copies;
+            document.getElementById('mk-lang').value = _mkS.lang;
+            document.getElementById('mk-dpi').value = String(_mkS.dpi);
+            document.getElementById('mk-margin').value = _mkS.margin;
+            document.getElementById('mk-gap').value = _mkS.gap;
+            document.getElementById('mk-rot180').checked = _mkS.rot180;
+            document.getElementById('mk-invert').checked = _mkS.invert;
+            document.getElementById('mk-shipto').value = _mkItem.shipTo;
+            document.getElementById('mk-alamat').value = _mkItem.alamat;
+            const x = document.getElementById('mk-shipto-x'); if (x) x.classList.toggle('mk-hide', !_mkItem.shipTo);
+
+            mkRefreshAll();
+            mkRenderDataNote(); mkRenderCombo();
+            plBindUsbEvents(); mkBindUsbEvents();
+            if (_mkS.conn === 'usb') plUsbAutoConnect().then(mkRefreshDetected); else mkRefreshDetected();
+            if (!_mkData || _mkLoad.state === 'error') mkLoadData();
+            if (!_mkDocBound) {
+                _mkDocBound = true;
+                document.addEventListener('click', function (ev) { if (!(ev.target.closest && ev.target.closest('#mk-combo'))) mkCloseCombo(); });
+                window.addEventListener('resize', function () { clearTimeout(_mkResizeTimer); _mkResizeTimer = setTimeout(function () { if (document.getElementById('mk-canvas')) mkRenderPreview(); }, 150); });
+            }
+        }
+
+        /** Perbarui semua kontrol setelan + preview + indikator. */
+        function mkRefreshAll() {
+            if (!_mkS) return;
+            const p = mkPrinter(), isSys = p.lang === 'system';
+            const sel = document.getElementById('mk-printer'); if (sel && sel.value !== _mkS.printerId) sel.value = _mkS.printerId;
+            const note = document.getElementById('mk-printer-note');
+            if (note) note.textContent = isSys ? 'Dicetak lewat driver printer yang terpasang di komputer · ' + _mkS.dpi + ' dpi' : 'Bahasa perintah: ' + PL_LANG_LABEL[mkLang()] + ' · ' + _mkS.dpi + ' dpi' + (p.maxDots ? ' · lebar cetak maks. ' + p.maxDots + ' dot' : '');
+            document.querySelectorAll('#mk-conn-seg button').forEach(function (b) {
+                const v = b.getAttribute('data-v');
+                b.classList.toggle('on', v === _mkS.conn);
+                b.disabled = isSys && v !== 'system';
+            });
+            const hints = {
+                usb: 'Colokkan kabel USB — printer yang sudah pernah diizinkan tersambung otomatis. Butuh Chrome/Edge.',
+                bluetooth: 'Untuk printer yang punya Bluetooth (BLE). Klik Deteksi & Hubungkan Printer, lalu pilih printer dari daftar.',
+                system: 'Cetak lewat dialog cetak browser ke printer yang driver-nya sudah terpasang di komputer (inkjet, laser, atau thermal ber-driver).'
+            };
+            const hint = document.getElementById('mk-conn-hint'); if (hint) hint.textContent = hints[_mkS.conn];
+            const paper = mkPaperInfo(), dims = mkLayoutDims();
+            const ps = document.getElementById('mk-paper'); if (ps && ps.value !== _mkS.paperId) ps.value = _mkS.paperId;
+            const custom = document.getElementById('mk-custom'); if (custom) custom.classList.toggle('mk-hide', paper.id !== 'custom');
+            const pn = document.getElementById('mk-paper-note');
+            if (pn) pn.innerHTML = paper.id === 'custom' ? 'Lebar = sisi yang melintang head printer; tinggi = arah keluarnya kertas (mm).' :
+                (paper.auto ? 'Kertas kontinu: tinggi label mengikuti isi secara otomatis.' : '<b>' + escapeHtml(paper.label || (paper.w + ' × ' + paper.h + ' mm')) + '</b> — tata letak &amp; ukuran font otomatis menyesuaikan, tanpa perlu diatur ulang.');
+            document.querySelectorAll('#mk-orient-seg button').forEach(function (b) {
+                b.classList.toggle('on', dims.fixedShape ? false : b.getAttribute('data-v') === _mkS.orientation);
+                b.disabled = dims.fixedShape;
+            });
+            const on = document.getElementById('mk-orient-note');
+            if (on) on.textContent = dims.fixedShape ? (dims.auto ? 'Kertas kontinu: orientasi tidak berpengaruh.' : 'Kertas persegi: orientasi tidak berpengaruh.') : (dims.needRotate && _mkS.conn !== 'system' ? 'Desain diputar 90° otomatis agar pas dengan arah kertas di printer.' : '');
+            mkRenderStatus();
+            mkRenderPreview();
+            mkSyncButtons();
+        }
+        function mkSyncButtons() {
+            const pb = document.getElementById('mk-print-btn'), tb = document.getElementById('mk-test-btn');
+            if (pb) pb.disabled = _mkBusy;
+            if (tb) tb.disabled = _mkBusy;
+        }
+
+        // ---- handler kontrol ----
+        function mkOnPrinterChange() {
+            const p = mkFindPrinter(document.getElementById('mk-printer').value);
+            if (!p) return;
+            const wasSys = mkPrinter().lang === 'system';
+            _mkS.printerId = p.id; _mkS.dpi = p.dpi || _mkS.dpi;
+            if (p.lang === 'system') { _mkS.conn = 'system'; _mkS.margin = Math.max(_mkS.margin, 3); const m = document.getElementById('mk-margin'); if (m) m.value = _mkS.margin; }
+            else if (wasSys && _mkS.conn === 'system') _mkS.conn = 'usb';
+            const d = document.getElementById('mk-dpi'); if (d) d.value = String(_mkS.dpi);
+            mkSaveSettings(); mkRefreshAll();
+            if (_mkS.conn === 'usb') plUsbAutoConnect().then(mkRefreshDetected);
+        }
+        function mkSetConn(v) {
+            if (mkPrinter().lang === 'system') return;
+            _mkS.conn = v; mkSaveSettings(); mkRefreshAll();
+            if (v === 'usb') plUsbAutoConnect().then(mkRefreshDetected);
+        }
+        function mkOnPaperChange() {
+            const p = mkFindPaper(document.getElementById('mk-paper').value);
+            if (!p) return;
+            _mkS.paperId = p.id;
+            _mkS.orientation = p.id === 'custom' ? plNaturalOrientation(_mkS.cw, _mkS.ch) : mkNaturalOrientation(p);
+            mkSaveSettings(); mkRefreshAll();
+        }
+        function mkOnCustomSize() {
+            const w = parseFloat(document.getElementById('mk-cw').value), h = parseFloat(document.getElementById('mk-ch').value);
+            if (!(w >= 10) || !(h >= 10)) return;
+            _mkS.cw = plClamp(w, 10, 300); _mkS.ch = plClamp(h, 10, 400);
+            _mkS.orientation = plNaturalOrientation(_mkS.cw, _mkS.ch);
+            mkSaveSettings(); mkRefreshAll();
+        }
+        function mkSetOrient(v) { _mkS.orientation = v; mkSaveSettings(); mkRefreshAll(); }
+        function mkQtyStep(d) { _mkS.copies = Math.round(plClamp((parseInt(document.getElementById('mk-qty').value, 10) || 1) + d, 1, 500)); document.getElementById('mk-qty').value = _mkS.copies; mkSaveSettings(); }
+        function mkOnQtyInput() { const v = parseInt(document.getElementById('mk-qty').value, 10); if (v >= 1) { _mkS.copies = Math.min(500, v); mkSaveSettings(); } }
+        function mkOnQtyBlur() { const i = document.getElementById('mk-qty'); _mkS.copies = Math.round(plClamp(parseInt(i.value, 10) || 1, 1, 500)); i.value = _mkS.copies; mkSaveSettings(); }
+        function mkOnAdv() {
+            _mkS.lang = document.getElementById('mk-lang').value;
+            _mkS.dpi = Number(document.getElementById('mk-dpi').value) === 300 ? 300 : 203;
+            const mg = parseFloat(document.getElementById('mk-margin').value); if (isFinite(mg)) _mkS.margin = plClamp(mg, 0, 10);
+            const gp = parseFloat(document.getElementById('mk-gap').value); if (isFinite(gp)) _mkS.gap = plClamp(gp, 0, 10);
+            _mkS.rot180 = document.getElementById('mk-rot180').checked;
+            _mkS.invert = document.getElementById('mk-invert').checked;
+            mkSaveSettings(); mkRefreshAll();
+        }
+
+        /** Dipanggil saat logout: buang data yang sudah dimuat (koneksi printer fisik dibiarkan). */
+        function mkResetOnLogout() {
+            _mkData = null; _mkLoad = { state: 'idle', msg: '' }; _mkItem = { shipTo: '', alamat: '' }; _mkSelId = null; _mkQuery = ''; _mkIdx = -1;
         }
     </script>
 
