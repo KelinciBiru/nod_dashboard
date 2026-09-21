@@ -413,6 +413,139 @@
         .b2b-alt { width: 100%; min-width: 14rem; padding: .4rem; border: 1px solid #d1d5db; border-radius: .5rem; background: #fff; font-size: .75rem; }
     </style>
 
+    <!-- [MENU BARU — Print Label > Label Produk] Style halaman "print setup". Sengaja ditulis
+         sebagai CSS biasa (prefix .pl-) — BUKAN class Tailwind — supaya tampil benar TANPA perlu
+         build ulang tailwind.min.css (pola sama seperti blok request-b2b-b2c-style). -->
+    <style id="print-label-style">
+        .pl-hide { display: none !important; }
+        .pl-page { max-width: 1280px; margin: 0 auto; }
+        .pl-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+        .pl-crumb { font-size: .6875rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #d97706; }
+        .pl-title { font-size: 1.5rem; font-weight: 700; color: #374151; line-height: 1.2; }
+        .pl-sub { font-size: .8125rem; color: #6b7280; margin-top: .25rem; }
+        @media (min-width: 640px) { .pl-title { font-size: 1.875rem; } }
+
+        /* grid: HP = 1 kolom (urutan diatur lewat order), desktop = 2 kolom (setelan | pratinjau+data) */
+        .pl-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
+        .pl-col { display: contents; }
+        .pl-c-printer { order: 1; } .pl-c-data { order: 2; } .pl-c-preview { order: 3; } .pl-c-paper { order: 4; } .pl-c-actions { order: 5; }
+        @media (min-width: 1024px) {
+            .pl-grid { grid-template-columns: 390px minmax(0, 1fr); }
+            .pl-col { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+            .pl-c-printer, .pl-c-data, .pl-c-preview, .pl-c-paper, .pl-c-actions { order: 0; }
+        }
+
+        .pl-card { background: #fff; border: 1px solid #eef0f4; border-radius: 1rem; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); padding: 1rem; min-width: 0; }
+        .pl-card-h { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .75rem; font-size: .8125rem; font-weight: 700; color: #374151; }
+        .pl-card-h > span:first-child { display: inline-flex; align-items: center; gap: .5rem; }
+        .pl-ic { display: inline-flex; width: 1.6rem; height: 1.6rem; border-radius: .5rem; background: #fef3c7; color: #b45309; align-items: center; justify-content: center; font-size: .9rem; }
+
+        .pl-lbl { display: block; font-size: .6875rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; margin: .875rem 0 .35rem; }
+        .pl-lbl:first-of-type { margin-top: 0; }
+        .pl-input { width: 100%; padding: .55rem .75rem; border: 1px solid #e5e7eb; border-radius: .7rem; background: #fff; font-size: .875rem; color: #374151; }
+        .pl-input:focus { outline: none; border-color: #fbbf24; box-shadow: 0 0 0 2px #fde68a; }
+        .pl-input:disabled { background: #f9fafb; color: #9ca3af; }
+        select.pl-input { cursor: pointer; }
+        .pl-note { font-size: .6875rem; color: #6b7280; margin-top: .35rem; line-height: 1.45; }
+        .pl-2col { display: grid; grid-template-columns: 1fr auto 1fr; gap: .5rem; align-items: center; margin-top: .5rem; }
+        .pl-2col span { font-size: .8125rem; color: #6b7280; }
+
+        /* indikator printer */
+        .pl-status { display: flex; align-items: flex-start; gap: .75rem; padding: .75rem .875rem; border-radius: .85rem; border: 1px solid #e5e7eb; background: #f9fafb; margin-bottom: .75rem; }
+        .pl-dot { flex: 0 0 auto; width: .8rem; height: .8rem; border-radius: 9999px; margin-top: .3rem; background: #9ca3af; box-shadow: 0 0 0 4px rgba(156, 163, 175, .2); }
+        .pl-st-title { display: block; font-size: .875rem; font-weight: 700; color: #374151; }
+        .pl-st-sub { display: block; font-size: .75rem; color: #6b7280; margin-top: .125rem; overflow-wrap: anywhere; }
+        .pl-st-green { background: #ecfdf5; border-color: #a7f3d0; } .pl-st-green .pl-dot { background: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, .22); animation: pl-pulse 1.8s ease-in-out infinite; } .pl-st-green .pl-st-title { color: #047857; }
+        .pl-st-amber { background: #fffbeb; border-color: #fde68a; } .pl-st-amber .pl-dot { background: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, .22); animation: pl-pulse 1s ease-in-out infinite; } .pl-st-amber .pl-st-title { color: #92400e; }
+        .pl-st-red { background: #fef2f2; border-color: #fecaca; } .pl-st-red .pl-dot { background: #ef4444; box-shadow: 0 0 0 4px rgba(239, 68, 68, .2); } .pl-st-red .pl-st-title { color: #b91c1c; }
+        .pl-st-blue { background: #eff6ff; border-color: #bfdbfe; } .pl-st-blue .pl-dot { background: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, .2); } .pl-st-blue .pl-st-title { color: #1d4ed8; }
+        @keyframes pl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+        /* tombol */
+        .pl-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .55rem 1rem; border-radius: .75rem; border: 1px solid transparent; font-size: .8125rem; font-weight: 700; line-height: 1.25; cursor: pointer; transition: background-color .15s, box-shadow .15s, opacity .15s; }
+        .pl-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .pl-btn-dark { background: #1f2937; color: #fff; } .pl-btn-dark:hover:not(:disabled) { background: #111827; }
+        .pl-btn-primary { background: #f59e0b; color: #fff; box-shadow: 0 2px 6px rgba(245, 158, 11, .35); } .pl-btn-primary:hover:not(:disabled) { background: #d97706; }
+        .pl-btn-ghost { background: #fff; color: #374151; border-color: #e5e7eb; } .pl-btn-ghost:hover:not(:disabled) { background: #f9fafb; }
+        .pl-btn-block { width: 100%; }
+        .pl-btn-lg { padding: .8rem 1rem; font-size: .9375rem; border-radius: .9rem; }
+        .pl-actions { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+        .pl-actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+
+        /* segmented control */
+        .pl-seg { display: flex; padding: .2rem; gap: .2rem; background: #f3f4f6; border-radius: .8rem; }
+        .pl-seg button { flex: 1 1 0; padding: .5rem .4rem; border: 0; border-radius: .62rem; background: transparent; font-size: .8125rem; font-weight: 600; color: #6b7280; cursor: pointer; transition: background-color .15s, color .15s, box-shadow .15s; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; }
+        .pl-seg button.on { background: #fff; color: #b45309; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+        .pl-seg button:disabled { opacity: .45; cursor: not-allowed; }
+        .pl-seg svg { width: .95rem; height: .95rem; }
+
+        /* stepper qty */
+        .pl-step { display: flex; align-items: stretch; border: 1px solid #e5e7eb; border-radius: .7rem; overflow: hidden; background: #fff; }
+        .pl-step button { width: 2.6rem; border: 0; background: #f9fafb; color: #374151; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+        .pl-step button:hover { background: #f3f4f6; }
+        .pl-step input { flex: 1 1 auto; min-width: 0; text-align: center; border: 0; font-size: .9375rem; font-weight: 700; color: #374151; padding: .5rem 0; }
+        .pl-step input:focus { outline: none; background: #fffbeb; }
+
+        /* lanjutan */
+        .pl-adv { margin-top: .875rem; border-top: 1px dashed #e5e7eb; padding-top: .625rem; }
+        .pl-adv summary { cursor: pointer; font-size: .75rem; font-weight: 700; color: #6b7280; list-style: none; display: flex; align-items: center; gap: .35rem; }
+        .pl-adv summary::-webkit-details-marker { display: none; }
+        .pl-adv summary::before { content: '▸'; display: inline-block; transition: transform .15s; }
+        .pl-adv[open] summary::before { transform: rotate(90deg); }
+        .pl-adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .75rem; margin-top: .25rem; }
+        .pl-adv-grid .pl-lbl { margin-top: .5rem; }
+        .pl-chk { display: flex; align-items: flex-start; gap: .5rem; margin-top: .6rem; font-size: .75rem; color: #374151; cursor: pointer; line-height: 1.35; }
+        .pl-chk input { margin-top: .12rem; accent-color: #f59e0b; width: 1rem; height: 1rem; flex: 0 0 auto; }
+        .pl-chk small { display: block; color: #9ca3af; font-size: .6875rem; }
+
+        /* pratinjau */
+        .pl-chip { display: inline-block; padding: .15rem .6rem; border-radius: 9999px; background: #fef3c7; border: 1px solid #fde68a; color: #92400e; font-size: .6875rem; font-weight: 700; white-space: nowrap; }
+        .pl-chip-gray { background: #f3f4f6; border-color: #e5e7eb; color: #4b5563; }
+        .pl-stage { display: flex; align-items: center; justify-content: center; min-height: 200px; padding: 1.25rem; border-radius: .85rem; background-color: #f3f4f6; background-image: radial-gradient(#d5d9e0 1px, transparent 1px); background-size: 14px 14px; overflow: hidden; }
+        .pl-paper { line-height: 0; background: #fff; border-radius: 3px; box-shadow: 0 8px 22px rgba(0, 0, 0, .16), 0 0 0 1px rgba(0, 0, 0, .07); }
+        .pl-paper canvas { display: block; }
+        .pl-meta { margin-top: .625rem; font-size: .6875rem; color: #6b7280; text-align: center; overflow-wrap: anywhere; }
+        .pl-tips { margin-top: .75rem; padding: .625rem .75rem; border-radius: .75rem; background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fde68a; font-size: .75rem; color: #92400e; }
+        .pl-tips b { display: block; margin-bottom: .25rem; font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase; }
+        .pl-tips ul { margin: 0; padding-left: 1.05rem; } .pl-tips li { margin: .15rem 0; }
+        .pl-fields { display: grid; grid-template-columns: 1fr; gap: .5rem; margin-top: .875rem; }
+        @media (min-width: 640px) { .pl-fields { grid-template-columns: 2fr 1fr 1fr; } }
+        .pl-fields .pl-lbl { margin-top: 0; }
+        .pl-field-note { font-size: .6875rem; color: #9ca3af; margin-top: .4rem; }
+
+        /* data */
+        .pl-tabs { display: flex; gap: .25rem; padding: .2rem; background: #f3f4f6; border-radius: .8rem; margin-bottom: .75rem; }
+        .pl-tabs button { flex: 1 1 0; padding: .5rem .5rem; border: 0; border-radius: .62rem; background: transparent; font-size: .8125rem; font-weight: 700; color: #6b7280; cursor: pointer; }
+        .pl-tabs button.on { background: #fff; color: #b45309; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+        .pl-toolbar { display: flex; gap: .5rem; margin-bottom: .625rem; }
+        .pl-search { position: relative; flex: 1 1 auto; min-width: 0; }
+        .pl-search input { padding-left: 2.2rem; padding-right: 2rem; }
+        .pl-search > svg { position: absolute; left: .75rem; top: 50%; transform: translateY(-50%); width: 1rem; height: 1rem; color: #9ca3af; pointer-events: none; }
+        .pl-search-x { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: #9ca3af; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+        .pl-list { max-height: 22rem; overflow: auto; border: 1px solid #f0f1f4; border-radius: .85rem; background: #fff; }
+        .pl-item { display: block; width: 100%; text-align: left; padding: .6rem .8rem; border: 0; border-bottom: 1px solid #f3f4f6; background: #fff; cursor: pointer; }
+        .pl-item:last-child { border-bottom: 0; }
+        .pl-item:hover { background: #fffbeb; }
+        .pl-item.sel { background: #fef3c7; box-shadow: inset 3px 0 0 #f59e0b; }
+        .pl-item-name { display: block; font-size: .8125rem; font-weight: 700; color: #1f2937; overflow-wrap: anywhere; }
+        .pl-item-meta { display: block; margin-top: .125rem; font-size: .6875rem; color: #6b7280; }
+        .pl-empty { padding: 1.75rem 1rem; text-align: center; font-size: .8125rem; color: #9ca3af; }
+        .pl-more { display: block; width: 100%; padding: .65rem; border: 0; border-top: 1px solid #f3f4f6; background: #fff; font-size: .75rem; font-weight: 700; color: #374151; cursor: pointer; }
+        .pl-count { font-size: .6875rem; font-weight: 700; padding: .2rem .65rem; border-radius: 9999px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; white-space: nowrap; }
+        .pl-drop { display: flex; flex-direction: column; align-items: center; gap: .35rem; padding: 1.25rem 1rem; margin-bottom: .75rem; border: 2px dashed #e5e7eb; border-radius: .85rem; background: #fafafa; text-align: center; cursor: pointer; }
+        .pl-drop:hover, .pl-drop.over { border-color: #fbbf24; background: #fffbeb; }
+        .pl-drop b { font-size: .8125rem; color: #374151; } .pl-drop small { font-size: .6875rem; color: #6b7280; }
+        .pl-link { border: 0; background: transparent; color: #b45309; font-size: .6875rem; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+        .pl-spin { display: inline-block; width: 1.1rem; height: 1.1rem; border: 3px solid #fde68a; border-top-color: #f59e0b; border-radius: 9999px; animation: pl-rot .8s linear infinite; vertical-align: middle; margin-right: .5rem; }
+        @keyframes pl-rot { to { transform: rotate(360deg); } }
+
+        /* sub-menu "Resi" (non-aktif) di sidebar */
+        #sidebar-nav .sub-item[disabled] { color: #c2c8d2 !important; cursor: not-allowed; }
+        #sidebar-nav .sub-item[disabled]:hover { background-color: transparent; color: #c2c8d2 !important; }
+        .pl-soon { margin-left: .5rem; padding: .05rem .45rem; border-radius: 9999px; background: #f3f4f6; color: #9ca3af; font-size: .625rem; font-weight: 700; letter-spacing: .02em; vertical-align: middle; }
+    </style>
+
+
     <!-- [FIX PERF LOGIN — Agustus 2026] Semua library berat di bawah ini TIDAK dipakai
          di halaman login, hanya dipakai di menu-menu setelah login (Process PO, Warranty OCR,
          Route scanner, Pool Driver map, Share PDF). Sebelumnya di-load sinkron (blocking) di
@@ -2273,6 +2406,27 @@
                         Catalogue
                     </button>
 
+                    <!-- Print Label Baru (untuk ADMIN & WAREHOUSE) — sub-menu "Resi" sementara non-aktif -->
+                    <div id="menu-print-label" class="hidden">
+                        <button onclick="toggleSubMenu('print-label-sub', 'arrow-print-label')"
+                            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                            <div class="flex items-center gap-3">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                <span>Print Label</span>
+                            </div>
+                            <span id="arrow-print-label" class="text-xs">▼</span>
+                        </button>
+                        <div id="print-label-sub" class="hidden ml-7 mt-1 space-y-0.5 border-l-2 border-amber-100 pl-3">
+                            <button onclick="navTo('Label Produk')"
+                                class="sub-item w-full text-left px-2 py-2 text-sm text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition">Label Produk</button>
+                            <button type="button" disabled aria-disabled="true" title="Segera hadir — belum diaktifkan"
+                                class="sub-item w-full text-left px-2 py-2 text-sm rounded-lg">Resi<span class="pl-soon">Segera</span></button>
+                        </div>
+                    </div>
+
                     <!-- Service Center Baru (untuk ADMIN, CS_User, dan Teknisi) -->
                     <div id="menu-service-center" class="hidden">
                         <button onclick="toggleSubMenu('service-center-sub','arrow-service-center')"
@@ -3592,7 +3746,7 @@
             // seharusnya tidak boleh. Pola deny-by-default ini menutup celah itu.
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
                 'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
-                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c'
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c', 'menu-print-label'
             ].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -3628,6 +3782,8 @@
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
                 // Catalogue untuk ADMIN, PO_User, dan Warehouse
                 document.getElementById('menu-catalogue').classList.remove('hidden');
+                // Print Label (Label Produk) untuk ADMIN & Warehouse
+                document.getElementById('menu-print-label').classList.remove('hidden');
                 navTo(_getRestorePage('Process PO'));
 
                 // Tampilkan tombol notifikasi & load data Open
@@ -3722,6 +3878,8 @@
                 document.getElementById('menu-list-paket').classList.remove('hidden');
                 // Request B2B/B2C (sub-menu B2B & B2C) hanya untuk ADMIN
                 document.getElementById('menu-request-b2b-b2c').classList.remove('hidden');
+                // Print Label (Label Produk) untuk ADMIN & Warehouse
+                document.getElementById('menu-print-label').classList.remove('hidden');
                 navTo(_getRestorePage('Dashboard'));
             }
 
@@ -3803,6 +3961,12 @@
             if ((saved === 'Request B2B' || saved === 'Request B2C') && currentUserRole !== 'ADMIN') {
                 return defaultPage;
             }
+            if (saved === 'Label Produk' && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
+                return defaultPage;
+            }
+            if (saved === 'Resi') {   // sub-menu Resi belum aktif
+                return defaultPage;
+            }
             if (['Check Machine', 'Riwayat Penukaran', 'Report Status Repair', 'Task Technician'].includes(saved) &&
                 !(currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi')) {
                 return defaultPage;
@@ -3839,6 +4003,7 @@
             sessionStorage.removeItem('currentDriverName');
             _clearAllDraftForms();
             _requestB2BB2CCache = { B2B: null, B2C: null };   // cache Request B2B/B2C ikut dibuang saat logout
+            if (typeof plResetOnLogout === 'function') plResetOnLogout();   // data Print Label ikut dibuang saat logout
 
             // Reset form password
             document.getElementById('passwordInput').value = '';
@@ -3860,7 +4025,7 @@
             // berikutnya (mis. sekilas ke-flash sebelum startApp() menata ulang).
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
                 'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
-                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c'
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c', 'menu-print-label'
             ].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -4896,6 +5061,15 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Request B2B/B2C" hanya dapat diakses oleh Admin.');
                 return;
             }
+            // ── AKSES KONTROL: Print Label > Label Produk hanya untuk ADMIN & WAREHOUSE ──
+            if (pageName === 'Resi') {
+                showToastAlert('info', 'Segera hadir', 'Sub-menu \"Resi\" belum diaktifkan.');
+                return;
+            }
+            if (pageName === 'Label Produk' && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
+                showAlert('error', 'Akses Ditolak', 'Menu \"Print Label\" hanya dapat diakses oleh Admin dan Team Warehouse.');
+                return;
+            }
             // ── AKSES KONTROL: List PO Pre-Order/Need Approval hanya untuk ADMIN & Finance ──
             if (pageName === 'PO PreOrder Approval' && !(currentUserRole === 'ADMIN' || currentUserRole === 'Finance')) {
                 showAlert('error', 'Akses Ditolak', 'Menu "List PO Pre-Order/Need Approval" hanya dapat diakses oleh Admin dan Finance.');
@@ -4933,7 +5107,8 @@
                 'Form Service': 'Service Center - Form Service',
                 'List Paket': 'List Paket - Drop Off Mandiri',
                 'Request B2B': 'Request B2B/B2C - B2B',
-                'Request B2C': 'Request B2B/B2C - B2C'
+                'Request B2C': 'Request B2B/B2C - B2C',
+                'Label Produk': 'Print Label - Label Produk'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -5008,6 +5183,7 @@
                 case 'List Paket': await showListPaket(); break;
                 case 'Request B2B': await showRequestB2BB2C('B2B'); break;
                 case 'Request B2C': await showRequestB2BB2C('B2C'); break;
+                case 'Label Produk': await showPrintLabel(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -24818,6 +24994,1232 @@
                 });
         }
         restoreSessionOnLoad();
+    </script>
+
+    <!-- [MENU BARU — Print Label > Label Produk] Library pembuat QR Code (qrcode-generator 1.4.4, MIT, Kazuhiko Arase) — di-inline supaya tanpa CDN -->
+    <script id="print-label-qr-lib">
+window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],f={},c=function(t,r){o=function(t){for(var r=new Array(t),e=0;e<t;e+=1){r[e]=new Array(t);for(var n=0;n<t;n+=1)r[e][n]=null}return r}(i=4*e+17),l(0,0),l(i-7,0),l(0,i-7),s(),h(),d(t,r),e>=7&&v(t),null==a&&(a=y(e,n,u)),w(a,r)},l=function(t,r){for(var e=-1;e<=7;e+=1)if(!(t+e<=-1||i<=t+e))for(var n=-1;n<=7;n+=1)r+n<=-1||i<=r+n||(o[t+e][r+n]=0<=e&&e<=6&&(0==n||6==n)||0<=n&&n<=6&&(0==e||6==e)||2<=e&&e<=4&&2<=n&&n<=4)},h=function(){for(var t=8;t<i-8;t+=1)null==o[t][6]&&(o[t][6]=t%2==0);for(var r=8;r<i-8;r+=1)null==o[6][r]&&(o[6][r]=r%2==0)},s=function(){for(var t=B.getPatternPosition(e),r=0;r<t.length;r+=1)for(var n=0;n<t.length;n+=1){var i=t[r],a=t[n];if(null==o[i][a])for(var u=-2;u<=2;u+=1)for(var f=-2;f<=2;f+=1)o[i+u][a+f]=-2==u||2==u||-2==f||2==f||0==u&&0==f}},v=function(t){for(var r=B.getBCHTypeNumber(e),n=0;n<18;n+=1){var a=!t&&1==(r>>n&1);o[Math.floor(n/3)][n%3+i-8-3]=a}for(n=0;n<18;n+=1){a=!t&&1==(r>>n&1);o[n%3+i-8-3][Math.floor(n/3)]=a}},d=function(t,r){for(var e=n<<3|r,a=B.getBCHTypeInfo(e),u=0;u<15;u+=1){var f=!t&&1==(a>>u&1);u<6?o[u][8]=f:u<8?o[u+1][8]=f:o[i-15+u][8]=f}for(u=0;u<15;u+=1){f=!t&&1==(a>>u&1);u<8?o[8][i-u-1]=f:u<9?o[8][15-u-1+1]=f:o[8][15-u-1]=f}o[i-8][8]=!t},w=function(t,r){for(var e=-1,n=i-1,a=7,u=0,f=B.getMaskFunction(r),c=i-1;c>0;c-=2)for(6==c&&(c-=1);;){for(var g=0;g<2;g+=1)if(null==o[n][c-g]){var l=!1;u<t.length&&(l=1==(t[u]>>>a&1)),f(n,c-g)&&(l=!l),o[n][c-g]=l,-1==(a-=1)&&(u+=1,a=7)}if((n+=e)<0||i<=n){n-=e,e=-e;break}}},y=function(t,r,e){for(var n=A.getRSBlocks(t,r),o=b(),i=0;i<e.length;i+=1){var a=e[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var u=0;for(i=0;i<n.length;i+=1)u+=n[i].dataCount;if(o.getLengthInBits()>8*u)throw"code length overflow. ("+o.getLengthInBits()+">"+8*u+")";for(o.getLengthInBits()+4<=8*u&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=8*u||(o.put(236,8),o.getLengthInBits()>=8*u));)o.put(17,8);return function(t,r){for(var e=0,n=0,o=0,i=new Array(r.length),a=new Array(r.length),u=0;u<r.length;u+=1){var f=r[u].dataCount,c=r[u].totalCount-f;n=Math.max(n,f),o=Math.max(o,c),i[u]=new Array(f);for(var g=0;g<i[u].length;g+=1)i[u][g]=255&t.getBuffer()[g+e];e+=f;var l=B.getErrorCorrectPolynomial(c),h=k(i[u],l.getLength()-1).mod(l);for(a[u]=new Array(l.getLength()-1),g=0;g<a[u].length;g+=1){var s=g+h.getLength()-a[u].length;a[u][g]=s>=0?h.getAt(s):0}}var v=0;for(g=0;g<r.length;g+=1)v+=r[g].totalCount;var d=new Array(v),w=0;for(g=0;g<n;g+=1)for(u=0;u<r.length;u+=1)g<i[u].length&&(d[w]=i[u][g],w+=1);for(g=0;g<o;g+=1)for(u=0;u<r.length;u+=1)g<a[u].length&&(d[w]=a[u][g],w+=1);return d}(o,n)};f.addData=function(t,r){var e=null;switch(r=r||"Byte"){case"Numeric":e=M(t);break;case"Alphanumeric":e=x(t);break;case"Byte":e=m(t);break;case"Kanji":e=L(t);break;default:throw"mode:"+r}u.push(e),a=null},f.isDark=function(t,r){if(t<0||i<=t||r<0||i<=r)throw t+","+r;return o[t][r]},f.getModuleCount=function(){return i},f.make=function(){if(e<1){for(var t=1;t<40;t++){for(var r=A.getRSBlocks(t,n),o=b(),i=0;i<u.length;i++){var a=u[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var g=0;for(i=0;i<r.length;i++)g+=r[i].dataCount;if(o.getLengthInBits()<=8*g)break}e=t}c(!1,function(){for(var t=0,r=0,e=0;e<8;e+=1){c(!0,e);var n=B.getLostPoint(f);(0==e||t>n)&&(t=n,r=e)}return r}())},f.createTableTag=function(t,r){t=t||2;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+(r=void 0===r?4*t:r)+"px;",e+='">',e+="<tbody>";for(var n=0;n<f.getModuleCount();n+=1){e+="<tr>";for(var o=0;o<f.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+t+"px;",e+=" height: "+t+"px;",e+=" background-color: ",e+=f.isDark(n,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>"},f.createSvgTag=function(t,r,e,n){var o={};"object"==typeof arguments[0]&&(t=(o=arguments[0]).cellSize,r=o.margin,e=o.alt,n=o.title),t=t||2,r=void 0===r?4*t:r,(e="string"==typeof e?{text:e}:e||{}).text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,(n="string"==typeof n?{text:n}:n||{}).text=n.text||null,n.id=n.text?n.id||"qrcode-title":null;var i,a,u,c,g=f.getModuleCount()*t+2*r,l="";for(c="l"+t+",0 0,"+t+" -"+t+",0 0,-"+t+"z ",l+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',l+=o.scalable?"":' width="'+g+'px" height="'+g+'px"',l+=' viewBox="0 0 '+g+" "+g+'" ',l+=' preserveAspectRatio="xMinYMin meet"',l+=n.text||e.text?' role="img" aria-labelledby="'+p([n.id,e.id].join(" ").trim())+'"':"",l+=">",l+=n.text?'<title id="'+p(n.id)+'">'+p(n.text)+"</title>":"",l+=e.text?'<description id="'+p(e.id)+'">'+p(e.text)+"</description>":"",l+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',l+='<path d="',a=0;a<f.getModuleCount();a+=1)for(u=a*t+r,i=0;i<f.getModuleCount();i+=1)f.isDark(a,i)&&(l+="M"+(i*t+r)+","+u+c);return l+='" stroke="transparent" fill="black"/>',l+="</svg>"},f.createDataURL=function(t,r){t=t||2,r=void 0===r?4*t:r;var e=f.getModuleCount()*t+2*r,n=r,o=e-r;return T(e,e,function(r,e){if(n<=r&&r<o&&n<=e&&e<o){var i=Math.floor((r-n)/t),a=Math.floor((e-n)/t);return f.isDark(a,i)?0:1}return 1})},f.createImgTag=function(t,r,e){t=t||2,r=void 0===r?4*t:r;var n=f.getModuleCount()*t+2*r,o="";return o+="<img",o+=' src="',o+=f.createDataURL(t,r),o+='"',o+=' width="',o+=n,o+='"',o+=' height="',o+=n,o+='"',e&&(o+=' alt="',o+=p(e),o+='"'),o+="/>"};var p=function(t){for(var r="",e=0;e<t.length;e+=1){var n=t.charAt(e);switch(n){case"<":r+="&lt;";break;case">":r+="&gt;";break;case"&":r+="&amp;";break;case'"':r+="&quot;";break;default:r+=n}}return r};return f.createASCII=function(t,r){if((t=t||1)<2)return function(t){t=void 0===t?2:t;var r,e,n,o,i,a=1*f.getModuleCount()+2*t,u=t,c=a-t,g={"██":"█","█ ":"▀"," █":"▄","  ":" "},l={"██":"▀","█ ":"▀"," █":" ","  ":" "},h="";for(r=0;r<a;r+=2){for(n=Math.floor((r-u)/1),o=Math.floor((r+1-u)/1),e=0;e<a;e+=1)i="█",u<=e&&e<c&&u<=r&&r<c&&f.isDark(n,Math.floor((e-u)/1))&&(i=" "),u<=e&&e<c&&u<=r+1&&r+1<c&&f.isDark(o,Math.floor((e-u)/1))?i+=" ":i+="█",h+=t<1&&r+1>=c?l[i]:g[i];h+="\n"}return a%2&&t>0?h.substring(0,h.length-a-1)+Array(a+1).join("▀"):h.substring(0,h.length-1)}(r);t-=1,r=void 0===r?2*t:r;var e,n,o,i,a=f.getModuleCount()*t+2*r,u=r,c=a-r,g=Array(t+1).join("██"),l=Array(t+1).join("  "),h="",s="";for(e=0;e<a;e+=1){for(o=Math.floor((e-u)/t),s="",n=0;n<a;n+=1)i=1,u<=n&&n<c&&u<=e&&e<c&&f.isDark(o,Math.floor((n-u)/t))&&(i=0),s+=i?g:l;for(o=0;o<t;o+=1)h+=s+"\n"}return h.substring(0,h.length-1)},f.renderTo2dContext=function(t,r){r=r||2;for(var e=f.getModuleCount(),n=0;n<e;n++)for(var o=0;o<e;o++)t.fillStyle=f.isDark(n,o)?"black":"white",t.fillRect(n*r,o*r,r,r)},f};t.stringToBytes=(t.stringToBytesFuncs={default:function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);r.push(255&n)}return r}}).default,t.createStringToBytes=function(t,r){var e=function(){for(var e=S(t),n=function(){var t=e.read();if(-1==t)throw"eof";return t},o=0,i={};;){var a=e.read();if(-1==a)break;var u=n(),f=n()<<8|n();i[String.fromCharCode(a<<8|u)]=f,o+=1}if(o!=r)throw o+" != "+r;return i}(),n="?".charCodeAt(0);return function(t){for(var r=[],o=0;o<t.length;o+=1){var i=t.charCodeAt(o);if(i<128)r.push(i);else{var a=e[t.charAt(o)];"number"==typeof a?(255&a)==a?r.push(a):(r.push(a>>>8),r.push(255&a)):r.push(n)}}return r}};var r,e,n,o,i,a=1,u=2,f=4,c=8,g={L:1,M:0,Q:3,H:2},l=0,h=1,s=2,v=3,d=4,w=5,y=6,p=7,B=(r=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],e=1335,n=7973,i=function(t){for(var r=0;0!=t;)r+=1,t>>>=1;return r},(o={}).getBCHTypeInfo=function(t){for(var r=t<<10;i(r)-i(e)>=0;)r^=e<<i(r)-i(e);return 21522^(t<<10|r)},o.getBCHTypeNumber=function(t){for(var r=t<<12;i(r)-i(n)>=0;)r^=n<<i(r)-i(n);return t<<12|r},o.getPatternPosition=function(t){return r[t-1]},o.getMaskFunction=function(t){switch(t){case l:return function(t,r){return(t+r)%2==0};case h:return function(t,r){return t%2==0};case s:return function(t,r){return r%3==0};case v:return function(t,r){return(t+r)%3==0};case d:return function(t,r){return(Math.floor(t/2)+Math.floor(r/3))%2==0};case w:return function(t,r){return t*r%2+t*r%3==0};case y:return function(t,r){return(t*r%2+t*r%3)%2==0};case p:return function(t,r){return(t*r%3+(t+r)%2)%2==0};default:throw"bad maskPattern:"+t}},o.getErrorCorrectPolynomial=function(t){for(var r=k([1],0),e=0;e<t;e+=1)r=r.multiply(k([1,C.gexp(e)],0));return r},o.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case a:return 10;case u:return 9;case f:case c:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case a:return 12;case u:return 11;case f:return 16;case c:return 10;default:throw"mode:"+t}else{if(!(r<41))throw"type:"+r;switch(t){case a:return 14;case u:return 13;case f:return 16;case c:return 12;default:throw"mode:"+t}}},o.getLostPoint=function(t){for(var r=t.getModuleCount(),e=0,n=0;n<r;n+=1)for(var o=0;o<r;o+=1){for(var i=0,a=t.isDark(n,o),u=-1;u<=1;u+=1)if(!(n+u<0||r<=n+u))for(var f=-1;f<=1;f+=1)o+f<0||r<=o+f||0==u&&0==f||a==t.isDark(n+u,o+f)&&(i+=1);i>5&&(e+=3+i-5)}for(n=0;n<r-1;n+=1)for(o=0;o<r-1;o+=1){var c=0;t.isDark(n,o)&&(c+=1),t.isDark(n+1,o)&&(c+=1),t.isDark(n,o+1)&&(c+=1),t.isDark(n+1,o+1)&&(c+=1),0!=c&&4!=c||(e+=3)}for(n=0;n<r;n+=1)for(o=0;o<r-6;o+=1)t.isDark(n,o)&&!t.isDark(n,o+1)&&t.isDark(n,o+2)&&t.isDark(n,o+3)&&t.isDark(n,o+4)&&!t.isDark(n,o+5)&&t.isDark(n,o+6)&&(e+=40);for(o=0;o<r;o+=1)for(n=0;n<r-6;n+=1)t.isDark(n,o)&&!t.isDark(n+1,o)&&t.isDark(n+2,o)&&t.isDark(n+3,o)&&t.isDark(n+4,o)&&!t.isDark(n+5,o)&&t.isDark(n+6,o)&&(e+=40);var g=0;for(o=0;o<r;o+=1)for(n=0;n<r;n+=1)t.isDark(n,o)&&(g+=1);return e+=Math.abs(100*g/r/r-50)/5*10},o),C=function(){for(var t=new Array(256),r=new Array(256),e=0;e<8;e+=1)t[e]=1<<e;for(e=8;e<256;e+=1)t[e]=t[e-4]^t[e-5]^t[e-6]^t[e-8];for(e=0;e<255;e+=1)r[t[e]]=e;var n={glog:function(t){if(t<1)throw"glog("+t+")";return r[t]},gexp:function(r){for(;r<0;)r+=255;for(;r>=256;)r-=255;return t[r]}};return n}();function k(t,r){if(void 0===t.length)throw t.length+"/"+r;var e=function(){for(var e=0;e<t.length&&0==t[e];)e+=1;for(var n=new Array(t.length-e+r),o=0;o<t.length-e;o+=1)n[o]=t[o+e];return n}(),n={getAt:function(t){return e[t]},getLength:function(){return e.length},multiply:function(t){for(var r=new Array(n.getLength()+t.getLength()-1),e=0;e<n.getLength();e+=1)for(var o=0;o<t.getLength();o+=1)r[e+o]^=C.gexp(C.glog(n.getAt(e))+C.glog(t.getAt(o)));return k(r,0)},mod:function(t){if(n.getLength()-t.getLength()<0)return n;for(var r=C.glog(n.getAt(0))-C.glog(t.getAt(0)),e=new Array(n.getLength()),o=0;o<n.getLength();o+=1)e[o]=n.getAt(o);for(o=0;o<t.getLength();o+=1)e[o]^=C.gexp(C.glog(t.getAt(o))+r);return k(e,0).mod(t)}};return n}var A=function(){var t=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],r=function(t,r){var e={};return e.totalCount=t,e.dataCount=r,e},e={};return e.getRSBlocks=function(e,n){var o=function(r,e){switch(e){case g.L:return t[4*(r-1)+0];case g.M:return t[4*(r-1)+1];case g.Q:return t[4*(r-1)+2];case g.H:return t[4*(r-1)+3];default:return}}(e,n);if(void 0===o)throw"bad rs block @ typeNumber:"+e+"/errorCorrectionLevel:"+n;for(var i=o.length/3,a=[],u=0;u<i;u+=1)for(var f=o[3*u+0],c=o[3*u+1],l=o[3*u+2],h=0;h<f;h+=1)a.push(r(c,l));return a},e}(),b=function(){var t=[],r=0,e={getBuffer:function(){return t},getAt:function(r){var e=Math.floor(r/8);return 1==(t[e]>>>7-r%8&1)},put:function(t,r){for(var n=0;n<r;n+=1)e.putBit(1==(t>>>r-n-1&1))},getLengthInBits:function(){return r},putBit:function(e){var n=Math.floor(r/8);t.length<=n&&t.push(0),e&&(t[n]|=128>>>r%8),r+=1}};return e},M=function(t){var r=a,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+2<r.length;)t.put(o(r.substring(n,n+3)),10),n+=3;n<r.length&&(r.length-n==1?t.put(o(r.substring(n,n+1)),4):r.length-n==2&&t.put(o(r.substring(n,n+2)),7))}},o=function(t){for(var r=0,e=0;e<t.length;e+=1)r=10*r+i(t.charAt(e));return r},i=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);throw"illegal char :"+t};return n},x=function(t){var r=u,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+1<r.length;)t.put(45*o(r.charAt(n))+o(r.charAt(n+1)),11),n+=2;n<r.length&&t.put(o(r.charAt(n)),6)}},o=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);if("A"<=t&&t<="Z")return t.charCodeAt(0)-"A".charCodeAt(0)+10;switch(t){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+t}};return n},m=function(r){var e=f,n=t.stringToBytes(r),o={getMode:function(){return e},getLength:function(t){return n.length},write:function(t){for(var r=0;r<n.length;r+=1)t.put(n[r],8)}};return o},L=function(r){var e=c,n=t.stringToBytesFuncs.SJIS;if(!n)throw"sjis not supported.";!function(){var t=n("友");if(2!=t.length||38726!=(t[0]<<8|t[1]))throw"sjis not supported."}();var o=n(r),i={getMode:function(){return e},getLength:function(t){return~~(o.length/2)},write:function(t){for(var r=o,e=0;e+1<r.length;){var n=(255&r[e])<<8|255&r[e+1];if(33088<=n&&n<=40956)n-=33088;else{if(!(57408<=n&&n<=60351))throw"illegal char at "+(e+1)+"/"+n;n-=49472}n=192*(n>>>8&255)+(255&n),t.put(n,13),e+=2}if(e<r.length)throw"illegal char at "+(e+1)}};return i},D=function(){var t=[],r={writeByte:function(r){t.push(255&r)},writeShort:function(t){r.writeByte(t),r.writeByte(t>>>8)},writeBytes:function(t,e,n){e=e||0,n=n||t.length;for(var o=0;o<n;o+=1)r.writeByte(t[o+e])},writeString:function(t){for(var e=0;e<t.length;e+=1)r.writeByte(t.charCodeAt(e))},toByteArray:function(){return t},toString:function(){var r="";r+="[";for(var e=0;e<t.length;e+=1)e>0&&(r+=","),r+=t[e];return r+="]"}};return r},S=function(t){var r=t,e=0,n=0,o=0,i={read:function(){for(;o<8;){if(e>=r.length){if(0==o)return-1;throw"unexpected end of file./"+o}var t=r.charAt(e);if(e+=1,"="==t)return o=0,-1;t.match(/^\s$/)||(n=n<<6|a(t.charCodeAt(0)),o+=6)}var i=n>>>o-8&255;return o-=8,i}},a=function(t){if(65<=t&&t<=90)return t-65;if(97<=t&&t<=122)return t-97+26;if(48<=t&&t<=57)return t-48+52;if(43==t)return 62;if(47==t)return 63;throw"c:"+t};return i},T=function(t,r,e){for(var n=function(t,r){var e=t,n=r,o=new Array(t*r),i={setPixel:function(t,r,n){o[r*e+t]=n},write:function(t){t.writeString("GIF87a"),t.writeShort(e),t.writeShort(n),t.writeByte(128),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(255),t.writeByte(255),t.writeByte(255),t.writeString(","),t.writeShort(0),t.writeShort(0),t.writeShort(e),t.writeShort(n),t.writeByte(0);var r=a(2);t.writeByte(2);for(var o=0;r.length-o>255;)t.writeByte(255),t.writeBytes(r,o,255),o+=255;t.writeByte(r.length-o),t.writeBytes(r,o,r.length-o),t.writeByte(0),t.writeString(";")}},a=function(t){for(var r=1<<t,e=1+(1<<t),n=t+1,i=u(),a=0;a<r;a+=1)i.add(String.fromCharCode(a));i.add(String.fromCharCode(r)),i.add(String.fromCharCode(e));var f,c,g,l=D(),h=(f=l,c=0,g=0,{write:function(t,r){if(t>>>r!=0)throw"length over";for(;c+r>=8;)f.writeByte(255&(t<<c|g)),r-=8-c,t>>>=8-c,g=0,c=0;g|=t<<c,c+=r},flush:function(){c>0&&f.writeByte(g)}});h.write(r,n);var s=0,v=String.fromCharCode(o[s]);for(s+=1;s<o.length;){var d=String.fromCharCode(o[s]);s+=1,i.contains(v+d)?v+=d:(h.write(i.indexOf(v),n),i.size()<4095&&(i.size()==1<<n&&(n+=1),i.add(v+d)),v=d)}return h.write(i.indexOf(v),n),h.write(e,n),h.flush(),l.toByteArray()},u=function(){var t={},r=0,e={add:function(n){if(e.contains(n))throw"dup key:"+n;t[n]=r,r+=1},size:function(){return r},indexOf:function(r){return t[r]},contains:function(r){return void 0!==t[r]}};return e};return i}(t,r),o=0;o<r;o+=1)for(var i=0;i<t;i+=1)n.setPixel(i,o,e(i,o));var a=D();n.write(a);for(var u=function(){var t=0,r=0,e=0,n="",o={},i=function(t){n+=String.fromCharCode(a(63&t))},a=function(t){if(t<0);else{if(t<26)return 65+t;if(t<52)return t-26+97;if(t<62)return t-52+48;if(62==t)return 43;if(63==t)return 47}throw"n:"+t};return o.writeByte=function(n){for(t=t<<8|255&n,r+=8,e+=1;r>=6;)i(t>>>r-6),r-=6},o.flush=function(){if(r>0&&(i(t<<6-r),t=0,r=0),e%3!=0)for(var o=3-e%3,a=0;a<o;a+=1)n+="="},o.toString=function(){return n},o}(),f=a.toByteArray(),c=0;c<f.length;c+=1)u.writeByte(f[c]);return u.flush(),"data:image/gif;base64,"+u};return t}();return t.stringToBytesFuncs["UTF-8"]=function(t){return function(t){for(var r=[],e=0;e<t.length;e++){var n=t.charCodeAt(e);n<128?r.push(n):n<2048?r.push(192|n>>6,128|63&n):n<55296||n>=57344?r.push(224|n>>12,128|n>>6&63,128|63&n):(e++,n=65536+((1023&n)<<10|1023&t.charCodeAt(e)),r.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|63&n))}return r}(t)},t.stringToBytes=t.stringToBytesFuncs["UTF-8"],t}();
+    </script>
+
+    <!-- [MENU BARU — Print Label > Label Produk] Modul halaman "print setup" (dipisah dari script utama agar error di sini tidak mengganggu aplikasi lain) -->
+    <script id="print-label-module">
+        // =====================================================================
+        // [MENU BARU — PRINT LABEL > LABEL PRODUK]
+        // ---------------------------------------------------------------------
+        // Halaman "print setup" untuk mencetak label produk (QR Code) ke printer
+        // thermal. Alur:
+        //   1. Pilih data  -> tarik dari sheet "QRlabel" (spreadsheet
+        //      "Purchase Order nod.", action GAS 'getQRLabelData') ATAU Import file
+        //      (CSV / Excel).
+        //   2. Atur printer (tipe, koneksi USB / Bluetooth / Driver), ukuran
+        //      kertas, orientasi, qty.
+        //   3. Pratinjau otomatis menyesuaikan ukuran kertas & orientasi.
+        //   4. Cetak.
+        //
+        // Cara mencetak (tanpa driver): label digambar ke canvas pada resolusi
+        // printer (sama persis dengan pratinjau), diubah jadi bitmap 1-bit lalu
+        // dikirim sebagai perintah TSPL / ZPL / ESC-POS lewat WebUSB (otomatis
+        // tersambung begitu printer dicolok, setelah izin pertama kali) atau
+        // Web Bluetooth (BLE). Mode "Driver" memakai dialog cetak browser untuk
+        // printer yang sudah terpasang driver-nya (mis. Windows).
+        // Label: Nama Produk (atas) · QR Code berisi Nama Produk (tengah) ·
+        //        Kode Lokasi (bawah QR) · Exp Date (paling bawah).
+        // =====================================================================
+        const PL_STORAGE_KEY = 'nodPrintLabelSettingsV1';
+
+        // Tipe printer thermal yang umum dipakai di Indonesia untuk label produk.
+        // lang: bahasa perintah printer (tspl | zpl | escpos), dpi: resolusi head,
+        // paper: ukuran kertas default yang disarankan, maxDots: lebar head (dot,
+        // khusus ESC/POS) untuk peringatan kalau kertas terlalu lebar.
+        const PL_PRINTERS = [
+            {
+                group: 'Printer Label (TSPL)', items: [
+                    { id: 'xp-365b', name: 'Xprinter XP-365B / XP-360B', lang: 'tspl', dpi: 203, paper: '50x30' },
+                    { id: 'xp-420b', name: 'Xprinter XP-420B / XP-DT426B / XP-460B', lang: 'tspl', dpi: 203, paper: '100x50' },
+                    { id: 'xp-235b', name: 'Xprinter XP-235B / XP-237B', lang: 'tspl', dpi: 203, paper: '40x30' },
+                    { id: 'gp-1324d', name: 'Gprinter GP-1324D / GP-2120TF', lang: 'tspl', dpi: 203, paper: '50x30' },
+                    { id: 'tsc-te200', name: 'TSC TE200 / TE210 / TTP-244 Pro', lang: 'tspl', dpi: 203, paper: '50x30' },
+                    { id: 'hprt-ht300', name: 'HPRT HT300 / HT330', lang: 'tspl', dpi: 203, paper: '50x30' },
+                    { id: 'tspl-generic', name: 'Printer label lain (generik TSPL)', lang: 'tspl', dpi: 203, paper: '50x30' }
+                ]
+            },
+            {
+                group: 'Printer Label (ZPL)', items: [
+                    { id: 'zebra-zd', name: 'Zebra ZD220 / ZD230 / ZD420', lang: 'zpl', dpi: 203, paper: '100x50' },
+                    { id: 'zebra-gk', name: 'Zebra GK420t / GK420d', lang: 'zpl', dpi: 203, paper: '100x50' },
+                    { id: 'zpl-generic', name: 'Printer label lain (generik ZPL)', lang: 'zpl', dpi: 203, paper: '100x50' }
+                ]
+            },
+            {
+                group: 'Printer Thermal Struk (ESC/POS)', items: [
+                    { id: 'xp-58', name: 'Xprinter XP-58 / XP-58IIH / XP-P300 (58 mm)', lang: 'escpos', dpi: 203, paper: 'rcpt58', maxDots: 384 },
+                    { id: 'xp-80', name: 'Xprinter XP-80 / XP-Q200 / XP-N160II (80 mm)', lang: 'escpos', dpi: 203, paper: 'rcpt80', maxDots: 576 },
+                    { id: 'eppos-58', name: 'Eppos EP-5811 / EPP200 / EP-5802AI (58 mm)', lang: 'escpos', dpi: 203, paper: 'rcpt58', maxDots: 384 },
+                    { id: 'zjiang-58', name: 'Zjiang ZJ-5802 / ZJ-5890 / Panda PRJ-R58 (58 mm)', lang: 'escpos', dpi: 203, paper: 'rcpt58', maxDots: 384 },
+                    { id: 'escpos-58', name: 'Printer struk lain 58 mm (generik ESC/POS)', lang: 'escpos', dpi: 203, paper: 'rcpt58', maxDots: 384 },
+                    { id: 'escpos-80', name: 'Printer struk lain 80 mm (generik ESC/POS)', lang: 'escpos', dpi: 203, paper: 'rcpt80', maxDots: 576 }
+                ]
+            }
+        ];
+
+        // Ukuran kertas thermal yang umum. w = lebar melintang head printer,
+        // h = panjang searah feed (mm). h = 0 -> kertas kontinu (tinggi otomatis).
+        const PL_PAPERS = [
+            { id: '30x20', w: 30, h: 20 }, { id: '40x30', w: 40, h: 30 }, { id: '50x30', w: 50, h: 30 },
+            { id: '40x40', w: 40, h: 40 }, { id: '50x50', w: 50, h: 50 }, { id: '40x60', w: 40, h: 60 },
+            { id: '60x40', w: 60, h: 40 }, { id: '70x50', w: 70, h: 50 }, { id: '100x50', w: 100, h: 50 },
+            { id: '100x100', w: 100, h: 100 }, { id: '100x150', w: 100, h: 150 },
+            { id: 'rcpt58', w: 48, h: 0, label: 'Struk 58 mm — area cetak 48 mm (tinggi otomatis)' },
+            { id: 'rcpt80', w: 72, h: 0, label: 'Struk 80 mm — area cetak 72 mm (tinggi otomatis)' },
+            { id: 'custom', w: 0, h: 0, label: 'Kustom (isi sendiri)…' }
+        ];
+
+        // Service UUID BLE yang umum dipakai printer thermal (Web Bluetooth wajib
+        // mendaftarkan service di depan supaya bisa diakses setelah terhubung).
+        const PL_BLE_SERVICES = [
+            '000018f0-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb',
+            '0000ff00-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+            'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '0000fee7-0000-1000-8000-00805f9b34fb',
+            '0000ae30-0000-1000-8000-00805f9b34fb', '0000fff0-0000-1000-8000-00805f9b34fb'
+        ];
+
+        // Vendor ID USB yang pasti (dipakai hanya untuk memberi saran tipe printer).
+        const PL_USB_VENDORS = { 0x0A5F: { brand: 'Zebra', lang: 'zpl' }, 0x1203: { brand: 'TSC', lang: 'tspl' } };
+
+        const PL_SAMPLE = { nama: 'CONTOH PRODUK 250G', lokasi: 'A-01-03', exp: '31 Des 2027' };
+        const PL_LANG_LABEL = { tspl: 'TSPL', zpl: 'ZPL', escpos: 'ESC/POS' };
+
+        const PL_DEFAULTS = {
+            printerId: 'xp-365b', conn: 'usb', paperId: '50x30', cw: 50, ch: 30, orientation: 'landscape',
+            qty: 1, dpi: 203, lang: 'auto', margin: 2, gap: 2, rot180: false, invert: false, expPrefix: true
+        };
+
+        let _plS = null;                              // pengaturan aktif
+        let _plRows = { sheet: null, import: [] };    // data: sheet = { rows, loadedAt, meta } | null
+        let _plTab = 'sheet';
+        let _plSelId = null;
+        let _plItem = null;                           // { nama, lokasi, exp } — data yang sedang dipratinjau/dicetak
+        let _plSearch = '';
+        let _plLimit = 100;
+        const PL_PAGE = 100;
+        let _plBusy = false;
+        let _plLoadSeq = 0;
+        let _plUsb = { state: 'idle', device: null, itf: 0, ep: 0, name: '', detail: '', manualOff: false };
+        let _plBle = { state: 'idle', device: null, ch: null, name: '', detail: '', chunk: 180 };
+        let _plUsbBound = false;
+
+        // ---------------------------------------------------------------
+        // Pengaturan
+        // ---------------------------------------------------------------
+        function plClamp(v, lo, hi) { v = Number(v); if (!isFinite(v)) v = lo; return Math.min(hi, Math.max(lo, v)); }
+        function plFindPrinter(id) {
+            for (const g of PL_PRINTERS) { const p = g.items.find(x => x.id === id); if (p) return p; }
+            return null;
+        }
+        function plFindPaper(id) { return PL_PAPERS.find(p => p.id === id) || null; }
+        function plNaturalOrientation(w, h) { return (h > 0 && h < w) ? 'landscape' : 'portrait'; }
+
+        function plLoadSettings() {
+            let s = {};
+            try { s = JSON.parse(localStorage.getItem(PL_STORAGE_KEY) || '{}') || {}; } catch (_) { s = {}; }
+            const d = Object.assign({}, PL_DEFAULTS, s);
+            if (!plFindPrinter(d.printerId)) d.printerId = PL_DEFAULTS.printerId;
+            if (!plFindPaper(d.paperId)) d.paperId = PL_DEFAULTS.paperId;
+            if (['usb', 'bluetooth', 'system'].indexOf(d.conn) < 0) d.conn = 'usb';
+            if (['portrait', 'landscape'].indexOf(d.orientation) < 0) d.orientation = 'landscape';
+            if (['auto', 'tspl', 'zpl', 'escpos'].indexOf(d.lang) < 0) d.lang = 'auto';
+            d.dpi = (Number(d.dpi) === 300) ? 300 : 203;
+            d.qty = Math.round(plClamp(d.qty, 1, 500));
+            d.cw = plClamp(d.cw, 10, 300); d.ch = plClamp(d.ch, 10, 400);
+            d.margin = plClamp(d.margin, 0, 10); d.gap = plClamp(d.gap, 0, 10);
+            d.rot180 = !!d.rot180; d.invert = !!d.invert; d.expPrefix = d.expPrefix !== false;
+            _plS = d;
+        }
+        function plSaveSettings() { try { localStorage.setItem(PL_STORAGE_KEY, JSON.stringify(_plS)); } catch (_) { } }
+
+        function plPrinter() { return plFindPrinter(_plS.printerId) || plFindPrinter(PL_DEFAULTS.printerId); }
+        function plLang() { return _plS.lang === 'auto' ? plPrinter().lang : _plS.lang; }
+        function plPaperInfo() {
+            const p = plFindPaper(_plS.paperId) || PL_PAPERS[0];
+            if (p.id === 'custom') return { id: 'custom', w: _plS.cw, h: _plS.ch, auto: false };
+            return { id: p.id, w: p.w, h: p.h, auto: !(p.h > 0) };
+        }
+        /** Ukuran desain (layout) sesuai orientasi + apakah bitmap harus diputar 90° agar pas ke kertas fisik. */
+        function plLayoutDims() {
+            const p = plPaperInfo();
+            if (p.auto) return { lw: p.w, lh: 0, needRotate: false, auto: true, physW: p.w, physH: 0, fixedShape: true };
+            const mn = Math.min(p.w, p.h), mx = Math.max(p.w, p.h);
+            if (p.w === p.h) return { lw: p.w, lh: p.h, needRotate: false, auto: false, physW: p.w, physH: p.h, fixedShape: true };
+            const lw = _plS.orientation === 'portrait' ? mn : mx;
+            const lh = _plS.orientation === 'portrait' ? mx : mn;
+            return { lw: lw, lh: lh, needRotate: lw !== p.w, auto: false, physW: p.w, physH: p.h, fixedShape: false };
+        }
+
+        // ---------------------------------------------------------------
+        // Render label -> canvas (dipakai untuk pratinjau DAN cetak)
+        // ---------------------------------------------------------------
+        function plMakeQR(text) {
+            const gen = window.NodQRGen;
+            if (!gen) throw new Error('Library QR belum termuat.');
+            const qr = gen(0, text.length <= 32 ? 'M' : 'L');
+            qr.addData(text, 'Byte');
+            qr.make();
+            return qr;
+        }
+
+        function plWrapText(ctx, text, maxW) {
+            const words = String(text).split(/\s+/).filter(Boolean);
+            const lines = []; let cur = '';
+            words.forEach(function (w) {
+                let word = w;
+                while (ctx.measureText(word).width > maxW && word.length > 1) {
+                    let k = word.length;
+                    while (k > 1 && ctx.measureText(word.slice(0, k)).width > maxW) k--;
+                    if (cur) { lines.push(cur); cur = ''; }
+                    lines.push(word.slice(0, k));
+                    word = word.slice(k);
+                }
+                const test = cur ? cur + ' ' + word : word;
+                if (ctx.measureText(test).width <= maxW) cur = test;
+                else { if (cur) lines.push(cur); cur = word; }
+            });
+            if (cur) lines.push(cur);
+            return lines;
+        }
+
+        function plBinarize(canvas, thr) {
+            const ctx = canvas.getContext('2d');
+            const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = id.data;
+            for (let i = 0; i < d.length; i += 4) {
+                const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+                const v = (d[i + 3] < 128 || lum >= thr) ? 255 : 0;
+                d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+            }
+            ctx.putImageData(id, 0, 0);
+        }
+
+        /**
+         * Gambar 1 label.
+         * o = { lw, lh (mm; lh 0 = tinggi otomatis), dpi, margin (mm), expPrefix, placeholder }
+         * Mengembalikan { canvas, W, H, info } — info: modules, modDots, warnings.
+         */
+        function plRenderLabel(item, o) {
+            const mm = o.dpi / 25.4;
+            const W = Math.max(16, Math.round(o.lw * mm));
+            const margin = Math.max(0, Math.round(o.margin * mm));
+            const aw = Math.max(8, W - 2 * margin);
+            const auto = !(o.lh > 0);
+            const Hfixed = auto ? 0 : Math.max(16, Math.round(o.lh * mm));
+            const ah = auto ? 0 : Math.max(8, Hfixed - 2 * margin);
+            const FONT = '"Arial", "Helvetica Neue", Helvetica, sans-serif';
+            const fontOf = function (px) { return 'bold ' + Math.max(6, Math.round(px)) + 'px ' + FONT; };
+
+            const nama = String(item && item.nama || '').trim();
+            const lokasi = String(item && item.lokasi || '').trim();
+            const exp = String(item && item.exp || '').trim();
+            const expText = exp ? ((o.expPrefix ? 'EXP: ' : '') + exp) : '';
+            const warnings = [];
+
+            const mc = document.createElement('canvas').getContext('2d');
+            let qr = null, n = 0;
+            if (nama) {
+                try { qr = plMakeQR(nama); n = qr.getModuleCount(); }
+                catch (e) { warnings.push('Nama Produk terlalu panjang untuk dijadikan QR Code — persingkat namanya.'); }
+            }
+            const QZ = 2, totalMods = n + 2 * QZ;
+            const gap = Math.max(2, Math.round(0.8 * mm));
+            const LH = 1.18;
+            const uMin = Math.max(8, Math.round(1.7 * mm));
+
+            function fitOne(text, px) {          // 1 baris: kecilkan font kalau lebih lebar dari area
+                mc.font = fontOf(px);
+                const w = mc.measureText(text).width;
+                return w > aw ? Math.max(6, Math.floor(px * aw / w)) : Math.round(px);
+            }
+            function attempt(u, allowTrunc) {
+                const fName = Math.round(u * 1.15);
+                let lines = [];
+                if (nama) {
+                    mc.font = fontOf(fName);
+                    lines = plWrapText(mc, nama, aw);
+                    if (lines.length > 3) {
+                        if (!allowTrunc) return null;
+                        lines = lines.slice(0, 3);
+                        let last = lines[2];
+                        while (last.length > 1 && mc.measureText(last + '…').width > aw) last = last.slice(0, -1);
+                        lines[2] = last + '…';
+                        const tw = 'Nama Produk panjang — dipotong jadi 3 baris di label (QR tetap berisi nama lengkap).';
+                        if (warnings.indexOf(tw) < 0) warnings.push(tw);
+                    }
+                }
+                const locPx = lokasi ? fitOne(lokasi, u * 1.1) : 0;
+                const expPx = expText ? fitOne(expText, u * 0.9) : 0;
+                const lhName = Math.round(fName * LH), lhLoc = Math.round(locPx * LH), lhExp = Math.round(expPx * LH);
+                const hName = lines.length * lhName, hLoc = lokasi ? lhLoc : 0, hExp = expText ? lhExp : 0;
+                const blocks = (lines.length ? 1 : 0) + (qr ? 1 : 0) + (lokasi ? 1 : 0) + (expText ? 1 : 0);
+                const gaps = Math.max(0, blocks - 1);
+                return {
+                    u: u, fName: fName, locPx: locPx, expPx: expPx, lines: lines, lhName: lhName, lhLoc: lhLoc, lhExp: lhExp,
+                    hName: hName, hLoc: hLoc, hExp: hExp, gaps: gaps, avail: ah - hName - hLoc - hExp - gaps * gap
+                };
+            }
+
+            let L = null, qMax = 0;
+            if (auto) {
+                const u = Math.max(uMin, Math.round(Math.min(aw * 0.09, 3.6 * mm)));
+                L = attempt(u, true);
+                qMax = qr ? Math.min(aw, Math.round(42 * mm)) : 0;
+            } else {
+                const uMax = Math.max(uMin, Math.round(Math.min(Math.min(aw, ah) * 0.16, 4.2 * mm)));
+                const uLegible = Math.max(uMin, Math.round(2.3 * mm));
+                const base = qr ? Math.min(aw, ah) * 0.45 : 0;
+                // Prioritas: QR dengan >= 4 dot/modul (mudah dipindai) -> >= 3 dot/modul -> sisanya; teks diusahakan tetap terbaca.
+                const stages = qr ? [[Math.max(base, totalMods * 4), uLegible], [Math.max(base, totalMods * 3), uLegible], [base, uMin]] : [[0, uMin]];
+                for (let si = 0; si < stages.length && !L; si++) {
+                    for (let u = uMax; u >= stages[si][1]; u--) {
+                        const t = attempt(u, u === uMin);
+                        if (t && Math.min(aw, t.avail) >= stages[si][0]) { L = t; break; }
+                    }
+                }
+                if (!L) L = attempt(uMin, true);
+                qMax = qr ? Math.max(0, Math.min(aw, L.avail)) : 0;
+            }
+            const mod = qr ? Math.max(1, Math.floor(qMax / totalMods)) : 0;
+            const side = qr ? mod * totalMods : 0;
+            if (qr && qMax < totalMods) warnings.push('Ruang untuk QR terlalu sempit — pilih kertas lebih besar.');
+            else if (qr && mod < 3) warnings.push('Modul QR hanya ' + mod + ' dot — bisa sulit dipindai. Perbesar kertas atau persingkat Nama Produk.');
+
+            const H = auto ? (2 * margin + L.hName + side + L.hLoc + L.hExp + L.gaps * gap) : Hfixed;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = Math.max(16, H);
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+            if (L.lines.length) {
+                ctx.font = fontOf(L.fName);
+                L.lines.forEach(function (ln, i) { ctx.fillText(ln, W / 2, margin + i * L.lhName + L.lhName / 2); });
+            }
+            const topEnd = margin + L.hName;
+            const bottomBlock = L.hLoc + L.hExp + ((L.hLoc && L.hExp) ? gap : 0);
+            const bottomStart = canvas.height - margin - bottomBlock;
+            if (qr) {
+                const regionTop = topEnd + (L.hName ? gap : 0);
+                const regionBottom = bottomStart - (bottomBlock ? gap : 0);
+                const qy = Math.round(regionTop + Math.max(0, (regionBottom - regionTop - side) / 2));
+                const qx = Math.round((W - side) / 2);
+                for (let r = 0; r < n; r++) {
+                    for (let c = 0; c < n; c++) {
+                        if (qr.isDark(r, c)) ctx.fillRect(qx + (QZ + c) * mod, qy + (QZ + r) * mod, mod, mod);
+                    }
+                }
+            }
+            let by = bottomStart;
+            if (lokasi) { ctx.font = fontOf(L.locPx); ctx.fillText(lokasi, W / 2, by + L.lhLoc / 2); by += L.hLoc + gap; }
+            if (expText) { ctx.font = fontOf(L.expPx); ctx.fillText(expText, W / 2, by + L.lhExp / 2); }
+
+            plBinarize(canvas, 170);
+
+            if (!nama && o.placeholder) {   // hanya pratinjau
+                ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = 'bold ' + Math.max(10, Math.round(Math.min(W, canvas.height) * 0.07)) + 'px ' + FONT;
+                ctx.fillText('Pilih data untuk pratinjau', W / 2, canvas.height / 2);
+            }
+            return { canvas: canvas, W: canvas.width, H: canvas.height, info: { modules: n, modDots: mod, warnings: warnings } };
+        }
+
+        function plRotate(canvas, deg) {
+            const w = canvas.width, h = canvas.height;
+            const out = document.createElement('canvas');
+            const swap = (deg === 90);
+            out.width = swap ? h : w; out.height = swap ? w : h;
+            const ctx = out.getContext('2d', { willReadFrequently: true });
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
+            if (deg === 90) { ctx.translate(h, 0); ctx.rotate(Math.PI / 2); }
+            else { ctx.translate(w, h); ctx.rotate(Math.PI); }
+            ctx.drawImage(canvas, 0, 0);
+            plBinarize(out, 128);
+            return out;
+        }
+
+        /** Canvas desain -> canvas fisik (sesuai arah kertas di printer). */
+        function plToPhysical(canvas, dims) {
+            let c = canvas;
+            if (dims.needRotate) c = plRotate(c, 90);
+            if (_plS.rot180) c = plRotate(c, 180);
+            return c;
+        }
+
+        // ---------------------------------------------------------------
+        // Bitmap & bahasa printer (fungsi murni — mudah diuji)
+        // ---------------------------------------------------------------
+        function plPackBitmap(canvas) {
+            const w = canvas.width, h = canvas.height, wb = Math.ceil(w / 8);
+            const d = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+            const out = new Uint8Array(wb * h);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (d[(y * w + x) * 4] < 128) out[y * wb + (x >> 3)] |= (0x80 >> (x & 7));   // 1 = hitam
+                }
+            }
+            return { wb: wb, w: w, h: h, data: out };
+        }
+        function plAscii(s) { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xFF; return b; }
+        function plConcat(parts) {
+            let len = 0; parts.forEach(function (p) { len += p.length; });
+            const out = new Uint8Array(len); let o = 0;
+            parts.forEach(function (p) { out.set(p, o); o += p.length; });
+            return out;
+        }
+        function plNum(n) { return String(Math.round(n * 100) / 100); }
+
+        // TSPL (TSC, Xprinter, Gprinter, HPRT, dst). Bitmap TSPL: bit 0 = hitam, 1 = putih.
+        function plJobTspl(bmp, o) {
+            const data = new Uint8Array(bmp.data.length);
+            const flip = !o.invert;
+            for (let i = 0; i < data.length; i++) data[i] = flip ? (~bmp.data[i] & 0xFF) : bmp.data[i];
+            const head = 'SIZE ' + plNum(o.wMm) + ' mm,' + plNum(o.hMm) + ' mm\r\n' +
+                'GAP ' + (o.gapMm > 0 ? plNum(o.gapMm) : '0') + ' mm,0 mm\r\n' +
+                'DIRECTION 0\r\nREFERENCE 0,0\r\nCLS\r\n' +
+                'BITMAP 0,0,' + bmp.wb + ',' + bmp.h + ',0,';
+            return plConcat([plAscii(head), data, plAscii('\r\nPRINT ' + o.qty + ',1\r\n')]);
+        }
+        // ZPL (Zebra) — ^GFA hex, 1 = hitam.
+        function plJobZpl(bmp, o) {
+            const HEX = '0123456789ABCDEF';
+            const total = bmp.data.length;
+            const hex = new Uint8Array(total * 2);
+            for (let i = 0; i < total; i++) { hex[i * 2] = HEX.charCodeAt(bmp.data[i] >> 4); hex[i * 2 + 1] = HEX.charCodeAt(bmp.data[i] & 15); }
+            const head = '^XA\n^PW' + bmp.w + '\n^LL' + bmp.h + '\n^LH0,0\n^FO0,0^GFA,' + total + ',' + total + ',' + bmp.wb + ',';
+            return plConcat([plAscii(head), hex, plAscii('^FS\n^PQ' + o.qty + ',0,1,N\n^XZ\n')]);
+        }
+        // ESC/POS — raster GS v 0, dipecah per 128 baris, 1 = hitam. Diulang sebanyak qty.
+        function plJobEscpos(bmp, o) {
+            const STRIP = 128;
+            const one = [];
+            for (let y = 0; y < bmp.h; y += STRIP) {
+                const hh = Math.min(STRIP, bmp.h - y);
+                one.push(Uint8Array.of(0x1D, 0x76, 0x30, 0x00, bmp.wb & 0xFF, (bmp.wb >> 8) & 0xFF, hh & 0xFF, (hh >> 8) & 0xFF));
+                one.push(bmp.data.subarray(y * bmp.wb, (y + hh) * bmp.wb));
+            }
+            const parts = [Uint8Array.of(0x1B, 0x40, 0x1B, 0x61, 0x01)];
+            for (let c = 0; c < o.qty; c++) { one.forEach(function (p) { parts.push(p); }); parts.push(Uint8Array.of(0x1B, 0x64, 0x03)); }
+            return plConcat(parts);
+        }
+        function plBuildJob(lang, bmp, o) {
+            if (lang === 'zpl') return plJobZpl(bmp, o);
+            if (lang === 'escpos') return plJobEscpos(bmp, o);
+            return plJobTspl(bmp, o);
+        }
+
+        // ---------------------------------------------------------------
+        // Koneksi USB (WebUSB) — tersambung otomatis setelah izin pertama kali
+        // ---------------------------------------------------------------
+        function plUsbSupported() { return !!(navigator.usb && window.isSecureContext); }
+        function plBleSupported() { return !!(navigator.bluetooth && window.isSecureContext); }
+        function plSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+        function plFindUsbTarget(dev) {
+            let best = null;
+            (dev.configurations || []).forEach(function (cfg) {
+                cfg.interfaces.forEach(function (itf) {
+                    itf.alternates.forEach(function (alt) {
+                        if (alt.interfaceClass !== 7 && alt.interfaceClass !== 255) return;   // 7 = printer, 255 = vendor-specific
+                        const ep = alt.endpoints.find(function (e) { return e.direction === 'out' && e.type === 'bulk'; });
+                        if (!ep) return;
+                        const cand = { cfg: cfg.configurationValue, itf: itf.interfaceNumber, alt: alt.alternateSetting, ep: ep.endpointNumber, cls: alt.interfaceClass };
+                        if (!best || (cand.cls === 7 && best.cls !== 7)) best = cand;
+                    });
+                });
+            });
+            return best;
+        }
+        function plUsbLooksLikePrinter(dev) {
+            if (dev.configurations && dev.configurations.length) return !!plFindUsbTarget(dev);
+            return true;   // konfigurasi belum terbaca: coba saja saat open()
+        }
+
+        async function plUsbConnect(dev, silent) {
+            _plUsb.state = 'connecting'; _plUsb.detail = ''; plRenderStatus();
+            try {
+                if (!dev.opened) await dev.open();
+                const t = plFindUsbTarget(dev);
+                if (!t) throw new Error('Perangkat USB ini tidak punya antarmuka printer. Pilih perangkat printer yang benar.');
+                if (!dev.configuration || dev.configuration.configurationValue !== t.cfg) await dev.selectConfiguration(t.cfg);
+                await dev.claimInterface(t.itf);
+                if (t.alt) await dev.selectAlternateInterface(t.itf, t.alt);
+                _plUsb = { state: 'connected', device: dev, itf: t.itf, ep: t.ep, manualOff: false, detail: '',
+                    name: [dev.manufacturerName, dev.productName].filter(Boolean).join(' ') || ('USB Printer ' + dev.vendorId.toString(16).toUpperCase() + ':' + dev.productId.toString(16).toUpperCase()) };
+                plRenderStatus();
+                const vend = PL_USB_VENDORS[dev.vendorId];
+                if (vend && vend.lang !== plPrinter().lang && _plS.lang === 'auto') {
+                    showToastAlert('info', 'Terdeteksi printer ' + vend.brand, 'Bahasa perintah ' + PL_LANG_LABEL[vend.lang] + ' — pilih tipe printer yang sesuai supaya hasil cetak benar.');
+                }
+                if (!silent) showToastAlert('success', 'Printer terhubung', escapeHtml(_plUsb.name));
+                return true;
+            } catch (e) {
+                try { if (dev.opened) await dev.close(); } catch (_) { }
+                _plUsb = { state: 'error', device: null, itf: 0, ep: 0, name: '', detail: plErrMsg(e), manualOff: false };
+                plRenderStatus();
+                if (!silent) showAlert('error', 'Gagal terhubung ke printer', _plUsb.detail);
+                return false;
+            }
+        }
+        async function plUsbRequest() {
+            if (!plUsbSupported()) { showAlert('warning', 'USB tidak didukung', 'Browser ini tidak mendukung koneksi USB langsung. Gunakan Chrome/Edge (desktop atau Android) atau pakai mode "Driver".'); return false; }
+            let dev;
+            try { dev = await navigator.usb.requestDevice({ filters: [] }); }
+            catch (e) { if (e && e.name === 'NotFoundError') return false; throw e; }   // user menutup dialog
+            return plUsbConnect(dev, false);
+        }
+        async function plUsbAutoConnect() {
+            if (!plUsbSupported() || _plUsb.manualOff || _plUsb.state === 'connected' || _plUsb.state === 'connecting') return;
+            let list = [];
+            try { list = await navigator.usb.getDevices(); } catch (_) { return; }
+            for (const dev of list) {
+                if (!plUsbLooksLikePrinter(dev)) continue;
+                if (await plUsbConnect(dev, true)) return;
+            }
+            if (_plUsb.state !== 'connected') { _plUsb.state = 'idle'; plRenderStatus(); }
+        }
+        function plBindUsbEvents() {
+            if (_plUsbBound || !plUsbSupported()) return;
+            _plUsbBound = true;
+            navigator.usb.addEventListener('connect', function (ev) {
+                _plUsb.manualOff = false;
+                if (_plUsb.state !== 'connected' && plUsbLooksLikePrinter(ev.device)) plUsbConnect(ev.device, false);
+            });
+            navigator.usb.addEventListener('disconnect', function (ev) {
+                if (_plUsb.device && ev.device === _plUsb.device) {
+                    _plUsb = { state: 'idle', device: null, itf: 0, ep: 0, name: '', detail: '', manualOff: false };
+                    plRenderStatus();
+                    if (document.getElementById('pl-status')) showToastAlert('warning', 'Printer terputus', 'Kabel USB dicabut. Colok lagi — akan tersambung otomatis.');
+                }
+            });
+        }
+        async function plUsbDisconnect() {
+            const d = _plUsb.device, itf = _plUsb.itf;
+            _plUsb = { state: 'idle', device: null, itf: 0, ep: 0, name: '', detail: '', manualOff: true };
+            plRenderStatus();
+            try { if (d && d.opened) { try { await d.releaseInterface(itf); } catch (_) { } await d.close(); } } catch (_) { }
+        }
+        async function plUsbWrite(bytes, onProgress) {
+            const s = _plUsb;
+            if (s.state !== 'connected' || !s.device) throw new Error('Printer USB belum terhubung.');
+            const CH = 16384;
+            for (let o = 0; o < bytes.length; o += CH) {
+                const chunk = bytes.subarray(o, Math.min(o + CH, bytes.length));
+                let res = await s.device.transferOut(s.ep, chunk);
+                if (res.status === 'stall') { await s.device.clearHalt('out', s.ep); res = await s.device.transferOut(s.ep, chunk); }
+                if (res.status !== 'ok') throw new Error('Printer menolak data (status: ' + res.status + ').');
+                if (onProgress) onProgress(Math.min(1, (o + chunk.length) / bytes.length));
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Koneksi Bluetooth (Web Bluetooth / BLE)
+        // ---------------------------------------------------------------
+        async function plBleConnect() {
+            if (!plBleSupported()) { showAlert('warning', 'Bluetooth tidak didukung', 'Browser ini tidak mendukung Web Bluetooth. Gunakan Chrome/Edge (desktop atau Android). iPhone/iPad (Safari) belum didukung.'); return false; }
+            let dev;
+            try { dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: PL_BLE_SERVICES }); }
+            catch (e) { if (e && e.name === 'NotFoundError') return false; _plBle = { state: 'error', device: null, ch: null, name: '', detail: plErrMsg(e), chunk: 180 }; plRenderStatus(); showAlert('error', 'Gagal membuka Bluetooth', _plBle.detail); return false; }
+            _plBle = { state: 'connecting', device: dev, ch: null, name: dev.name || 'Printer Bluetooth', detail: '', chunk: 180 }; plRenderStatus();
+            try {
+                dev.addEventListener('gattserverdisconnected', function () {
+                    if (_plBle.device === dev) {
+                        _plBle = { state: 'idle', device: null, ch: null, name: '', detail: '', chunk: 180 };
+                        plRenderStatus();
+                        if (document.getElementById('pl-status')) showToastAlert('warning', 'Bluetooth terputus', 'Koneksi ke printer terputus. Klik Hubungkan Printer untuk menyambung lagi.');
+                    }
+                });
+                const server = await dev.gatt.connect();
+                const services = await server.getPrimaryServices();
+                let ch = null;
+                for (const svc of services) {
+                    const chars = await svc.getCharacteristics();
+                    for (const c of chars) {
+                        if (c.properties.writeWithoutResponse) { ch = c; break; }
+                        if (c.properties.write && !ch) ch = c;
+                    }
+                    if (ch && ch.properties.writeWithoutResponse) break;
+                }
+                if (!ch) { try { server.disconnect(); } catch (_) { } throw new Error('Tidak ditemukan jalur tulis Bluetooth LE pada perangkat ini. Printer mungkin memakai Bluetooth Classic (SPP) yang tidak bisa diakses browser — pakai USB atau mode "Driver".'); }
+                _plBle = { state: 'connected', device: dev, ch: ch, name: dev.name || 'Printer Bluetooth', detail: '', chunk: 180 };
+                plRenderStatus();
+                showToastAlert('success', 'Printer terhubung', escapeHtml(_plBle.name) + ' (Bluetooth)');
+                return true;
+            } catch (e) {
+                try { if (dev.gatt && dev.gatt.connected) dev.gatt.disconnect(); } catch (_) { }
+                _plBle = { state: 'error', device: null, ch: null, name: '', detail: plErrMsg(e), chunk: 180 };
+                plRenderStatus();
+                showAlert('error', 'Gagal terhubung ke printer', _plBle.detail);
+                return false;
+            }
+        }
+        function plBleDisconnect() {
+            const d = _plBle.device;
+            _plBle = { state: 'idle', device: null, ch: null, name: '', detail: '', chunk: 180 };
+            try { if (d && d.gatt && d.gatt.connected) d.gatt.disconnect(); } catch (_) { }
+            plRenderStatus();
+        }
+        async function plBleWrite(bytes, onProgress) {
+            const s = _plBle;
+            if (s.state !== 'connected' || !s.ch) throw new Error('Printer Bluetooth belum terhubung.');
+            let o = 0, retries = 0;
+            while (o < bytes.length) {
+                const end = Math.min(o + s.chunk, bytes.length);
+                const part = bytes.slice(o, end);
+                try {
+                    if (s.ch.properties.writeWithoutResponse) await s.ch.writeValueWithoutResponse(part);
+                    else await s.ch.writeValue(part);
+                    o = end; retries = 0;
+                    if (onProgress) onProgress(o / bytes.length);
+                    await plSleep(s.chunk <= 20 ? 10 : 6);
+                } catch (e) {
+                    if (retries < 3) { retries++; await plSleep(60); continue; }
+                    if (s.chunk > 20) { s.chunk = 20; retries = 0; continue; }
+                    throw e;
+                }
+            }
+        }
+
+        function plErrMsg(e) {
+            const m = (e && e.message) ? e.message : String(e || 'Kesalahan tidak diketahui');
+            if (/access denied|unable to claim|claimInterface|busy|in use/i.test(m)) {
+                return 'Printer USB tidak bisa diakses langsung — biasanya karena driver printer Windows sedang memakainya. Pakai mode "Driver" (dialog cetak), atau ganti driver USB printer ke WinUSB (mis. lewat Zadig) agar bisa cetak langsung.';
+            }
+            if (e && e.name === 'SecurityError') return 'Izin akses perangkat ditolak browser. Klik Hubungkan Printer lalu pilih perangkat, dan izinkan akses.';
+            if (e && e.name === 'NotSupportedError') return 'Perangkat/perintah ini tidak didukung browser.';
+            return m;
+        }
+
+        // ---------------------------------------------------------------
+        // Kirim ke printer
+        // ---------------------------------------------------------------
+        function plConnected() {
+            if (_plS.conn === 'usb') return _plUsb.state === 'connected';
+            if (_plS.conn === 'bluetooth') return _plBle.state === 'connected';
+            return true;
+        }
+        async function plEnsureConnected() {
+            if (plConnected()) return true;
+            if (_plS.conn === 'usb') return plUsbRequest();
+            if (_plS.conn === 'bluetooth') return plBleConnect();
+            return true;
+        }
+        function plSendBytes(bytes, onProgress) {
+            return _plS.conn === 'bluetooth' ? plBleWrite(bytes, onProgress) : plUsbWrite(bytes, onProgress);
+        }
+
+        /** Mode "Driver": cetak lewat dialog cetak browser (untuk printer yang sudah terpasang driver). */
+        function plPrintViaSystem(canvas, lw, lh, qty) {
+            return new Promise(function (resolve, reject) {
+                const url = canvas.toDataURL('image/png');
+                const hMm = lh > 0 ? lh : Math.round(canvas.height / (_plS.dpi / 25.4) * 100) / 100;
+                let imgs = '';
+                for (let i = 0; i < qty; i++) imgs += '<div class="p"><img src="' + url + '" alt=""></div>';
+                const ifr = document.createElement('iframe');
+                ifr.setAttribute('aria-hidden', 'true');
+                ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+                document.body.appendChild(ifr);
+                const doc = ifr.contentDocument || ifr.contentWindow.document;
+                doc.open();
+                doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Label Produk</title><style>' +
+                    '@page{size:' + lw + 'mm ' + hMm + 'mm;margin:0}html,body{margin:0;padding:0;background:#fff}' +
+                    '.p{width:' + lw + 'mm;height:' + hMm + 'mm;overflow:hidden;page-break-after:always;break-after:page}' +
+                    '.p:last-child{page-break-after:auto;break-after:auto}' +
+                    'img{display:block;width:' + lw + 'mm;height:' + hMm + 'mm;image-rendering:pixelated}' +
+                    '</style></head><body>' + imgs + '</body></html>');
+                doc.close();
+                const cleanup = function () { setTimeout(function () { try { ifr.remove(); } catch (_) { } }, 1000); };
+                const go = function () {
+                    try {
+                        const w = ifr.contentWindow;
+                        w.addEventListener('afterprint', cleanup);
+                        w.focus(); w.print();
+                        setTimeout(cleanup, 120000);
+                        resolve();
+                    } catch (e) { cleanup(); reject(e); }
+                };
+                const im = doc.querySelector('img');
+                if (im && !im.complete) { im.onload = go; im.onerror = function () { cleanup(); reject(new Error('Gagal menyiapkan gambar label.')); }; }
+                else setTimeout(go, 50);
+            });
+        }
+
+        function plRenderOpts() {
+            const d = plLayoutDims();
+            return { dims: d, render: { lw: d.lw, lh: d.lh, dpi: _plS.dpi, margin: _plS.margin, expPrefix: _plS.expPrefix } };
+        }
+
+        async function plPrint(isTest) {
+            if (_plBusy) return;
+            const item = isTest ? PL_SAMPLE : _plItem;
+            if (!item || !String(item.nama || '').trim()) {
+                showAlert('warning', 'Belum ada data', 'Pilih data dari daftar (atau Import file) dulu. Kotak Nama Produk wajib terisi.');
+                return;
+            }
+            const qty = isTest ? 1 : Math.round(plClamp(_plS.qty, 1, 500));
+            const btn = document.getElementById('pl-print-btn');
+            const setBtn = function (t) { if (btn) btn.textContent = t; };
+            const oldText = btn ? btn.textContent : '';
+            _plBusy = true; plSyncButtons();
+            try {
+                if (_plS.conn !== 'system') {
+                    setBtn('Menghubungkan…');
+                    if (!(await plEnsureConnected())) return;   // user batal / gagal (pesan sudah tampil)
+                }
+                setBtn('Menyiapkan label…');
+                await plSleep(20);   // beri kesempatan browser menggambar ulang tombol
+                const ro = plRenderOpts();
+                const lay = plRenderLabel(item, ro.render);
+                if (lay.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(lay.info.warnings[0]));
+                if (_plS.conn === 'system') {
+                    setBtn('Membuka dialog cetak…');
+                    await plPrintViaSystem(lay.canvas, ro.dims.lw, ro.dims.lh, qty);
+                } else {
+                    const phys = plToPhysical(lay.canvas, ro.dims);
+                    const bmp = plPackBitmap(phys);
+                    const mmPx = _plS.dpi / 25.4;
+                    const bytes = plBuildJob(plLang(), bmp, {
+                        wMm: ro.dims.physW, hMm: ro.dims.physH > 0 ? ro.dims.physH : Math.ceil(phys.height / mmPx),
+                        gapMm: _plS.gap, qty: qty, invert: _plS.invert
+                    });
+                    await plSendBytes(bytes, function (p) { setBtn('Mengirim… ' + Math.round(p * 100) + '%'); });
+                    showToastAlert('success', isTest ? 'Cetak tes terkirim' : 'Label terkirim ke printer', escapeHtml(item.nama) + (isTest ? '' : ' × ' + qty));
+                }
+                if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak label produk: ' + item.nama + ' ×' + qty);
+            } catch (e) {
+                showAlert('error', 'Gagal mencetak', plErrMsg(e));
+            } finally {
+                _plBusy = false;
+                if (btn) btn.textContent = oldText || 'Cetak Label';
+                plSyncButtons();
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Data: tarik dari spreadsheet & import file
+        // ---------------------------------------------------------------
+        function plMakeRow(id, nama, lokasi, exp) {
+            nama = String(nama == null ? '' : nama).trim(); lokasi = String(lokasi == null ? '' : lokasi).trim(); exp = String(exp == null ? '' : exp).trim();
+            return { id: id, nama: nama, lokasi: lokasi, exp: exp, _q: (nama + ' ' + lokasi + ' ' + exp).toLowerCase() };
+        }
+
+        async function plLoadSheet() {
+            const mySeq = ++_plLoadSeq;
+            const btn = document.getElementById('pl-refresh');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Memuat…'; }
+            const list = document.getElementById('pl-list');
+            if (list && _plTab === 'sheet' && !_plRows.sheet) list.innerHTML = '<div class="pl-empty"><span class="pl-spin"></span>Memuat data dari sheet QRlabel…</div>';
+            try {
+                const res = await fetchWithRetry(PO_GAS_URL + '?action=getQRLabelData', {}, 25000);
+                const result = await res.json();
+                if (result.error || result.success === false) throw new Error(result.error || result.message || 'Gagal mengambil data QRlabel.');
+                const rows = (Array.isArray(result.rows) ? result.rows : []).map(function (r) { return plMakeRow('s' + r._row, r.namaProduk, r.kodeLokasi, r.expDate); });
+                _plRows.sheet = { rows: rows, loadedAt: Date.now(), meta: result.meta || {} };
+                if (mySeq !== _plLoadSeq) return;
+                if (_plTab === 'sheet') { _plLimit = PL_PAGE; plRenderList(); }
+            } catch (err) {
+                if (mySeq !== _plLoadSeq) return;
+                if (_plRows.sheet) { showToastAlert('error', 'Gagal memuat ulang', escapeHtml(err.message || String(err))); }
+                else if (_plTab === 'sheet') {
+                    const l2 = document.getElementById('pl-list');
+                    if (l2) l2.innerHTML = '<div class="pl-empty" style="color:#dc2626">Gagal memuat data: ' + escapeHtml(err.message || String(err)) + '<br><button type="button" class="pl-link" onclick="plLoadSheet()">Coba lagi</button></div>';
+                }
+            } finally {
+                const b2 = document.getElementById('pl-refresh');
+                if (b2 && mySeq === _plLoadSeq) { b2.disabled = false; b2.textContent = '⟳ Refresh'; }
+            }
+        }
+
+        function plParseDelimited(text) {
+            text = String(text || '').replace(/^\uFEFF/, '');
+            const first = (text.split(/\r?\n/).find(function (l) { return l.trim(); }) || '');
+            const cnt = function (ch) { return first.split(ch).length - 1; };
+            const delim = (cnt('\t') >= cnt(';') && cnt('\t') >= cnt(',') && cnt('\t') > 0) ? '\t' : (cnt(';') > cnt(',') ? ';' : ',');
+            const rows = []; let row = [], cur = '', q = false;
+            for (let i = 0; i < text.length; i++) {
+                const ch = text[i];
+                if (q) {
+                    if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+                    else cur += ch;
+                } else if (ch === '"') q = true;
+                else if (ch === delim) { row.push(cur); cur = ''; }
+                else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; rows.push(row); row = []; }
+                else cur += ch;
+            }
+            if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+            return rows;
+        }
+
+        function plMatrixToRows(matrix) {
+            const isEmpty = function (r) { return !r || r.every(function (c) { return String(c == null ? '' : c).trim() === ''; }); };
+            const rows = (matrix || []).filter(function (r) { return !isEmpty(r); });
+            if (!rows.length) return [];
+            const findIdx = function (hdr, regs) {
+                for (const re of regs) { const i = hdr.findIndex(function (h) { return re.test(String(h == null ? '' : h).trim()); }); if (i >= 0) return i; }
+                return -1;
+            };
+            const REG_NAMA = [/^nama\s*(produk|barang|item)$/i, /^(product\s*name|item\s*name)$/i, /nama/i, /produk|product|item|barang/i];
+            const REG_LOK = [/^kode\s*lokasi$/i, /kode\s*lokasi|lokasi|location|\bloc\b|\brak\b/i];
+            const REG_EXP = [/^exp(\.|ired|iry)?(\s*date)?$/i, /\bexp\b|expired|expiry|kadaluarsa|kedaluwarsa|kadaluwarsa|best\s*before/i];
+            const hdr = rows[0];
+            let iN = findIdx(hdr, REG_NAMA), iL = findIdx(hdr, REG_LOK), iE = findIdx(hdr, REG_EXP);
+            let start = 1;
+            if (iN < 0 && iL < 0 && iE < 0) { iN = 0; iL = 1; iE = 2; start = 0; }   // tanpa judul: kolom 1-3
+            else { if (iN < 0) iN = 0; }
+            const out = [];
+            for (let r = start; r < rows.length; r++) {
+                const nama = iN >= 0 ? rows[r][iN] : '';
+                if (String(nama == null ? '' : nama).trim() === '') continue;
+                out.push(plMakeRow('i' + r, nama, iL >= 0 ? rows[r][iL] : '', iE >= 0 ? rows[r][iE] : ''));
+            }
+            return out;
+        }
+
+        function _ensureXlsx() { return _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'); }
+
+        async function plHandleImportFile(file) {
+            if (!file) return;
+            const drop = document.getElementById('pl-drop-t');
+            if (drop) drop.textContent = 'Membaca ' + file.name + '…';
+            try {
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                let matrix;
+                if (ext === 'xlsx' || ext === 'xls') {
+                    await _ensureXlsx();
+                    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', dateNF: 'yyyy-mm-dd' });
+                } else {
+                    matrix = plParseDelimited(await file.text());
+                }
+                const rows = plMatrixToRows(matrix);
+                if (!rows.length) throw new Error('Tidak ada baris data yang terbaca. Pastikan ada kolom "Nama Produk", "Kode Lokasi", dan "Exp Date".');
+                _plRows.import = rows; _plTab = 'import'; _plLimit = PL_PAGE; _plSearch = '';
+                showToastAlert('success', 'Import berhasil', rows.length + ' baris dari ' + escapeHtml(file.name));
+                plRenderDataCard();
+            } catch (e) {
+                showAlert('error', 'Gagal import file', plErrMsg(e));
+                if (drop) drop.textContent = 'Klik untuk memilih file, atau tarik file ke sini';
+            }
+        }
+        function plOnImportInput(inp) { const f = inp.files && inp.files[0]; inp.value = ''; plHandleImportFile(f); }
+        function plDownloadTemplate() {
+            const csv = '\uFEFFNama Produk,Kode Lokasi,Exp Date\r\nContoh Produk 250g,A-01-03,31 Des 2027\r\n';
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+            a.download = 'template_label_produk.csv';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+        }
+
+        // ---------------------------------------------------------------
+        // Tampilan (UI)
+        // ---------------------------------------------------------------
+        const PL_ICON_PORTRAIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="2"/></svg>';
+        const PL_ICON_LANDSCAPE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/></svg>';
+
+        function plPaperLabel(p) { return p.label || (p.w + ' × ' + p.h + ' mm'); }
+
+        async function showPrintLabel() {
+            if (!(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
+                showAlert('error', 'Akses Ditolak', 'Menu "Print Label" hanya dapat diakses oleh Admin dan Team Warehouse.');
+                return;
+            }
+            plLoadSettings();
+            _plTab = _plRows.import.length && !_plRows.sheet ? 'import' : 'sheet';
+            _plLimit = PL_PAGE; _plSearch = '';
+
+            const printerOpts = PL_PRINTERS.map(function (g) {
+                return '<optgroup label="' + escapeHtml(g.group) + '">' + g.items.map(function (p) {
+                    return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>';
+                }).join('') + '</optgroup>';
+            }).join('');
+            const paperOpts = '<optgroup label="Label (gap / black mark)">' + PL_PAPERS.filter(function (p) { return p.h > 0; }).map(function (p) {
+                return '<option value="' + p.id + '">' + plPaperLabel(p) + '</option>';
+            }).join('') + '</optgroup><optgroup label="Kertas kontinu / lainnya">' + PL_PAPERS.filter(function (p) { return !(p.h > 0); }).map(function (p) {
+                return '<option value="' + p.id + '">' + escapeHtml(plPaperLabel(p)) + '</option>';
+            }).join('') + '</optgroup>';
+
+            document.getElementById('content-area').innerHTML = `
+            <div class="pl-page">
+                <div class="pl-head">
+                    <div>
+                        <div class="pl-crumb">Print Label</div>
+                        <h1 class="pl-title">Label Produk</h1>
+                        <p class="pl-sub">Atur printer thermal, pilih produk, cek pratinjau, lalu cetak label QR Code.</p>
+                    </div>
+                </div>
+                <div class="pl-grid">
+                    <div class="pl-col">
+                        <section class="pl-card pl-c-printer" aria-label="Printer">
+                            <div class="pl-card-h"><span><span class="pl-ic">🖨️</span>Printer</span></div>
+                            <div id="pl-status" class="pl-status"><span class="pl-dot"></span><div><span id="pl-st-title" class="pl-st-title"></span><span id="pl-st-sub" class="pl-st-sub"></span></div></div>
+                            <button type="button" id="pl-btn-connect" class="pl-btn pl-btn-dark pl-btn-block" onclick="plConnectClick()">Hubungkan Printer</button>
+
+                            <label class="pl-lbl" for="pl-printer">Tipe printer thermal</label>
+                            <select id="pl-printer" class="pl-input" onchange="plOnPrinterChange()">${printerOpts}</select>
+                            <div id="pl-printer-note" class="pl-note"></div>
+
+                            <label class="pl-lbl">Koneksi</label>
+                            <div class="pl-seg" id="pl-conn-seg">
+                                <button type="button" data-v="usb" onclick="plSetConn('usb')">USB</button>
+                                <button type="button" data-v="bluetooth" onclick="plSetConn('bluetooth')">Bluetooth</button>
+                                <button type="button" data-v="system" onclick="plSetConn('system')">Driver</button>
+                            </div>
+                            <div id="pl-conn-hint" class="pl-note"></div>
+                        </section>
+
+                        <section class="pl-card pl-c-paper" aria-label="Kertas dan tata letak">
+                            <div class="pl-card-h"><span><span class="pl-ic">📐</span>Kertas &amp; Tata Letak</span></div>
+                            <label class="pl-lbl" for="pl-paper">Ukuran kertas thermal</label>
+                            <select id="pl-paper" class="pl-input" onchange="plOnPaperChange()">${paperOpts}</select>
+                            <div id="pl-custom" class="pl-2col pl-hide">
+                                <input id="pl-cw" type="number" min="10" max="300" step="0.5" class="pl-input" oninput="plOnCustomSize()" aria-label="Lebar (mm)" placeholder="Lebar">
+                                <span>×</span>
+                                <input id="pl-ch" type="number" min="10" max="400" step="0.5" class="pl-input" oninput="plOnCustomSize()" aria-label="Tinggi (mm)" placeholder="Tinggi">
+                            </div>
+                            <div class="pl-note" id="pl-custom-note"></div>
+
+                            <label class="pl-lbl">Orientasi</label>
+                            <div class="pl-seg" id="pl-orient-seg">
+                                <button type="button" data-v="portrait" onclick="plSetOrient('portrait')">${PL_ICON_PORTRAIT}Potret</button>
+                                <button type="button" data-v="landscape" onclick="plSetOrient('landscape')">${PL_ICON_LANDSCAPE}Lanskap</button>
+                            </div>
+                            <div id="pl-orient-note" class="pl-note"></div>
+
+                            <label class="pl-lbl" for="pl-qty">Jumlah cetak (Qty)</label>
+                            <div class="pl-step">
+                                <button type="button" onclick="plQtyStep(-1)" aria-label="Kurangi">−</button>
+                                <input id="pl-qty" type="number" min="1" max="500" step="1" inputmode="numeric" oninput="plOnQtyInput()" onblur="plOnQtyBlur()">
+                                <button type="button" onclick="plQtyStep(1)" aria-label="Tambah">+</button>
+                            </div>
+
+                            <details class="pl-adv" id="pl-adv">
+                                <summary>Pengaturan lanjutan</summary>
+                                <div class="pl-adv-grid">
+                                    <div><label class="pl-lbl" for="pl-lang">Bahasa printer</label>
+                                        <select id="pl-lang" class="pl-input" onchange="plOnAdv()"><option value="auto">Otomatis (ikut tipe)</option><option value="tspl">TSPL</option><option value="zpl">ZPL</option><option value="escpos">ESC/POS</option></select></div>
+                                    <div><label class="pl-lbl" for="pl-dpi">Resolusi</label>
+                                        <select id="pl-dpi" class="pl-input" onchange="plOnAdv()"><option value="203">203 dpi</option><option value="300">300 dpi</option></select></div>
+                                    <div><label class="pl-lbl" for="pl-margin">Margin (mm)</label>
+                                        <input id="pl-margin" type="number" min="0" max="10" step="0.5" class="pl-input" oninput="plOnAdv()"></div>
+                                    <div><label class="pl-lbl" for="pl-gap">Gap label (mm)</label>
+                                        <input id="pl-gap" type="number" min="0" max="10" step="0.5" class="pl-input" oninput="plOnAdv()"></div>
+                                </div>
+                                <div class="pl-note">Gap: jarak antar stiker (TSPL). Isi 0 untuk kertas kontinu.</div>
+                                <label class="pl-chk"><input id="pl-expprefix" type="checkbox" onchange="plOnAdv()"><span>Tambahkan awalan “EXP:” pada tanggal kedaluwarsa</span></label>
+                                <label class="pl-chk"><input id="pl-rot180" type="checkbox" onchange="plOnAdv()"><span>Putar hasil cetak 180°<small>Jika label keluar terbalik (kertas terpasang berlawanan arah).</small></span></label>
+                                <label class="pl-chk"><input id="pl-invert" type="checkbox" onchange="plOnAdv()"><span>Balik polaritas bitmap<small>Aktifkan jika hasil cetak negatif (latar hitam) atau kosong.</small></span></label>
+                            </details>
+                        </section>
+
+                        <section class="pl-card pl-c-actions" aria-label="Cetak">
+                            <div class="pl-actions">
+                                <button type="button" id="pl-print-btn" class="pl-btn pl-btn-primary pl-btn-lg pl-btn-block" onclick="plPrint(false)">Cetak Label</button>
+                                <button type="button" id="pl-test-btn" class="pl-btn pl-btn-ghost pl-btn-block" onclick="plPrint(true)">Cetak Tes (contoh label)</button>
+                            </div>
+                            <div class="pl-note">Cetak Tes memakai data contoh — berguna untuk mengecek arah, ukuran, dan warna cetak sebelum mencetak produk sungguhan.</div>
+                        </section>
+                    </div>
+
+                    <div class="pl-col">
+                        <section class="pl-card pl-c-preview" aria-label="Pratinjau">
+                            <div class="pl-card-h"><span><span class="pl-ic">👁️</span>Pratinjau</span><span><span id="pl-chip-size" class="pl-chip"></span> <span id="pl-chip-orient" class="pl-chip pl-chip-gray"></span></span></div>
+                            <div class="pl-stage" id="pl-stage"><div class="pl-paper"><canvas id="pl-canvas" width="10" height="10"></canvas></div></div>
+                            <div class="pl-meta" id="pl-meta"></div>
+                            <div id="pl-tips" class="pl-tips pl-hide"></div>
+                            <div class="pl-fields">
+                                <div><label class="pl-lbl" for="pl-f-nama">Nama Produk (isi QR)</label><input id="pl-f-nama" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                                <div><label class="pl-lbl" for="pl-f-lokasi">Kode Lokasi</label><input id="pl-f-lokasi" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                                <div><label class="pl-lbl" for="pl-f-exp">Exp Date</label><input id="pl-f-exp" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                            </div>
+                            <div class="pl-field-note">Kotak di atas otomatis terisi saat produk diklik. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>
+                        </section>
+
+                        <section class="pl-card pl-c-data" aria-label="Data yang dicetak" id="pl-data-card"></section>
+                    </div>
+                </div>
+            </div>`;
+
+            // isi nilai awal kontrol
+            document.getElementById('pl-printer').value = _plS.printerId;
+            document.getElementById('pl-paper').value = _plS.paperId;
+            document.getElementById('pl-cw').value = _plS.cw;
+            document.getElementById('pl-ch').value = _plS.ch;
+            document.getElementById('pl-qty').value = _plS.qty;
+            document.getElementById('pl-lang').value = _plS.lang;
+            document.getElementById('pl-dpi').value = String(_plS.dpi);
+            document.getElementById('pl-margin').value = _plS.margin;
+            document.getElementById('pl-gap').value = _plS.gap;
+            document.getElementById('pl-expprefix').checked = _plS.expPrefix;
+            document.getElementById('pl-rot180').checked = _plS.rot180;
+            document.getElementById('pl-invert').checked = _plS.invert;
+            if (_plItem) plFillFields();
+
+            plRenderDataCard();
+            plRefreshAll();
+            plBindUsbEvents();
+            plUsbAutoConnect();
+            if (_plTab === 'sheet' && !_plRows.sheet) plLoadSheet();
+        }
+
+        /** Perbarui semua kontrol setelan + pratinjau + indikator. */
+        function plRefreshAll() {
+            const p = plPrinter();
+            const note = document.getElementById('pl-printer-note');
+            if (note) note.textContent = 'Bahasa perintah: ' + PL_LANG_LABEL[plLang()] + ' · ' + _plS.dpi + ' dpi' + (p.maxDots ? ' · lebar cetak maks. ' + p.maxDots + ' dot' : '');
+            document.querySelectorAll('#pl-conn-seg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === _plS.conn); });
+            const hints = {
+                usb: 'Colokkan kabel USB — printer tersambung otomatis (izin cukup sekali). Butuh Chrome/Edge.',
+                bluetooth: 'Untuk printer yang punya Bluetooth (BLE). Klik Hubungkan Printer, lalu pilih printer dari daftar.',
+                system: 'Cetak lewat dialog cetak browser ke printer yang driver-nya sudah terpasang di komputer.'
+            };
+            const hint = document.getElementById('pl-conn-hint'); if (hint) hint.textContent = hints[_plS.conn];
+            const paper = plPaperInfo(), dims = plLayoutDims();
+            const custom = document.getElementById('pl-custom'); if (custom) custom.classList.toggle('pl-hide', paper.id !== 'custom');
+            const cn = document.getElementById('pl-custom-note'); if (cn) cn.textContent = paper.id === 'custom' ? 'Lebar = sisi yang melintang head printer; tinggi = arah keluarnya kertas (mm).' : '';
+            document.querySelectorAll('#pl-orient-seg button').forEach(function (b) {
+                b.classList.toggle('on', dims.fixedShape ? false : b.getAttribute('data-v') === _plS.orientation);
+                b.disabled = dims.fixedShape;
+            });
+            const on = document.getElementById('pl-orient-note');
+            if (on) on.textContent = dims.fixedShape ? (dims.auto ? 'Kertas kontinu: tinggi label menyesuaikan isi secara otomatis.' : 'Kertas persegi: orientasi tidak berpengaruh.') : (dims.needRotate ? 'Desain diputar 90° otomatis agar pas dengan arah kertas di printer.' : '');
+            plRenderStatus();
+            plRenderPreview();
+            plSyncButtons();
+        }
+
+        function plSyncButtons() {
+            const pb = document.getElementById('pl-print-btn'), tb = document.getElementById('pl-test-btn');
+            if (pb) pb.disabled = _plBusy;
+            if (tb) tb.disabled = _plBusy;
+        }
+
+        function plStatusModel() {
+            const c = _plS.conn;
+            if (c === 'system') return { cls: 'pl-st-blue', title: 'Mode Driver / Dialog Cetak', sub: 'Printer dipilih di dialog cetak browser saat mencetak.', btn: null };
+            const isUsb = c === 'usb';
+            const st = isUsb ? _plUsb : _plBle;
+            const via = isUsb ? 'USB' : 'Bluetooth';
+            if (isUsb && !plUsbSupported()) return { cls: 'pl-st-red', title: 'USB langsung tidak didukung browser ini', sub: 'Gunakan Chrome / Edge (desktop atau Android), atau pindah ke mode Driver.', btn: null };
+            if (!isUsb && !plBleSupported()) return { cls: 'pl-st-red', title: 'Bluetooth tidak didukung browser ini', sub: 'Gunakan Chrome / Edge (desktop atau Android), atau pindah ke mode Driver.', btn: null };
+            if (st.state === 'connected') return { cls: 'pl-st-green', title: 'Printer terhubung', sub: st.name + ' · ' + via, btn: 'disconnect' };
+            if (st.state === 'connecting') return { cls: 'pl-st-amber', title: 'Menghubungkan…', sub: 'Menunggu printer merespons.', btn: 'wait' };
+            if (st.state === 'error') return { cls: 'pl-st-red', title: 'Gagal terhubung', sub: st.detail || 'Coba lagi.', btn: 'connect' };
+            return { cls: 'pl-st-gray', title: 'Belum ada printer terhubung', sub: isUsb ? 'Colokkan printer via USB. Pertama kali: klik Hubungkan Printer & beri izin.' : 'Nyalakan Bluetooth printer, lalu klik Hubungkan Printer.', btn: 'connect' };
+        }
+        function plRenderStatus() {
+            const box = document.getElementById('pl-status'); if (!box) return;
+            const m = plStatusModel();
+            box.className = 'pl-status ' + m.cls;
+            document.getElementById('pl-st-title').textContent = m.title;
+            document.getElementById('pl-st-sub').textContent = m.sub;
+            const b = document.getElementById('pl-btn-connect');
+            if (!b) return;
+            b.classList.toggle('pl-hide', !m.btn);
+            b.disabled = m.btn === 'wait';
+            b.className = 'pl-btn pl-btn-block ' + (m.btn === 'disconnect' ? 'pl-btn-ghost' : 'pl-btn-dark') + (m.btn ? '' : ' pl-hide');
+            b.textContent = m.btn === 'disconnect' ? 'Putuskan Printer' : (m.btn === 'wait' ? 'Menghubungkan…' : 'Hubungkan Printer');
+        }
+
+        function plRenderPreview() {
+            const canvas = document.getElementById('pl-canvas'); if (!canvas) return;
+            const ro = plRenderOpts();
+            const o = Object.assign({}, ro.render, { placeholder: true });
+            const lay = plRenderLabel(_plItem || {}, o);
+            canvas.width = lay.W; canvas.height = lay.H;
+            canvas.getContext('2d').drawImage(lay.canvas, 0, 0);
+            // tampilkan proporsional di dalam panggung
+            const stage = document.getElementById('pl-stage');
+            const availW = Math.max(120, (stage ? stage.clientWidth : 360) - 40);
+            const maxH = window.innerWidth < 640 ? 300 : 380;
+            const scale = Math.min(availW / lay.W, maxH / lay.H);
+            canvas.style.width = Math.round(lay.W * scale) + 'px';
+            canvas.style.height = Math.round(lay.H * scale) + 'px';
+            canvas.style.imageRendering = scale > 1 ? 'pixelated' : 'auto';
+
+            const dims = ro.dims, paper = plPaperInfo();
+            const mmPx = _plS.dpi / 25.4;
+            const hMm = dims.auto ? Math.round(lay.H / mmPx * 10) / 10 : dims.lh;
+            const chip = document.getElementById('pl-chip-size'); if (chip) chip.textContent = dims.lw + ' × ' + hMm + ' mm';
+            const co = document.getElementById('pl-chip-orient'); if (co) co.textContent = dims.auto ? 'Kontinu' : (dims.lw > dims.lh ? 'Lanskap' : (dims.lw < dims.lh ? 'Potret' : 'Persegi'));
+            const meta = document.getElementById('pl-meta');
+            if (meta) {
+                meta.textContent = lay.W + ' × ' + lay.H + ' dot · ' + _plS.dpi + ' dpi' +
+                    (lay.info.modules ? ' · QR ' + lay.info.modules + '×' + lay.info.modules + ' modul (' + lay.info.modDots + ' dot/modul)' : '');
+            }
+            // saran otomatis
+            const tips = lay.info.warnings.slice();
+            const pr = plPrinter();
+            const physW = dims.physW;
+            if (plLang() === 'escpos' && pr.maxDots && Math.round(physW * mmPx) > pr.maxDots) tips.push('Lebar kertas (' + Math.round(physW * mmPx) + ' dot) melebihi lebar cetak printer (' + pr.maxDots + ' dot) — sisi kanan bisa terpotong.');
+            if (_plTab === 'sheet' && _plRows.sheet && _plRows.sheet.meta && _plRows.sheet.rows.length && !_plRows.sheet.meta.expColumn) tips.push('Kolom Exp Date belum terdeteksi di sheet QRlabel — isi manual lewat kotak Exp Date, atau kunci kolomnya di GAS (QRLABEL_COL_EXP_OVERRIDE).');
+            if (paper.id !== 'custom' && !paper.auto && plLang() === 'escpos' && paper.h > 0) tips.push('Printer struk (ESC/POS) tidak membaca gap stiker — pastikan kertas pas, atau pakai kertas kontinu.');
+            const tb = document.getElementById('pl-tips');
+            if (tb) {
+                if (tips.length) { tb.classList.remove('pl-hide'); tb.innerHTML = '<b>✨ Saran otomatis</b><ul>' + tips.map(function (t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('') + '</ul>'; }
+                else { tb.classList.add('pl-hide'); tb.innerHTML = ''; }
+            }
+        }
+
+        function plFillFields() {
+            const it = _plItem || { nama: '', lokasi: '', exp: '' };
+            const a = document.getElementById('pl-f-nama'), b = document.getElementById('pl-f-lokasi'), c = document.getElementById('pl-f-exp');
+            if (a) a.value = it.nama; if (b) b.value = it.lokasi; if (c) c.value = it.exp;
+        }
+
+        // ---- daftar data ----
+        function plCurrentRows() { return _plTab === 'sheet' ? (_plRows.sheet ? _plRows.sheet.rows : []) : _plRows.import; }
+
+        function plRenderDataCard() {
+            const card = document.getElementById('pl-data-card'); if (!card) return;
+            const isSheet = _plTab === 'sheet';
+            card.innerHTML = `
+                <div class="pl-card-h"><span><span class="pl-ic">📦</span>Data yang dicetak</span><span id="pl-count" class="pl-count">0 data</span></div>
+                <div class="pl-tabs" role="tablist">
+                    <button type="button" role="tab" class="${isSheet ? 'on' : ''}" onclick="plSetTab('sheet')">Tarik dari Spreadsheet</button>
+                    <button type="button" role="tab" class="${isSheet ? '' : 'on'}" onclick="plSetTab('import')">Import File</button>
+                </div>
+                ${isSheet ? '' : `
+                <label class="pl-drop" id="pl-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="event.preventDefault();this.classList.remove('over');plHandleImportFile(event.dataTransfer.files[0])">
+                    <b id="pl-drop-t">Klik untuk memilih file, atau tarik file ke sini</b>
+                    <small>CSV / Excel (.xlsx, .xls) dengan kolom: Nama Produk · Kode Lokasi · Exp Date</small>
+                    <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" class="pl-hide" onchange="plOnImportInput(this)">
+                </label>
+                <div class="pl-note" style="margin:-.25rem 0 .75rem">Belum punya format? <button type="button" class="pl-link" onclick="plDownloadTemplate()">Unduh template CSV</button></div>`}
+                <div class="pl-toolbar">
+                    <div class="pl-search">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input id="pl-search" type="text" class="pl-input" placeholder="Cari nama produk, lokasi, exp…" value="${escapeHtml(_plSearch)}" oninput="plOnSearch(this.value)" autocomplete="off">
+                        <button type="button" id="pl-search-x" class="pl-search-x ${_plSearch ? '' : 'pl-hide'}" onclick="plClearSearch()" aria-label="Hapus pencarian">&times;</button>
+                    </div>
+                    ${isSheet ? '<button type="button" id="pl-refresh" class="pl-btn pl-btn-ghost" onclick="plLoadSheet()">⟳ Refresh</button>' : ''}
+                </div>
+                <div id="pl-list" class="pl-list" onclick="plListClick(event)"></div>`;
+            plRenderList();
+        }
+
+        function plRenderList() {
+            const list = document.getElementById('pl-list'); if (!list) return;
+            const rows = plCurrentRows();
+            const q = _plSearch.trim().toLowerCase();
+            const filtered = q ? rows.filter(function (r) { return r._q.indexOf(q) >= 0; }) : rows;
+            const cnt = document.getElementById('pl-count');
+            if (cnt) cnt.textContent = (q && filtered.length !== rows.length) ? (filtered.length + ' dari ' + rows.length + ' data') : (rows.length + ' data');
+            if (_plTab === 'sheet' && !_plRows.sheet) return;   // masih memuat — pesan loading sudah ditampilkan
+            if (!filtered.length) {
+                list.innerHTML = '<div class="pl-empty">' + (rows.length ? 'Tidak ada data yang cocok dengan pencarian.' : (_plTab === 'sheet' ? 'Belum ada data di sheet QRlabel.' : 'Belum ada data. Pilih file untuk di-import.')) + '</div>';
+                return;
+            }
+            const vis = filtered.slice(0, _plLimit);
+            list.innerHTML = vis.map(function (r) {
+                const meta = [r.lokasi ? '📍 ' + escapeHtml(r.lokasi) : '', r.exp ? 'Exp ' + escapeHtml(r.exp) : ''].filter(Boolean).join(' · ');
+                return '<button type="button" class="pl-item' + (r.id === _plSelId ? ' sel' : '') + '" data-id="' + escapeHtml(r.id) + '"><span class="pl-item-name">' + escapeHtml(r.nama) + '</span>' +
+                    (meta ? '<span class="pl-item-meta">' + meta + '</span>' : '') + '</button>';
+            }).join('') + (filtered.length > vis.length ? '<button type="button" class="pl-more" data-more="1">Tampilkan lebih banyak (' + (filtered.length - vis.length) + ' lagi)</button>' : '');
+        }
+
+        function plListClick(ev) {
+            const t = ev.target.closest ? ev.target.closest('[data-id],[data-more]') : null;
+            if (!t) return;
+            if (t.getAttribute('data-more')) { _plLimit += PL_PAGE; plRenderList(); return; }
+            plSelect(t.getAttribute('data-id'), t);
+        }
+        function plSelect(id, el) {
+            const row = plCurrentRows().find(function (r) { return r.id === id; });
+            if (!row) return;
+            _plSelId = id;
+            _plItem = { nama: row.nama, lokasi: row.lokasi, exp: row.exp };
+            document.querySelectorAll('#pl-list .pl-item.sel').forEach(function (n) { n.classList.remove('sel'); });
+            if (el) el.classList.add('sel');
+            plFillFields();
+            plRenderPreview();
+            if (window.innerWidth < 1024) { const pc = document.querySelector('.pl-c-preview'); if (pc && pc.scrollIntoView) pc.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        }
+        function plOnSearch(v) {
+            _plSearch = v || ''; _plLimit = PL_PAGE;
+            const x = document.getElementById('pl-search-x'); if (x) x.classList.toggle('pl-hide', !_plSearch);
+            plRenderList();
+        }
+        function plClearSearch() { const i = document.getElementById('pl-search'); if (i) i.value = ''; plOnSearch(''); }
+        function plSetTab(t) {
+            if (t === _plTab) return;
+            _plTab = t; _plLimit = PL_PAGE; _plSearch = '';
+            plRenderDataCard();
+            if (t === 'sheet' && !_plRows.sheet) plLoadSheet();
+            plRenderPreview();
+        }
+
+        // ---- handler kontrol ----
+        function plOnField() {
+            _plItem = {
+                nama: document.getElementById('pl-f-nama').value,
+                lokasi: document.getElementById('pl-f-lokasi').value,
+                exp: document.getElementById('pl-f-exp').value
+            };
+            plRenderPreview();
+        }
+        function plOnPrinterChange() {
+            const p = plFindPrinter(document.getElementById('pl-printer').value);
+            if (!p) return;
+            _plS.printerId = p.id; _plS.dpi = p.dpi;
+            const paper = plFindPaper(p.paper);
+            if (paper) { _plS.paperId = paper.id; _plS.orientation = plNaturalOrientation(paper.w, paper.h); document.getElementById('pl-paper').value = paper.id; }
+            document.getElementById('pl-dpi').value = String(_plS.dpi);
+            plSaveSettings(); plRefreshAll();
+        }
+        function plSetConn(v) { _plS.conn = v; plSaveSettings(); plRefreshAll(); if (v === 'usb') plUsbAutoConnect(); }
+        function plOnPaperChange() {
+            const p = plFindPaper(document.getElementById('pl-paper').value);
+            if (!p) return;
+            _plS.paperId = p.id;
+            if (p.id === 'custom') _plS.orientation = plNaturalOrientation(_plS.cw, _plS.ch);
+            else _plS.orientation = plNaturalOrientation(p.w, p.h);
+            plSaveSettings(); plRefreshAll();
+        }
+        function plOnCustomSize() {
+            const w = parseFloat(document.getElementById('pl-cw').value), h = parseFloat(document.getElementById('pl-ch').value);
+            if (!(w >= 10) || !(h >= 10)) return;
+            _plS.cw = plClamp(w, 10, 300); _plS.ch = plClamp(h, 10, 400);
+            _plS.orientation = plNaturalOrientation(_plS.cw, _plS.ch);
+            plSaveSettings(); plRefreshAll();
+        }
+        function plSetOrient(v) { _plS.orientation = v; plSaveSettings(); plRefreshAll(); }
+        function plQtyStep(d) { _plS.qty = Math.round(plClamp((parseInt(document.getElementById('pl-qty').value, 10) || 1) + d, 1, 500)); document.getElementById('pl-qty').value = _plS.qty; plSaveSettings(); }
+        function plOnQtyInput() { const v = parseInt(document.getElementById('pl-qty').value, 10); if (v >= 1) { _plS.qty = Math.min(500, v); plSaveSettings(); } }
+        function plOnQtyBlur() { const i = document.getElementById('pl-qty'); _plS.qty = Math.round(plClamp(parseInt(i.value, 10) || 1, 1, 500)); i.value = _plS.qty; plSaveSettings(); }
+        function plOnAdv() {
+            _plS.lang = document.getElementById('pl-lang').value;
+            _plS.dpi = Number(document.getElementById('pl-dpi').value) === 300 ? 300 : 203;
+            const mg = parseFloat(document.getElementById('pl-margin').value); if (isFinite(mg)) _plS.margin = plClamp(mg, 0, 10);
+            const gp = parseFloat(document.getElementById('pl-gap').value); if (isFinite(gp)) _plS.gap = plClamp(gp, 0, 10);
+            _plS.expPrefix = document.getElementById('pl-expprefix').checked;
+            _plS.rot180 = document.getElementById('pl-rot180').checked;
+            _plS.invert = document.getElementById('pl-invert').checked;
+            plSaveSettings(); plRefreshAll();
+        }
+        async function plConnectClick() {
+            if (_plS.conn === 'usb') {
+                if (_plUsb.state === 'connected') return plUsbDisconnect();
+                return plUsbRequest();
+            }
+            if (_plS.conn === 'bluetooth') {
+                if (_plBle.state === 'connected') return plBleDisconnect();
+                return plBleConnect();
+            }
+        }
+
+        /** Dipanggil saat logout: buang data yang sudah dimuat (koneksi printer fisik dibiarkan). */
+        function plResetOnLogout() {
+            _plRows = { sheet: null, import: [] }; _plSelId = null; _plItem = null; _plSearch = ''; _plTab = 'sheet';
+        }
     </script>
 
     <!-- ═══ MODAL KAMERA QR — PERMANEN (tidak ikut innerHTML) ═══ -->
