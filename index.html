@@ -742,6 +742,16 @@
             #content-area .mk-page .mk-step input { background: transparent !important; color: #eaeaea !important; border: 0 !important; box-shadow: none !important; }
             #content-area .mk-page .mk-in::placeholder { color: #7d7d7d !important; }
         }
+
+        /* tata letak lembar */
+        .mk-subbox { margin: .1rem 0 .65rem; padding: .7rem .75rem .2rem; border: 1px solid #484848; border-radius: .4rem; background: #2b2b2b; }
+        .mk-subbox .mk-row:last-of-type { margin-bottom: .4rem; }
+        .mk-pager { display: flex; align-items: center; justify-content: center; gap: .7rem; padding: 0 .95rem .55rem; font-size: .75rem; font-weight: 600; color: #e0e0e0; }
+        .mk-pager button { min-width: 2rem; padding: .15rem .5rem; border: 1px solid #6a6a6a; border-radius: .25rem; background: #3d3d3d; color: #eee; font-size: 1rem; line-height: 1.2; cursor: pointer; }
+        .mk-pager button:disabled { opacity: .35; cursor: not-allowed; }
+        #mk-fillrow button { justify-self: start; }
+        .mk-zoomrow { padding: 0 .95rem .45rem; text-align: center; }
+        .mk-zoomrow .mk-link { color: #9fc8f7; }
     </style>
 
 
@@ -26479,9 +26489,15 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         //      untuk baris yang Status-nya (kolom E) masih kosong. Alamat terisi
         //      otomatis dan tetap bisa diedit.
         //   4. Preview = gambar yang SAMA PERSIS dengan yang dicetak. Ukuran font
-        //      Ship To & Alamat dihitung otomatis supaya pas di ukuran label.
-        //   5. Cetak: TSPL/ZPL/ESC-POS langsung via USB/Bluetooth, atau lewat
-        //      dialog cetak browser (mode Driver — untuk printer inkjet/laser).
+        //      Ship To & Alamat dihitung otomatis supaya pas di ukuran label, dan
+        //      setiap label memuat logo NOD di pojok kanan atas.
+        //   5. Tata letak "Lembar (grid)" (default): preview & cetak berupa SATU
+        //      LEMBAR berisi grid label (default 2 kolom × 5 baris = 10 slot), siap
+        //      cetak lewat dialog cetak browser (Driver) — cocok untuk stiker
+        //      Tom & Jerry pada printer inkjet/laser. Bisa mulai dari slot tertentu
+        //      (memakai ulang lembar stiker yang sudah terpakai sebagian).
+        //      Tata letak "Per label": 1 label per halaman/feed — TSPL/ZPL/ESC-POS
+        //      langsung via USB/Bluetooth (printer thermal roll), atau lewat Driver.
         // =====================================================================
         const MK_STORAGE_KEY = 'nodMarkingSettingsV1';
 
@@ -26527,9 +26543,20 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         ];
 
         const MK_SAMPLE = { shipTo: 'OUTLET CONTOH SUKSES JAYA', alamat: 'Jl. Contoh Raya No. 12, RT 03/RW 04, Kel. Contoh, Kec. Contoh, Jakarta Timur 13210. Telp 0812-3456-7890' };
+        // Ukuran lembar cetak (untuk tata letak "Lembar"), dalam mm.
+        const MK_SHEETS = [
+            { id: 'a4p', w: 210, h: 297, label: 'A4 — Potret (210 × 297 mm)' },
+            { id: 'a4l', w: 297, h: 210, label: 'A4 — Lanskap (297 × 210 mm)' },
+            { id: 'f4p', w: 215, h: 330, label: 'F4 / Folio — Potret (215 × 330 mm)' },
+            { id: 'a5p', w: 148, h: 210, label: 'A5 — Potret (148 × 210 mm)' },
+            { id: 'a5l', w: 210, h: 148, label: 'A5 — Lanskap (210 × 148 mm)' },
+            { id: 'custom', w: 0, h: 0, label: 'Kustom (isi sendiri)…' }
+        ];
         const MK_DEFAULTS = {
-            printerId: 'xp-365b', conn: 'usb', paperId: 'tj121', cw: 75, ch: 38, orientation: 'landscape',
-            copies: 1, dpi: 203, lang: 'auto', margin: 2, gap: 2, rot180: false, invert: false
+            printerId: 'sys-epson', conn: 'system', connRaw: 'usb', paperId: 'tj121', cw: 75, ch: 38, orientation: 'landscape',
+            copies: 10, dpi: 300, lang: 'auto', margin: 2, gap: 2, rot180: false, invert: false,
+            layout: 'sheet', sheetPaper: 'a4p', sheetW: 210, sheetH: 297, cols: 2, rows: 5,
+            gapX: 2, gapY: 2, shiftX: 0, shiftY: 0, startSlot: 1, guides: false, logo: true
         };
         const MK_COMBO_MAX = 60;
 
@@ -26545,6 +26572,9 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         let _mkDetected = [];                              // printer USB yang sudah diizinkan browser
         let _mkLastDev = '';
         let _mkUsbBound = false, _mkDocBound = false, _mkResizeTimer = null;
+        let _mkPage = 0;                                   // lembar yang sedang dipratinjau (0-based)
+        let _mkZoom = true;                                // preview diperbesar ke area grid label (false = lembar penuh)
+        let _mkLogo = null;                                // <img> logo NOD (dimuat sekali)
 
         // ---------------------------------------------------------------
         // Pengaturan
@@ -26560,6 +26590,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             let s = {};
             try { s = JSON.parse(localStorage.getItem(MK_STORAGE_KEY) || '{}') || {}; } catch (_) { s = {}; }
             const d = Object.assign({}, MK_DEFAULTS, s);
+            const legacy = !('layout' in s) && Object.keys(s).length > 0;   // pengaturan dari versi sebelum ada tata letak Lembar
             if (!mkFindPrinter(d.printerId)) d.printerId = MK_DEFAULTS.printerId;
             if (!mkFindPaper(d.paperId)) d.paperId = MK_DEFAULTS.paperId;
             if (['usb', 'bluetooth', 'system'].indexOf(d.conn) < 0) d.conn = 'usb';
@@ -26570,7 +26601,20 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             d.cw = plClamp(d.cw, 10, 300); d.ch = plClamp(d.ch, 10, 400);
             d.margin = plClamp(d.margin, 0, 10); d.gap = plClamp(d.gap, 0, 10);
             d.rot180 = !!d.rot180; d.invert = !!d.invert;
+            if (['sheet', 'label'].indexOf(d.layout) < 0) d.layout = 'sheet';
+            if (!MK_SHEETS.some(function (x) { return x.id === d.sheetPaper; })) d.sheetPaper = 'a4p';
+            d.sheetW = plClamp(d.sheetW, 50, 600); d.sheetH = plClamp(d.sheetH, 50, 900);
+            d.cols = Math.round(plClamp(d.cols, 1, 6)); d.rows = Math.round(plClamp(d.rows, 1, 20));
+            d.gapX = plClamp(d.gapX, 0, 30); d.gapY = plClamp(d.gapY, 0, 30);
+            d.shiftX = plClamp(d.shiftX, -40, 40); d.shiftY = plClamp(d.shiftY, -60, 60);
+            d.startSlot = Math.round(plClamp(d.startSlot, 1, d.cols * d.rows));
+            d.guides = !!d.guides; d.logo = d.logo !== false;
+            if (['usb', 'bluetooth'].indexOf(d.connRaw) < 0) d.connRaw = 'usb';
+            if (legacy) { d.layout = 'sheet'; d.copies = d.cols * d.rows; d.startSlot = 1; }   // tampilan baru: preview langsung 1 lembar penuh
+            const pp = mkFindPaper(d.paperId);
+            const paperAuto = pp.id !== 'custom' && !(pp.h > 0);
             if (mkFindPrinter(d.printerId).lang === 'system') d.conn = 'system';
+            else if (d.layout === 'sheet' && !paperAuto && d.conn !== 'system') { d.connRaw = d.conn; d.conn = 'system'; }   // lembar dicetak lewat Driver
             _mkS = d;
         }
         function mkSaveSettings() { try { localStorage.setItem(MK_STORAGE_KEY, JSON.stringify(_mkS)); } catch (_) { } }
@@ -26594,7 +26638,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         }
         function mkRenderOpts() {
             const d = mkLayoutDims();
-            return { dims: d, render: { lw: d.lw, lh: d.lh, dpi: _mkS.dpi, margin: _mkS.margin, binarize: _mkS.conn !== 'system' } };
+            return { dims: d, render: { lw: d.lw, lh: d.lh, dpi: _mkS.dpi, margin: _mkS.margin, binarize: _mkS.conn !== 'system', logo: _mkS.logo ? _mkLogo : null } };
         }
 
         // ---------------------------------------------------------------
@@ -26628,6 +26672,15 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const LH = 1.16;
             const gapCap = Math.max(1, Math.round(0.4 * mm)), gapBlk = Math.max(2, Math.round(1.1 * mm)), rule = Math.max(1, Math.round(0.25 * mm));
             const lhC = Math.round(capPx * 1.25);
+            // Logo NOD di pojok kanan atas. Baris teratas dibuat setinggi logo supaya nama Ship To mulai di bawahnya (tidak bertabrakan).
+            const logo = (o.logo && o.logo.naturalWidth) ? o.logo : null;
+            let logoH = 0, logoW = 0;
+            if (logo) {
+                logoH = Math.round(Math.min(5.0 * mm, isFinite(ah) ? ah * 0.2 : 5.0 * mm));
+                logoW = Math.round(logoH * logo.naturalWidth / logo.naturalHeight);
+                if (logoW > aw * 0.34) { logoW = Math.round(aw * 0.34); logoH = Math.round(logoW * logo.naturalHeight / logo.naturalWidth); }
+            }
+            const hTop = logo ? Math.max(shipTo ? lhC + gapCap : 0, logoH + gapCap) : (shipTo ? lhC + gapCap : 0);
 
             function ellipsize(line, w) {
                 let t = line;
@@ -26645,7 +26698,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     if (nl.length > 3) { if (!trunc) return null; nl = nl.slice(0, 3); nl[2] = ellipsize(nl[2], aw); cut.name = true; }
                 }
                 if (alamat) { mc.font = fontOf(wAddr, addrPx); al = plWrapText(mc, alamat, aw); }
-                const hHead = shipTo ? (lhC + gapCap + nl.length * lhN) : 0;
+                const hHead = hTop + nl.length * lhN;
                 const hMid = (shipTo && alamat) ? (gapBlk + rule + gapBlk) : 0;
                 const hAddrFixed = alamat ? (lhC + gapCap) : 0;
                 const total = hHead + hMid + hAddrFixed + al.length * lhA;
@@ -26678,11 +26731,13 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+            if (logo) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(logo, margin + aw - logoW, margin, logoW, logoH); }
 
             if (L) {
-                let y = margin + (auto ? 0 : Math.max(0, Math.floor((ah - L.total) / 2)));   // blok teks di tengah secara vertikal
+                let y = margin;   // rata atas (logo terpasang di pojok kanan atas)
+                if (shipTo) { ctx.font = fontOf('bold', capPx); ctx.fillText('SHIP TO', margin, y + lhC / 2); }
+                y += hTop;
                 if (shipTo) {
-                    ctx.font = fontOf('bold', capPx); ctx.fillText('SHIP TO', margin, y + lhC / 2); y += lhC + gapCap;
                     ctx.font = fontOf(wName, L.namePx);
                     L.nl.forEach(function (ln) { ctx.fillText(ln, margin, y + L.lhN / 2); y += L.lhN; });
                 }
@@ -26712,6 +26767,93 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             if (dims.needRotate) c = plRotate(c, 90);
             if (_mkS.rot180) c = plRotate(c, 180);
             return c;
+        }
+
+        /** Muat logo NOD: pakai gambar logo yang sudah tertanam di sidebar aplikasi (data URI, aman untuk canvas). */
+        function mkLoadLogo() {
+            return new Promise(function (resolve) {
+                if (_mkLogo) { resolve(_mkLogo); return; }
+                const el = document.querySelector('img[alt="Logo"][src^="data:image"]');
+                const done = function (img) { if (img && img.naturalWidth) _mkLogo = img; resolve(_mkLogo); };
+                const load = function (u) { const im = new Image(); im.onload = function () { done(im); }; im.onerror = function () { done(null); }; im.src = u; };
+                if (el) { load(el.getAttribute('src')); return; }
+                if (typeof loadImageAsDataURL === 'function' && typeof NOD_LOGO_URL !== 'undefined') {
+                    loadImageAsDataURL(NOD_LOGO_URL).then(function (d) { if (d) load(d); else done(null); }).catch(function () { done(null); });
+                    return;
+                }
+                done(null);
+            });
+        }
+
+        // ---------------------------------------------------------------
+        // Tata letak LEMBAR (grid): banyak label dalam satu halaman cetak
+        // ---------------------------------------------------------------
+        function mkPaperIsAuto() { return mkPaperInfo().auto; }
+        function mkIsSheet() { return _mkS.layout === 'sheet' && !mkPaperIsAuto(); }
+        function mkSheetPage() {
+            const sh = MK_SHEETS.find(function (x) { return x.id === _mkS.sheetPaper; }) || MK_SHEETS[0];
+            return sh.id === 'custom' ? { w: _mkS.sheetW, h: _mkS.sheetH } : { w: sh.w, h: sh.h };
+        }
+        function mkSheetShort() {
+            const sh = MK_SHEETS.find(function (x) { return x.id === _mkS.sheetPaper; }) || MK_SHEETS[0];
+            return sh.id === 'custom' ? (_mkS.sheetW + ' × ' + _mkS.sheetH + ' mm') : sh.label.split(' (')[0];
+        }
+        /** Semua ukuran/posisi grid (mm). Grid diletakkan di tengah lembar, lalu digeser sebesar shiftX/shiftY. */
+        function mkSheetCfg() {
+            const d = mkLayoutDims(), pg = mkSheetPage();
+            const cols = _mkS.cols, rows = _mkS.rows, slots = cols * rows;
+            const gw = cols * d.lw + (cols - 1) * _mkS.gapX, gh = rows * d.lh + (rows - 1) * _mkS.gapY;
+            const x0 = (pg.w - gw) / 2 + _mkS.shiftX, y0 = (pg.h - gh) / 2 + _mkS.shiftY;
+            const start = Math.min(Math.max(1, _mkS.startSlot), slots);
+            const qty = Math.round(plClamp(_mkS.copies, 1, 500));
+            const pages = Math.max(1, Math.ceil((start - 1 + qty) / slots));
+            const e = 0.01;
+            const fits = x0 >= -e && y0 >= -e && x0 + gw <= pg.w + e && y0 + gh <= pg.h + e;
+            return { lw: d.lw, lh: d.lh, pw: pg.w, ph: pg.h, cols: cols, rows: rows, slots: slots, gw: gw, gh: gh, x0: x0, y0: y0, start: start, qty: qty, pages: pages, fits: fits };
+        }
+        /** Nomor slot (0-based, kiri→kanan lalu atas→bawah) yang terisi label di lembar ke-p. */
+        function mkFilledSlots(cfg, p) {
+            const out = [];
+            for (let i = 0; i < cfg.qty; i++) { const g = cfg.start - 1 + i; if (Math.floor(g / cfg.slots) === p) out.push(g % cfg.slots); }
+            return out;
+        }
+        /**
+         * Gambar 1 lembar penuh. o = { cfg, dpi, page | slots, preview, guides }.
+         * preview=true: slot kosong digambar putus-putus + nomor slot (TIDAK ikut tercetak).
+         * guides=true: garis tipis di sekeliling tiap label (untuk uji posisi di kertas biasa).
+         */
+        function mkRenderSheet(item, o) {
+            const cfg = o.cfg || mkSheetCfg();
+            const mm = o.dpi / 25.4;
+            const W = Math.max(50, Math.round(cfg.pw * mm)), H = Math.max(50, Math.round(cfg.ph * mm));
+            const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+            const lab = mkRenderLabel(item, { lw: cfg.lw, lh: cfg.lh, dpi: o.dpi, margin: _mkS.margin, binarize: false, logo: _mkS.logo ? _mkLogo : null, placeholder: false });
+            const filled = new Set(o.slots || mkFilledSlots(cfg, o.page || 0));
+            const line = Math.max(1, Math.round(0.2 * mm));
+            for (let s = 0; s < cfg.slots; s++) {
+                const r = Math.floor(s / cfg.cols), c = s % cfg.cols;
+                const x = Math.round((cfg.x0 + c * (cfg.lw + _mkS.gapX)) * mm), y = Math.round((cfg.y0 + r * (cfg.lh + _mkS.gapY)) * mm);
+                if (filled.has(s)) {
+                    if (!lab.info.empty) ctx.drawImage(lab.canvas, x, y);
+                    if (o.guides) { ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = line; ctx.setLineDash([]); ctx.strokeRect(x + line / 2, y + line / 2, lab.W - line, lab.H - line); }
+                    else if (o.preview) { ctx.strokeStyle = '#dcdcdc'; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.strokeRect(x + 0.5, y + 0.5, lab.W - 1, lab.H - 1); }
+                } else if (o.preview) {
+                    ctx.strokeStyle = '#c2c2c2'; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.strokeRect(x + 0.5, y + 0.5, lab.W - 1, lab.H - 1); ctx.setLineDash([]);
+                    ctx.fillStyle = '#b5b5b5'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.font = 'bold ' + Math.max(10, Math.round(Math.min(lab.W, lab.H) * 0.16)) + 'px Arial, sans-serif';
+                    ctx.fillText(String(s + 1), x + lab.W / 2, y + lab.H / 2);
+                }
+            }
+            if (o.preview && lab.info.empty) {
+                ctx.fillStyle = '#8b8b8b'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = 'bold ' + Math.max(12, Math.round(W * 0.03)) + 'px Arial, sans-serif';
+                const bx = (cfg.x0 + cfg.gw / 2) * mm, by = (cfg.y0 + cfg.gh / 2) * mm;
+                ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(bx - W * 0.3, by - W * 0.04, W * 0.6, W * 0.08);
+                ctx.fillStyle = '#6b7280'; ctx.fillText('Pilih Ship To untuk preview', bx, by);
+            }
+            return { canvas: canvas, W: W, H: H, cfg: cfg, info: lab.info, filled: filled.size };
         }
 
         // ---------------------------------------------------------------
@@ -26872,42 +27014,56 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // ---------------------------------------------------------------
         // Cetak
         // ---------------------------------------------------------------
-        /** Mode "Driver": cetak lewat dialog cetak browser (printer inkjet/laser atau thermal ber-driver). */
-        function mkPrintViaSystem(canvas, lw, lh, qty) {
+        /**
+         * Mode "Driver": cetak lewat dialog cetak browser (printer inkjet/laser atau thermal ber-driver).
+         * list = daftar canvas, satu per halaman (boleh berisi canvas yang sama berulang); wMm × hMm = ukuran halaman.
+         */
+        function mkPrintViaSystem(list, wMm, hMm) {
             return new Promise(function (resolve, reject) {
-                const hMm = lh > 0 ? lh : Math.round(canvas.height / (_mkS.dpi / 25.4) * 100) / 100;
-                canvas.toBlob(function (blob) {
-                    if (!blob) { reject(new Error('Gagal menyiapkan gambar label.')); return; }
-                    const url = URL.createObjectURL(blob);
-                    let imgs = '';
-                    for (let i = 0; i < qty; i++) imgs += '<div class="p"><img src="' + url + '" alt=""></div>';
+                const uniq = Array.from(new Set(list));
+                const urls = new Map();
+                let pending = uniq.length, failed = false;
+                const revokeAll = function () { urls.forEach(function (u) { try { URL.revokeObjectURL(u); } catch (_) { } }); };
+                const fail = function (msg) { if (failed) return; failed = true; revokeAll(); reject(new Error(msg)); };
+                const build = function () {
+                    const imgs = list.map(function (cv) { return '<div class="p"><img src="' + urls.get(cv) + '" alt=""></div>'; }).join('');
                     const ifr = document.createElement('iframe');
                     ifr.setAttribute('aria-hidden', 'true');
                     ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
                     document.body.appendChild(ifr);
                     const doc = ifr.contentDocument || ifr.contentWindow.document;
                     doc.open();
+                    // tinggi wadah dikurangi 0,3 mm agar pembulatan tidak memunculkan halaman kosong tambahan
                     doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Marking Pengiriman</title><style>' +
-                        '@page{size:' + lw + 'mm ' + hMm + 'mm;margin:0}html,body{margin:0;padding:0;background:#fff}' +
-                        '.p{width:' + lw + 'mm;height:' + hMm + 'mm;overflow:hidden;page-break-after:always;break-after:page}' +
+                        '@page{size:' + wMm + 'mm ' + hMm + 'mm;margin:0}html,body{margin:0;padding:0;background:#fff}' +
+                        '.p{width:' + wMm + 'mm;height:' + (hMm - 0.3) + 'mm;overflow:hidden;page-break-after:always;break-after:page}' +
                         '.p:last-child{page-break-after:auto;break-after:auto}' +
-                        'img{display:block;width:' + lw + 'mm;height:' + hMm + 'mm}' +
+                        'img{display:block;width:' + wMm + 'mm;height:' + hMm + 'mm}' +
                         '</style></head><body>' + imgs + '</body></html>');
                     doc.close();
-                    const cleanup = function () { setTimeout(function () { try { ifr.remove(); } catch (_) { } try { URL.revokeObjectURL(url); } catch (_) { } }, 1000); };
+                    const cleanup = function () { setTimeout(function () { try { ifr.remove(); } catch (_) { } revokeAll(); }, 1000); };
                     const go = function () {
                         try {
                             const w = ifr.contentWindow;
                             w.addEventListener('afterprint', cleanup);
                             w.focus(); w.print();
-                            setTimeout(cleanup, 120000);
+                            setTimeout(cleanup, 180000);
                             resolve();
                         } catch (e) { cleanup(); reject(e); }
                     };
-                    const im = doc.querySelector('img');
-                    if (im && !im.complete) { im.onload = go; im.onerror = function () { cleanup(); reject(new Error('Gagal menyiapkan gambar label.')); }; }
-                    else setTimeout(go, 50);
-                }, 'image/png');
+                    const all = Array.prototype.slice.call(doc.images || []);
+                    let left = all.filter(function (im) { return !im.complete; }).length;
+                    if (!left) { setTimeout(go, 50); return; }
+                    all.forEach(function (im) { if (!im.complete) { im.onload = im.onerror = function () { if (--left === 0) go(); }; } });
+                };
+                uniq.forEach(function (cv) {
+                    cv.toBlob(function (blob) {
+                        if (failed) return;
+                        if (!blob) { fail('Gagal menyiapkan gambar untuk dicetak.'); return; }
+                        urls.set(cv, URL.createObjectURL(blob));
+                        if (--pending === 0) build();
+                    }, 'image/png');
+                });
             });
         }
 
@@ -26918,6 +27074,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 showAlert('warning', 'Belum ada data', 'Pilih Ship To dari daftar (atau ketik manual) dulu. Kotak Ship To wajib terisi.');
                 return;
             }
+            const sheet = mkIsSheet();
             const qty = isTest ? 1 : Math.round(plClamp(_mkS.copies, 1, 500));
             const btn = document.getElementById('mk-print-btn');
             const setBtn = function (t) { if (btn) btn.textContent = t; };
@@ -26929,13 +27086,35 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     if (!(await mkEnsureConnected())) return;   // user batal / gagal (pesan sudah tampil)
                 }
                 setBtn('Menyiapkan label…');
+                if (_mkS.logo) await mkLoadLogo();
                 await plSleep(20);
+                if (sheet) {
+                    // ---- LEMBAR: 1 halaman = 1 lembar berisi grid label ----
+                    const cfg0 = mkSheetCfg();
+                    if (!cfg0.fits) throw new Error('Grid label (' + Math.round(cfg0.gw) + ' × ' + Math.round(cfg0.gh) + ' mm) tidak muat di lembar ' + cfg0.pw + ' × ' + cfg0.ph + ' mm. Ubah ukuran lembar, jumlah kolom/baris, jarak, atau orientasi label.');
+                    const cfg = isTest ? Object.assign({}, cfg0, { start: 1, qty: cfg0.slots, pages: 1 }) : cfg0;
+                    const cache = {}, pages = [];
+                    for (let pg = 0; pg < cfg.pages; pg++) {
+                        const slots = mkFilledSlots(cfg, pg), key = slots.join(',');
+                        if (!cache[key]) cache[key] = mkRenderSheet(item, { cfg: cfg, dpi: 300, slots: slots, guides: _mkS.guides || isTest });
+                        pages.push(cache[key].canvas);
+                        if (pg % 4 === 3) await plSleep(0);
+                    }
+                    const w0 = cache[Object.keys(cache)[0]];
+                    if (w0.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(w0.info.warnings[0]));
+                    setBtn('Membuka dialog cetak…');
+                    await mkPrintViaSystem(pages, cfg.pw, cfg.ph);
+                    if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak marking pengiriman (lembar): ' + mkClean(item.shipTo) + ' ×' + cfg.qty);
+                    return;
+                }
                 const ro = mkRenderOpts();
                 const lay = mkRenderLabel(item, ro.render);
                 if (lay.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(lay.info.warnings[0]));
                 if (_mkS.conn === 'system') {
                     setBtn('Membuka dialog cetak…');
-                    await mkPrintViaSystem(lay.canvas, ro.dims.lw, ro.dims.lh, qty);
+                    const hMm = ro.dims.lh > 0 ? ro.dims.lh : Math.round(lay.canvas.height / (_mkS.dpi / 25.4) * 100) / 100;
+                    const list = []; for (let i = 0; i < qty; i++) list.push(lay.canvas);
+                    await mkPrintViaSystem(list, ro.dims.lw, hMm);
                 } else {
                     const lang = mkLang();
                     if (lang === 'system') throw new Error('Tipe printer ini hanya bisa dicetak lewat mode Driver.');
@@ -27100,38 +27279,82 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // ---------------------------------------------------------------
         function mkRenderPreview() {
             const canvas = document.getElementById('mk-canvas'); if (!canvas || !_mkS) return;
-            const ro = mkRenderOpts();
-            const o = Object.assign({}, ro.render, { placeholder: true });
-            const lay = mkRenderLabel(_mkItem, o);
-            canvas.width = lay.W; canvas.height = lay.H;
-            canvas.getContext('2d').drawImage(lay.canvas, 0, 0);
             const stage = document.getElementById('mk-stage');
-            const availW = Math.max(120, (stage ? stage.clientWidth : 360) - 32 - 40);
-            const maxH = window.innerWidth < 640 ? 300 : 400;
-            const scale = Math.min(availW / lay.W, maxH / lay.H);
-            canvas.style.width = Math.round(lay.W * scale) + 'px';
-            canvas.style.height = Math.round(lay.H * scale) + 'px';
-            canvas.style.imageRendering = scale > 1 ? 'pixelated' : 'auto';
-
-            const dims = ro.dims;
-            const mmPx = _mkS.dpi / 25.4;
-            const hMm = dims.auto ? Math.round(lay.H / mmPx * 10) / 10 : dims.lh;
+            const availW = Math.max(160, (stage ? stage.clientWidth : 360) - 32 - 40);
+            const maxH = Math.max(300, Math.min(720, Math.round(window.innerHeight * 0.72)));
             const setT = function (id, t) { const e = document.getElementById(id); if (e) e.textContent = t; };
-            setT('mk-chip-size', dims.lw + ' × ' + hMm + ' mm');
-            setT('mk-chip-orient', dims.auto ? 'Kontinu' : (dims.lw > dims.lh ? 'Lanskap' : (dims.lw < dims.lh ? 'Potret' : 'Persegi')));
-            setT('mk-dim-w', dims.lw + ' mm');
-            setT('mk-dim-h', hMm + ' mm');
-            setT('mk-meta', lay.W + ' × ' + lay.H + ' dot · ' + _mkS.dpi + ' dpi' + (lay.info.empty ? '' : ' · font otomatis: Ship To ' + Math.round(lay.info.namePt * 10) / 10 + ' pt, Alamat ' + Math.round(lay.info.addrPt * 10) / 10 + ' pt'));
-
-            // saran otomatis
-            const tips = lay.info.warnings.slice();
+            const r1 = function (v) { return Math.round(v * 10) / 10; };
             const pr = mkPrinter();
-            if (_mkS.conn === 'system') {
-                tips.push('Di dialog cetak browser: pilih printer, set Scale/Skala = 100% (Actual size) dan Margins = None supaya ukuran label persis ' + dims.lw + ' × ' + hMm + ' mm.');
-                if (pr.lang === 'system') tips.push('Printer inkjet/laser tidak bisa mencetak sampai ke tepi kertas — kalau teks di pinggir terpotong, naikkan Margin di Pengaturan lanjutan (mis. 3–4 mm).');
+            const tips = [];
+            const pager = document.getElementById('mk-pager');
+
+            if (mkIsSheet()) {
+                // ---- LEMBAR: tampilkan satu halaman penuh berisi grid label ----
+                const cfg = mkSheetCfg();
+                if (_mkPage > cfg.pages - 1) _mkPage = cfg.pages - 1;
+                if (_mkPage < 0) _mkPage = 0;
+                // area yang ditampilkan: lembar penuh, atau (zoom) area grid + sedikit pinggiran
+                const pad = 6;
+                const rx = _mkZoom ? Math.max(0, cfg.x0 - pad) : 0, ry = _mkZoom ? Math.max(0, cfg.y0 - pad) : 0;
+                const rw = _mkZoom ? Math.max(20, Math.min(cfg.pw, cfg.x0 + cfg.gw + pad) - rx) : cfg.pw;
+                const rh = _mkZoom ? Math.max(20, Math.min(cfg.ph, cfg.y0 + cfg.gh + pad) - ry) : cfg.ph;
+                const dpr = Math.min(2, window.devicePixelRatio || 1);
+                const dpi = Math.max(110, Math.min(220, Math.round(availW * dpr / (rw / 25.4))));
+                const sh = mkRenderSheet(_mkItem, { cfg: cfg, dpi: dpi, page: _mkPage, preview: true });
+                const mmS = dpi / 25.4;
+                canvas.width = Math.max(50, Math.round(rw * mmS)); canvas.height = Math.max(50, Math.round(rh * mmS));
+                canvas.getContext('2d').drawImage(sh.canvas, Math.round(rx * mmS), Math.round(ry * mmS), canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+                const scale = Math.min(availW / canvas.width, maxH / canvas.height);
+                canvas.style.width = Math.round(canvas.width * scale) + 'px';
+                canvas.style.height = Math.round(canvas.height * scale) + 'px';
+                canvas.style.imageRendering = 'auto';
+                setT('mk-chip-size', cfg.cols + ' × ' + cfg.rows + ' · ' + r1(cfg.lw) + ' × ' + r1(cfg.lh) + ' mm');
+                setT('mk-chip-orient', mkSheetShort());
+                setT('mk-dim-w', _mkZoom ? 'grid ' + r1(cfg.gw) + ' mm' : r1(cfg.pw) + ' mm');
+                setT('mk-dim-h', _mkZoom ? 'grid ' + r1(cfg.gh) + ' mm' : r1(cfg.ph) + ' mm');
+                const zr = document.getElementById('mk-zoomrow'); if (zr) zr.classList.remove('mk-hide');
+                setT('mk-zoom', _mkZoom ? 'Tampilkan lembar penuh (' + mkSheetShort() + ')' : 'Perbesar area label');
+                setT('mk-meta', 'Lembar ' + (_mkPage + 1) + ' dari ' + cfg.pages + ' · ' + sh.filled + ' label di lembar ini · grid ' + r1(cfg.gw) + ' × ' + r1(cfg.gh) + ' mm' + (sh.info.empty ? '' : ' · font otomatis: Ship To ' + r1(sh.info.namePt) + ' pt, Alamat ' + r1(sh.info.addrPt) + ' pt'));
+                if (pager) {
+                    pager.classList.toggle('mk-hide', cfg.pages <= 1);
+                    setT('mk-pager-t', 'Lembar ' + (_mkPage + 1) + ' / ' + cfg.pages);
+                    const pb = pager.querySelectorAll('button'); if (pb[0]) pb[0].disabled = _mkPage <= 0; if (pb[1]) pb[1].disabled = _mkPage >= cfg.pages - 1;
+                }
+                sh.info.warnings.forEach(function (t) { tips.push(t); });
+                if (!cfg.fits) tips.unshift('Grid label (' + r1(cfg.gw) + ' × ' + r1(cfg.gh) + ' mm) tidak muat di lembar ' + r1(cfg.pw) + ' × ' + r1(cfg.ph) + ' mm — tidak bisa dicetak. Ubah ukuran lembar, jumlah kolom/baris, jarak antar label, atau orientasi label.');
+                if (cfg.start > 1) tips.push('Mulai dari slot ' + cfg.start + ': ' + (cfg.start - 1) + ' slot pertama dilewati (untuk lembar stiker yang sudah terpakai sebagian).');
+                tips.push('Di dialog cetak browser: pilih printer, ukuran kertas ' + mkSheetShort() + ', Scale/Skala = 100% (Actual size), Margins = None.');
+                tips.push('Sebelum mencetak di stiker asli, klik Cetak Tes di kertas biasa, lalu tempelkan ke lembar stiker (arahkan ke cahaya) untuk mengecek posisi. Kalau meleset, geser di Pengaturan lanjutan (Geser X/Y).');
             } else {
-                if (mkLang() === 'escpos' && pr.maxDots && Math.round(dims.physW * mmPx) > pr.maxDots) tips.push('Lebar kertas (' + Math.round(dims.physW * mmPx) + ' dot) melebihi lebar cetak printer (' + pr.maxDots + ' dot) — sisi kanan bisa terpotong.');
-                if (mkLang() === 'escpos' && !dims.auto) tips.push('Printer struk (ESC/POS) tidak membaca gap stiker — pastikan kertas pas, atau pakai kertas kontinu.');
+                // ---- PER LABEL ----
+                if (pager) pager.classList.add('mk-hide');
+                const zr0 = document.getElementById('mk-zoomrow'); if (zr0) zr0.classList.add('mk-hide');
+                const ro = mkRenderOpts();
+                const o = Object.assign({}, ro.render, { placeholder: true });
+                const lay = mkRenderLabel(_mkItem, o);
+                canvas.width = lay.W; canvas.height = lay.H;
+                canvas.getContext('2d').drawImage(lay.canvas, 0, 0);
+                const maxHL = window.innerWidth < 640 ? 300 : 400;
+                const scale = Math.min(availW / lay.W, maxHL / lay.H);
+                canvas.style.width = Math.round(lay.W * scale) + 'px';
+                canvas.style.height = Math.round(lay.H * scale) + 'px';
+                canvas.style.imageRendering = scale > 1 ? 'pixelated' : 'auto';
+                const dims = ro.dims;
+                const mmPx = _mkS.dpi / 25.4;
+                const hMm = dims.auto ? r1(lay.H / mmPx) : dims.lh;
+                setT('mk-chip-size', dims.lw + ' × ' + hMm + ' mm');
+                setT('mk-chip-orient', dims.auto ? 'Kontinu' : (dims.lw > dims.lh ? 'Lanskap' : (dims.lw < dims.lh ? 'Potret' : 'Persegi')));
+                setT('mk-dim-w', dims.lw + ' mm');
+                setT('mk-dim-h', hMm + ' mm');
+                setT('mk-meta', lay.W + ' × ' + lay.H + ' dot · ' + _mkS.dpi + ' dpi' + (lay.info.empty ? '' : ' · font otomatis: Ship To ' + r1(lay.info.namePt) + ' pt, Alamat ' + r1(lay.info.addrPt) + ' pt'));
+                lay.info.warnings.forEach(function (t) { tips.push(t); });
+                if (_mkS.conn === 'system') {
+                    tips.push('Di dialog cetak browser: pilih printer, set Scale/Skala = 100% (Actual size) dan Margins = None supaya ukuran label persis ' + dims.lw + ' × ' + hMm + ' mm.');
+                    if (pr.lang === 'system') tips.push('Printer inkjet/laser tidak bisa mencetak sampai ke tepi kertas — kalau teks di pinggir terpotong, naikkan Margin di Pengaturan lanjutan (mis. 3–4 mm).');
+                } else {
+                    if (mkLang() === 'escpos' && pr.maxDots && Math.round(dims.physW * mmPx) > pr.maxDots) tips.push('Lebar kertas (' + Math.round(dims.physW * mmPx) + ' dot) melebihi lebar cetak printer (' + pr.maxDots + ' dot) — sisi kanan bisa terpotong.');
+                    if (mkLang() === 'escpos' && !dims.auto) tips.push('Printer struk (ESC/POS) tidak membaca gap stiker — pastikan kertas pas, atau pakai kertas kontinu.');
+                }
             }
             const tb = document.getElementById('mk-tips');
             if (tb) {
@@ -27148,6 +27371,10 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 const items = MK_PAPERS.filter(function (p) { return p.g === g.g; });
                 return '<optgroup label="' + escapeHtml(g.label) + '">' + items.map(function (p) { return '<option value="' + p.id + '">' + escapeHtml(p.label) + '</option>'; }).join('') + '</optgroup>';
             }).join('');
+        }
+
+        function mkSheetOptions() {
+            return MK_SHEETS.map(function (x) { return '<option value="' + x.id + '">' + escapeHtml(x.label) + '</option>'; }).join('');
         }
 
         async function showMarkingPengiriman() {
@@ -27168,7 +27395,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     <div>
                         <div class="pl-crumb">Print Label</div>
                         <h1 class="pl-title">Marking Pengiriman</h1>
-                        <p class="pl-sub">Pilih printer &amp; kertas label, pilih Ship To — label langsung menyesuaikan ukuran kertas dan siap dicetak.</p>
+                        <p class="pl-sub">Pilih printer &amp; kertas label, pilih Ship To — preview langsung berupa satu lembar berisi grid label (default 2 × 5) yang siap dicetak.</p>
                     </div>
                 </div>
                 <div class="mk-win">
@@ -27209,27 +27436,65 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                                         <button type="button" data-v="landscape" onclick="mkSetOrient('landscape')">${PL_ICON_LANDSCAPE}Lanskap</button>
                                     </div></div>
                                 <div id="mk-orient-note" class="mk-note"></div>
-                                <div class="mk-row"><label for="mk-qty">Jumlah cetak</label>
+                                <div class="mk-row"><span class="mk-lab">Tata letak</span>
+                                    <div class="mk-seg" id="mk-layout-seg">
+                                        <button type="button" data-v="sheet" onclick="mkSetLayout('sheet')">Lembar (grid)</button>
+                                        <button type="button" data-v="label" onclick="mkSetLayout('label')">Per label</button>
+                                    </div></div>
+                                <div id="mk-layout-note" class="mk-note"></div>
+                                <div id="mk-sheetbox" class="mk-subbox">
+                                    <div class="mk-row"><label for="mk-sheet">Ukuran lembar</label><select id="mk-sheet" class="mk-in" onchange="mkOnSheetPaper()">${mkSheetOptions()}</select></div>
+                                    <div id="mk-sheet-custom" class="mk-2col mk-hide">
+                                        <input id="mk-sw" type="number" min="50" max="600" step="1" class="mk-in" oninput="mkOnSheetCustom()" aria-label="Lebar lembar (mm)" placeholder="Lebar">
+                                        <span>×</span>
+                                        <input id="mk-sh" type="number" min="50" max="900" step="1" class="mk-in" oninput="mkOnSheetCustom()" aria-label="Tinggi lembar (mm)" placeholder="Tinggi">
+                                    </div>
+                                    <div class="mk-row"><span class="mk-lab">Kolom × Baris</span>
+                                        <div class="mk-2col" style="margin:0">
+                                            <input id="mk-cols" type="number" min="1" max="6" step="1" class="mk-in" oninput="mkOnGrid()" aria-label="Jumlah kolom">
+                                            <span>×</span>
+                                            <input id="mk-rows" type="number" min="1" max="20" step="1" class="mk-in" oninput="mkOnGrid()" aria-label="Jumlah baris">
+                                        </div></div>
+                                    <div class="mk-row"><label for="mk-start">Mulai dari slot</label><input id="mk-start" type="number" min="1" step="1" inputmode="numeric" class="mk-in" oninput="mkOnStart()"></div>
+                                    <div id="mk-slot-note" class="mk-note"></div>
+                                </div>
+                                <div class="mk-row"><label for="mk-qty">Jumlah label</label>
                                     <div class="mk-step">
                                         <button type="button" onclick="mkQtyStep(-1)" aria-label="Kurangi">${PL_IC.minus}</button>
                                         <input id="mk-qty" type="number" min="1" max="500" step="1" inputmode="numeric" oninput="mkOnQtyInput()" onblur="mkOnQtyBlur()">
                                         <button type="button" onclick="mkQtyStep(1)" aria-label="Tambah">${PL_IC.plus}</button>
                                     </div></div>
+                                <div id="mk-fillrow" class="mk-row"><span></span><button type="button" id="mk-fill" class="mk-btn mk-btn-ghost mk-btn-sm" onclick="mkFillSheet()">Penuhi lembar</button></div>
+                                <label class="mk-chk"><input id="mk-logo" type="checkbox" onchange="mkOnLogo()"><span>Logo NOD di pojok kanan atas<small>Tampil di setiap label.</small></span></label>
                                 <details class="mk-adv" id="mk-adv">
                                     <summary>Pengaturan lanjutan</summary>
                                     <div class="mk-adv-grid">
-                                        <div><label for="mk-lang">Bahasa printer</label>
-                                            <select id="mk-lang" class="mk-in" onchange="mkOnAdv()"><option value="auto">Otomatis (ikut tipe)</option><option value="tspl">TSPL</option><option value="zpl">ZPL</option><option value="escpos">ESC/POS</option></select></div>
-                                        <div><label for="mk-dpi">Resolusi</label>
-                                            <select id="mk-dpi" class="mk-in" onchange="mkOnAdv()"><option value="203">203 dpi</option><option value="300">300 dpi</option></select></div>
-                                        <div><label for="mk-margin">Margin (mm)</label>
+                                        <div><label for="mk-margin">Margin isi label (mm)</label>
                                             <input id="mk-margin" type="number" min="0" max="10" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
-                                        <div><label for="mk-gap">Gap label (mm)</label>
-                                            <input id="mk-gap" type="number" min="0" max="10" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
                                     </div>
-                                    <div class="mk-note">Gap: jarak antar stiker (TSPL). Isi 0 untuk kertas kontinu.</div>
-                                    <label class="mk-chk"><input id="mk-rot180" type="checkbox" onchange="mkOnAdv()"><span>Putar hasil cetak 180°<small>Jika label keluar terbalik (kertas terpasang berlawanan arah).</small></span></label>
-                                    <label class="mk-chk"><input id="mk-invert" type="checkbox" onchange="mkOnAdv()"><span>Balik polaritas bitmap<small>Aktifkan jika hasil cetak negatif (latar hitam) atau kosong.</small></span></label>
+                                    <div id="mk-adv-sheet">
+                                        <div class="mk-adv-grid">
+                                            <div><label for="mk-gapx">Jarak antar kolom (mm)</label><input id="mk-gapx" type="number" min="0" max="30" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                            <div><label for="mk-gapy">Jarak antar baris (mm)</label><input id="mk-gapy" type="number" min="0" max="30" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                            <div><label for="mk-shiftx">Geser kanan (mm)</label><input id="mk-shiftx" type="number" min="-40" max="40" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                            <div><label for="mk-shifty">Geser bawah (mm)</label><input id="mk-shifty" type="number" min="-60" max="60" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                        </div>
+                                        <div class="mk-note">Grid otomatis di tengah lembar. Isi Geser dengan angka negatif untuk menggeser ke kiri / ke atas.</div>
+                                        <label class="mk-chk"><input id="mk-guides" type="checkbox" onchange="mkOnAdv()"><span>Garis bantu di sekeliling label<small>Untuk uji posisi di kertas biasa. Cetak Tes selalu memakai garis bantu.</small></span></label>
+                                    </div>
+                                    <div id="mk-adv-raw">
+                                        <div class="mk-adv-grid">
+                                            <div><label for="mk-lang">Bahasa printer</label>
+                                                <select id="mk-lang" class="mk-in" onchange="mkOnAdv()"><option value="auto">Otomatis (ikut tipe)</option><option value="tspl">TSPL</option><option value="zpl">ZPL</option><option value="escpos">ESC/POS</option></select></div>
+                                            <div><label for="mk-dpi">Resolusi</label>
+                                                <select id="mk-dpi" class="mk-in" onchange="mkOnAdv()"><option value="203">203 dpi</option><option value="300">300 dpi</option></select></div>
+                                            <div><label for="mk-gap">Gap label (mm)</label>
+                                                <input id="mk-gap" type="number" min="0" max="10" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                        </div>
+                                        <div class="mk-note">Gap: jarak antar stiker (TSPL). Isi 0 untuk kertas kontinu.</div>
+                                        <label class="mk-chk"><input id="mk-rot180" type="checkbox" onchange="mkOnAdv()"><span>Putar hasil cetak 180°<small>Jika label keluar terbalik (kertas terpasang berlawanan arah).</small></span></label>
+                                        <label class="mk-chk"><input id="mk-invert" type="checkbox" onchange="mkOnAdv()"><span>Balik polaritas bitmap<small>Aktifkan jika hasil cetak negatif (latar hitam) atau kosong.</small></span></label>
+                                    </div>
                                 </details>
                             </section>
 
@@ -27253,7 +27518,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                                     <button type="button" id="mk-test-btn" class="mk-btn mk-btn-ghost mk-btn-lg" onclick="mkPrint(true)">Cetak Tes</button>
                                     <button type="button" id="mk-print-btn" class="mk-btn mk-btn-primary mk-btn-lg" onclick="mkPrint(false)">Cetak Label</button>
                                 </div>
-                                <div class="mk-note" style="margin:.6rem 0 0">Cetak Tes memakai data contoh — untuk mengecek arah, ukuran, dan ketajaman cetak sebelum mencetak sungguhan.</div>
+                                <div class="mk-note" style="margin:.6rem 0 0">Cetak Tes memakai data contoh (dan garis bantu di tiap label bila tata letak Lembar) — untuk mengecek arah, ukuran, posisi, dan ketajaman cetak sebelum mencetak sungguhan.</div>
                             </section>
                         </div>
 
@@ -27267,6 +27532,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                                         <div class="mk-paper"><canvas id="mk-canvas" width="10" height="10"></canvas></div>
                                     </div>
                                 </div>
+                                <div id="mk-zoomrow" class="mk-zoomrow mk-hide"><button type="button" id="mk-zoom" class="mk-link" onclick="mkToggleZoom()"></button></div>
+                                <div id="mk-pager" class="mk-pager mk-hide"><button type="button" onclick="mkPage(-1)" aria-label="Lembar sebelumnya">‹</button><span id="mk-pager-t"></span><button type="button" onclick="mkPage(1)" aria-label="Lembar berikutnya">›</button></div>
                                 <div class="mk-meta" id="mk-meta"></div>
                                 <div id="mk-tips" class="mk-tips mk-hide"></div>
                             </section>
@@ -27285,6 +27552,18 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             document.getElementById('mk-dpi').value = String(_mkS.dpi);
             document.getElementById('mk-margin').value = _mkS.margin;
             document.getElementById('mk-gap').value = _mkS.gap;
+            document.getElementById('mk-sheet').value = _mkS.sheetPaper;
+            document.getElementById('mk-sw').value = _mkS.sheetW;
+            document.getElementById('mk-sh').value = _mkS.sheetH;
+            document.getElementById('mk-cols').value = _mkS.cols;
+            document.getElementById('mk-rows').value = _mkS.rows;
+            document.getElementById('mk-start').value = _mkS.startSlot;
+            document.getElementById('mk-gapx').value = _mkS.gapX;
+            document.getElementById('mk-gapy').value = _mkS.gapY;
+            document.getElementById('mk-shiftx').value = _mkS.shiftX;
+            document.getElementById('mk-shifty').value = _mkS.shiftY;
+            document.getElementById('mk-guides').checked = _mkS.guides;
+            document.getElementById('mk-logo').checked = _mkS.logo;
             document.getElementById('mk-rot180').checked = _mkS.rot180;
             document.getElementById('mk-invert').checked = _mkS.invert;
             document.getElementById('mk-shipto').value = _mkItem.shipTo;
@@ -27292,6 +27571,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const x = document.getElementById('mk-shipto-x'); if (x) x.classList.toggle('mk-hide', !_mkItem.shipTo);
 
             mkRefreshAll();
+            mkLoadLogo().then(function (l) { if (l && document.getElementById('mk-canvas')) mkRenderPreview(); });   // logo dimuat sekali, lalu preview digambar ulang
             mkRenderDataNote(); mkRenderCombo();
             plBindUsbEvents(); mkBindUsbEvents();
             if (_mkS.conn === 'usb') plUsbAutoConnect().then(mkRefreshDetected); else mkRefreshDetected();
@@ -27307,18 +27587,20 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         function mkRefreshAll() {
             if (!_mkS) return;
             const p = mkPrinter(), isSys = p.lang === 'system';
+            const sheet = mkIsSheet();
+            if (sheet && _mkS.conn !== 'system') { _mkS.connRaw = _mkS.conn; _mkS.conn = 'system'; mkSaveSettings(); }   // lembar selalu lewat Driver
             const sel = document.getElementById('mk-printer'); if (sel && sel.value !== _mkS.printerId) sel.value = _mkS.printerId;
             const note = document.getElementById('mk-printer-note');
-            if (note) note.textContent = isSys ? 'Dicetak lewat driver printer yang terpasang di komputer · ' + _mkS.dpi + ' dpi' : 'Bahasa perintah: ' + PL_LANG_LABEL[mkLang()] + ' · ' + _mkS.dpi + ' dpi' + (p.maxDots ? ' · lebar cetak maks. ' + p.maxDots + ' dot' : '');
+            if (note) note.textContent = (isSys || sheet) ? 'Dicetak lewat driver printer yang terpasang di komputer · ' + _mkS.dpi + ' dpi' : 'Bahasa perintah: ' + PL_LANG_LABEL[mkLang()] + ' · ' + _mkS.dpi + ' dpi' + (p.maxDots ? ' · lebar cetak maks. ' + p.maxDots + ' dot' : '');
             document.querySelectorAll('#mk-conn-seg button').forEach(function (b) {
                 const v = b.getAttribute('data-v');
                 b.classList.toggle('on', v === _mkS.conn);
-                b.disabled = isSys && v !== 'system';
+                b.disabled = (isSys || sheet) && v !== 'system';
             });
             const hints = {
                 usb: 'Colokkan kabel USB — printer yang sudah pernah diizinkan tersambung otomatis. Butuh Chrome/Edge.',
                 bluetooth: 'Untuk printer yang punya Bluetooth (BLE). Klik Deteksi & Hubungkan Printer, lalu pilih printer dari daftar.',
-                system: 'Cetak lewat dialog cetak browser ke printer yang driver-nya sudah terpasang di komputer (inkjet, laser, atau thermal ber-driver).'
+                system: sheet ? 'Tata letak Lembar dicetak lewat dialog cetak browser ke printer yang driver-nya sudah terpasang di komputer. Untuk printer thermal USB/Bluetooth langsung, pilih tata letak Per label.' : 'Cetak lewat dialog cetak browser ke printer yang driver-nya sudah terpasang di komputer (inkjet, laser, atau thermal ber-driver).'
             };
             const hint = document.getElementById('mk-conn-hint'); if (hint) hint.textContent = hints[_mkS.conn];
             const paper = mkPaperInfo(), dims = mkLayoutDims();
@@ -27333,6 +27615,26 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             });
             const on = document.getElementById('mk-orient-note');
             if (on) on.textContent = dims.fixedShape ? (dims.auto ? 'Kertas kontinu: orientasi tidak berpengaruh.' : 'Kertas persegi: orientasi tidak berpengaruh.') : (dims.needRotate && _mkS.conn !== 'system' ? 'Desain diputar 90° otomatis agar pas dengan arah kertas di printer.' : '');
+            // tata letak, lembar, logo
+            document.querySelectorAll('#mk-layout-seg button').forEach(function (b) {
+                const v = b.getAttribute('data-v');
+                b.classList.toggle('on', v === (sheet ? 'sheet' : 'label'));
+                b.disabled = (v === 'sheet' && paper.auto);
+            });
+            const ln = document.getElementById('mk-layout-note');
+            if (ln) ln.textContent = paper.auto ? 'Kertas kontinu memakai tata letak Per label.' : (sheet ? 'Preview = satu lembar penuh siap cetak: ' + _mkS.cols + ' kolom × ' + _mkS.rows + ' baris (' + (_mkS.cols * _mkS.rows) + ' label per lembar).' : 'Satu label per halaman / per feed printer.');
+            const sb = document.getElementById('mk-sheetbox'); if (sb) sb.classList.toggle('mk-hide', !sheet);
+            const fr = document.getElementById('mk-fillrow'); if (fr) fr.classList.toggle('mk-hide', !sheet);
+            const asx = document.getElementById('mk-adv-sheet'); if (asx) asx.classList.toggle('mk-hide', !sheet);
+            const arw = document.getElementById('mk-adv-raw'); if (arw) arw.classList.toggle('mk-hide', sheet || isSys);
+            const sc = document.getElementById('mk-sheet-custom'); if (sc) sc.classList.toggle('mk-hide', _mkS.sheetPaper !== 'custom');
+            if (sheet) {
+                const cfg = mkSheetCfg();
+                const sn = document.getElementById('mk-slot-note');
+                if (sn) sn.textContent = 'Slot 1 = kiri atas, urut ke kanan lalu ke bawah (1–' + cfg.slots + '). Ubah bila lembar stiker sudah terpakai sebagian.';
+                const st = document.getElementById('mk-start'); if (st) st.max = cfg.slots;
+                const fb = document.getElementById('mk-fill'); if (fb) fb.textContent = 'Penuhi lembar (' + (cfg.slots - cfg.start + 1) + ' label)';
+            }
             mkRenderStatus();
             mkRenderPreview();
             mkSyncButtons();
@@ -27349,14 +27651,14 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             if (!p) return;
             const wasSys = mkPrinter().lang === 'system';
             _mkS.printerId = p.id; _mkS.dpi = p.dpi || _mkS.dpi;
-            if (p.lang === 'system') { _mkS.conn = 'system'; _mkS.margin = Math.max(_mkS.margin, 3); const m = document.getElementById('mk-margin'); if (m) m.value = _mkS.margin; }
-            else if (wasSys && _mkS.conn === 'system') _mkS.conn = 'usb';
+            if (p.lang === 'system') { _mkS.conn = 'system'; if (!mkIsSheet()) { _mkS.margin = Math.max(_mkS.margin, 3); const m = document.getElementById('mk-margin'); if (m) m.value = _mkS.margin; } }
+            else if (wasSys && _mkS.conn === 'system' && !mkIsSheet()) _mkS.conn = _mkS.connRaw || 'usb';
             const d = document.getElementById('mk-dpi'); if (d) d.value = String(_mkS.dpi);
             mkSaveSettings(); mkRefreshAll();
             if (_mkS.conn === 'usb') plUsbAutoConnect().then(mkRefreshDetected);
         }
         function mkSetConn(v) {
-            if (mkPrinter().lang === 'system') return;
+            if (mkPrinter().lang === 'system' || mkIsSheet()) return;
             _mkS.conn = v; mkSaveSettings(); mkRefreshAll();
             if (v === 'usb') plUsbAutoConnect().then(mkRefreshDetected);
         }
@@ -27375,14 +27677,61 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             mkSaveSettings(); mkRefreshAll();
         }
         function mkSetOrient(v) { _mkS.orientation = v; mkSaveSettings(); mkRefreshAll(); }
-        function mkQtyStep(d) { _mkS.copies = Math.round(plClamp((parseInt(document.getElementById('mk-qty').value, 10) || 1) + d, 1, 500)); document.getElementById('mk-qty').value = _mkS.copies; mkSaveSettings(); }
-        function mkOnQtyInput() { const v = parseInt(document.getElementById('mk-qty').value, 10); if (v >= 1) { _mkS.copies = Math.min(500, v); mkSaveSettings(); } }
-        function mkOnQtyBlur() { const i = document.getElementById('mk-qty'); _mkS.copies = Math.round(plClamp(parseInt(i.value, 10) || 1, 1, 500)); i.value = _mkS.copies; mkSaveSettings(); }
+        function mkQtyStep(d) { _mkS.copies = Math.round(plClamp((parseInt(document.getElementById('mk-qty').value, 10) || 1) + d, 1, 500)); document.getElementById('mk-qty').value = _mkS.copies; mkSaveSettings(); mkRefreshAll(); }
+        function mkOnQtyInput() { const v = parseInt(document.getElementById('mk-qty').value, 10); if (v >= 1) { _mkS.copies = Math.min(500, v); mkSaveSettings(); mkRefreshAll(); } }
+        function mkOnQtyBlur() { const i = document.getElementById('mk-qty'); _mkS.copies = Math.round(plClamp(parseInt(i.value, 10) || 1, 1, 500)); i.value = _mkS.copies; mkSaveSettings(); mkRefreshAll(); }
+
+        // ---- tata letak lembar ----
+        function mkSetLayout(v) {
+            if (v === 'sheet' && mkPaperIsAuto()) return;
+            _mkS.layout = v; _mkPage = 0;
+            if (v === 'sheet') { if (_mkS.conn !== 'system') { _mkS.connRaw = _mkS.conn; _mkS.conn = 'system'; } }
+            else if (mkPrinter().lang !== 'system' && _mkS.conn === 'system') _mkS.conn = _mkS.connRaw || 'usb';
+            mkSaveSettings(); mkRefreshAll();
+            if (_mkS.conn === 'usb') plUsbAutoConnect().then(mkRefreshDetected);
+        }
+        function mkOnSheetPaper() { _mkS.sheetPaper = document.getElementById('mk-sheet').value; _mkPage = 0; mkSaveSettings(); mkRefreshAll(); }
+        function mkOnSheetCustom() {
+            const w = parseFloat(document.getElementById('mk-sw').value), h = parseFloat(document.getElementById('mk-sh').value);
+            if (!(w >= 50) || !(h >= 50)) return;
+            _mkS.sheetW = plClamp(w, 50, 600); _mkS.sheetH = plClamp(h, 50, 900); mkSaveSettings(); mkRefreshAll();
+        }
+        function mkOnGrid() {
+            const c = parseInt(document.getElementById('mk-cols').value, 10), r = parseInt(document.getElementById('mk-rows').value, 10);
+            if (!(c >= 1) || !(r >= 1)) return;
+            _mkS.cols = Math.min(6, c); _mkS.rows = Math.min(20, r);
+            _mkS.startSlot = Math.min(_mkS.startSlot, _mkS.cols * _mkS.rows);
+            const st = document.getElementById('mk-start'); if (st) st.value = _mkS.startSlot;
+            _mkPage = 0; mkSaveSettings(); mkRefreshAll();
+        }
+        function mkOnStart() {
+            const v = parseInt(document.getElementById('mk-start').value, 10);
+            if (!(v >= 1)) return;
+            _mkS.startSlot = Math.min(v, _mkS.cols * _mkS.rows); _mkPage = 0; mkSaveSettings(); mkRefreshAll();
+        }
+        /** Isi jumlah label = semua slot yang tersisa di lembar pertama (dari slot awal sampai slot terakhir). */
+        function mkFillSheet() {
+            const cfg = mkSheetCfg();
+            _mkS.copies = cfg.slots - cfg.start + 1;
+            const q = document.getElementById('mk-qty'); if (q) q.value = _mkS.copies;
+            _mkPage = 0; mkSaveSettings(); mkRefreshAll();
+        }
+        function mkOnLogo() {
+            _mkS.logo = document.getElementById('mk-logo').checked; mkSaveSettings();
+            if (_mkS.logo) mkLoadLogo().then(function () { mkRefreshAll(); }); else mkRefreshAll();
+        }
+        function mkPage(d) { _mkPage += d; mkRenderPreview(); }
+        function mkToggleZoom() { _mkZoom = !_mkZoom; mkRenderPreview(); }
         function mkOnAdv() {
             _mkS.lang = document.getElementById('mk-lang').value;
             _mkS.dpi = Number(document.getElementById('mk-dpi').value) === 300 ? 300 : 203;
             const mg = parseFloat(document.getElementById('mk-margin').value); if (isFinite(mg)) _mkS.margin = plClamp(mg, 0, 10);
             const gp = parseFloat(document.getElementById('mk-gap').value); if (isFinite(gp)) _mkS.gap = plClamp(gp, 0, 10);
+            const gx = parseFloat(document.getElementById('mk-gapx').value); if (isFinite(gx)) _mkS.gapX = plClamp(gx, 0, 30);
+            const gy = parseFloat(document.getElementById('mk-gapy').value); if (isFinite(gy)) _mkS.gapY = plClamp(gy, 0, 30);
+            const sx = parseFloat(document.getElementById('mk-shiftx').value); if (isFinite(sx)) _mkS.shiftX = plClamp(sx, -40, 40);
+            const sy = parseFloat(document.getElementById('mk-shifty').value); if (isFinite(sy)) _mkS.shiftY = plClamp(sy, -60, 60);
+            _mkS.guides = document.getElementById('mk-guides').checked;
             _mkS.rot180 = document.getElementById('mk-rot180').checked;
             _mkS.invert = document.getElementById('mk-invert').checked;
             mkSaveSettings(); mkRefreshAll();
@@ -27390,7 +27739,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
         /** Dipanggil saat logout: buang data yang sudah dimuat (koneksi printer fisik dibiarkan). */
         function mkResetOnLogout() {
-            _mkData = null; _mkLoad = { state: 'idle', msg: '' }; _mkItem = { shipTo: '', alamat: '' }; _mkSelId = null; _mkQuery = ''; _mkIdx = -1;
+            _mkData = null; _mkLoad = { state: 'idle', msg: '' }; _mkItem = { shipTo: '', alamat: '' }; _mkSelId = null; _mkQuery = ''; _mkIdx = -1; _mkPage = 0;
         }
     </script>
 
