@@ -438,7 +438,8 @@
         .pl-card { background: #fff; border: 1px solid #eef0f4; border-radius: 1rem; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); padding: 1rem; min-width: 0; }
         .pl-card-h { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .75rem; font-size: .8125rem; font-weight: 700; color: #374151; }
         .pl-card-h > span:first-child { display: inline-flex; align-items: center; gap: .5rem; }
-        .pl-ic { display: inline-flex; width: 1.6rem; height: 1.6rem; border-radius: .5rem; background: #fef3c7; color: #b45309; align-items: center; justify-content: center; font-size: .9rem; }
+        .pl-ic { display: inline-flex; flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: .5rem; background: #fef3c7; color: #b45309; align-items: center; justify-content: center; }
+        .pl-ic svg { width: 1rem; height: 1rem; }
 
         .pl-lbl { display: block; font-size: .6875rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; margin: .875rem 0 .35rem; }
         .pl-lbl:first-of-type { margin-top: 0; }
@@ -464,6 +465,8 @@
         /* tombol */
         .pl-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .55rem 1rem; border-radius: .75rem; border: 1px solid transparent; font-size: .8125rem; font-weight: 700; line-height: 1.25; cursor: pointer; transition: background-color .15s, box-shadow .15s, opacity .15s; }
         .pl-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .pl-btn svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
+        .pl-btn.is-loading svg { animation: pl-rot .8s linear infinite; }
         .pl-btn-dark { background: #1f2937; color: #fff; } .pl-btn-dark:hover:not(:disabled) { background: #111827; }
         .pl-btn-primary { background: #f59e0b; color: #fff; box-shadow: 0 2px 6px rgba(245, 158, 11, .35); } .pl-btn-primary:hover:not(:disabled) { background: #d97706; }
         .pl-btn-ghost { background: #fff; color: #374151; border-color: #e5e7eb; } .pl-btn-ghost:hover:not(:disabled) { background: #f9fafb; }
@@ -483,6 +486,7 @@
         .pl-step { display: flex; align-items: stretch; border: 1px solid #e5e7eb; border-radius: .7rem; overflow: hidden; background: #fff; }
         .pl-step button { width: 2.6rem; border: 0; background: #f9fafb; color: #374151; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
         .pl-step button:hover { background: #f3f4f6; }
+        .pl-step button svg { display: block; width: 1rem; height: 1rem; margin: 0 auto; }
         .pl-step input { flex: 1 1 auto; min-width: 0; text-align: center; border: 0; font-size: .9375rem; font-weight: 700; color: #374151; padding: .5rem 0; }
         .pl-step input:focus { outline: none; background: #fffbeb; }
 
@@ -490,8 +494,8 @@
         .pl-adv { margin-top: .875rem; border-top: 1px dashed #e5e7eb; padding-top: .625rem; }
         .pl-adv summary { cursor: pointer; font-size: .75rem; font-weight: 700; color: #6b7280; list-style: none; display: flex; align-items: center; gap: .35rem; }
         .pl-adv summary::-webkit-details-marker { display: none; }
-        .pl-adv summary::before { content: '▸'; display: inline-block; transition: transform .15s; }
-        .pl-adv[open] summary::before { transform: rotate(90deg); }
+        .pl-adv summary::before { content: ''; display: inline-block; width: .42rem; height: .42rem; margin: 0 .3rem 0 .1rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+        .pl-adv[open] summary::before { transform: rotate(45deg); }
         .pl-adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .75rem; margin-top: .25rem; }
         .pl-adv-grid .pl-lbl { margin-top: .5rem; }
         .pl-chk { display: flex; align-items: flex-start; gap: .5rem; margin-top: .6rem; font-size: .75rem; color: #374151; cursor: pointer; line-height: 1.35; }
@@ -506,10 +510,15 @@
         .pl-paper canvas { display: block; }
         .pl-meta { margin-top: .625rem; font-size: .6875rem; color: #6b7280; text-align: center; overflow-wrap: anywhere; }
         .pl-tips { margin-top: .75rem; padding: .625rem .75rem; border-radius: .75rem; background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fde68a; font-size: .75rem; color: #92400e; }
-        .pl-tips b { display: block; margin-bottom: .25rem; font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase; }
+        .pl-tips b { display: flex; align-items: center; gap: .35rem; margin-bottom: .25rem; font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase; }
+        .pl-tips b svg { width: .95rem; height: .95rem; flex: 0 0 auto; }
         .pl-tips ul { margin: 0; padding-left: 1.05rem; } .pl-tips li { margin: .15rem 0; }
         .pl-fields { display: grid; grid-template-columns: 1fr; gap: .5rem; margin-top: .875rem; }
-        @media (min-width: 640px) { .pl-fields { grid-template-columns: 2fr 1fr 1fr; } }
+        .pl-fields > div { min-width: 0; }
+        @media (min-width: 640px) {
+            .pl-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            .pl-f-id { grid-column: span 1; } .pl-f-nama { grid-column: span 3; } .pl-f-lok, .pl-f-exp { grid-column: span 2; }
+        }
         .pl-fields .pl-lbl { margin-top: 0; }
         .pl-field-note { font-size: .6875rem; color: #9ca3af; margin-top: .4rem; }
 
@@ -521,14 +530,18 @@
         .pl-search { position: relative; flex: 1 1 auto; min-width: 0; }
         .pl-search input { padding-left: 2.2rem; padding-right: 2rem; }
         .pl-search > svg { position: absolute; left: .75rem; top: 50%; transform: translateY(-50%); width: 1rem; height: 1rem; color: #9ca3af; pointer-events: none; }
-        .pl-search-x { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: #9ca3af; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+        .pl-search-x { position: absolute; right: .55rem; top: 50%; transform: translateY(-50%); display: inline-flex; padding: .15rem; border: 0; background: transparent; color: #9ca3af; line-height: 1; cursor: pointer; }
+        .pl-search-x:hover { color: #6b7280; }
+        .pl-search-x svg { width: .9rem; height: .9rem; }
         .pl-list { max-height: 22rem; overflow: auto; border: 1px solid #f0f1f4; border-radius: .85rem; background: #fff; }
         .pl-item { display: block; width: 100%; text-align: left; padding: .6rem .8rem; border: 0; border-bottom: 1px solid #f3f4f6; background: #fff; cursor: pointer; }
         .pl-item:last-child { border-bottom: 0; }
         .pl-item:hover { background: #fffbeb; }
         .pl-item.sel { background: #fef3c7; box-shadow: inset 3px 0 0 #f59e0b; }
         .pl-item-name { display: block; font-size: .8125rem; font-weight: 700; color: #1f2937; overflow-wrap: anywhere; }
-        .pl-item-meta { display: block; margin-top: .125rem; font-size: .6875rem; color: #6b7280; }
+        .pl-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .125rem .75rem; margin-top: .125rem; font-size: .6875rem; color: #6b7280; }
+        .pl-mp { display: inline-flex; align-items: center; gap: .25rem; }
+        .pl-mp svg { width: .8rem; height: .8rem; flex: 0 0 auto; color: #d97706; }
         .pl-empty { padding: 1.75rem 1rem; text-align: center; font-size: .8125rem; color: #9ca3af; }
         .pl-more { display: block; width: 100%; padding: .65rem; border: 0; border-top: 1px solid #f3f4f6; background: #fff; font-size: .75rem; font-weight: 700; color: #374151; cursor: pointer; }
         .pl-count { font-size: .6875rem; font-weight: 700; padding: .2rem .65rem; border-radius: 9999px; background: #fffbeb; border: 1px solid #fde68a; color: #b45309; white-space: nowrap; }
@@ -25022,8 +25035,10 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // tersambung begitu printer dicolok, setelah izin pertama kali) atau
         // Web Bluetooth (BLE). Mode "Driver" memakai dialog cetak browser untuk
         // printer yang sudah terpasang driver-nya (mis. Windows).
-        // Label: Nama Produk (atas) · QR Code berisi Nama Produk (tengah) ·
+        // Label: Nama Produk (atas) · QR Code berisi ID Produk + Nama Produk (tengah) ·
         //        Kode Lokasi (bawah QR) · Exp Date (paling bawah).
+        // Isi QR (lihat plQrPayload):  baris 1 "ID: <ID Produk>", baris 2 "Nama: <Nama Produk>".
+        // Kalau ID Produk kosong, QR hanya berisi Nama Produk (perilaku lama).
         // =====================================================================
         const PL_STORAGE_KEY = 'nodPrintLabelSettingsV1';
 
@@ -25086,7 +25101,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // Vendor ID USB yang pasti (dipakai hanya untuk memberi saran tipe printer).
         const PL_USB_VENDORS = { 0x0A5F: { brand: 'Zebra', lang: 'zpl' }, 0x1203: { brand: 'TSC', lang: 'tspl' } };
 
-        const PL_SAMPLE = { nama: 'CONTOH PRODUK 250G', lokasi: 'A-01-03', exp: '31 Des 2027' };
+        const PL_SAMPLE = { idProduk: 'PRD-0001', nama: 'CONTOH PRODUK 250G', lokasi: 'A-01-03', exp: '31 Des 2027' };
         const PL_LANG_LABEL = { tspl: 'TSPL', zpl: 'ZPL', escpos: 'ESC/POS' };
 
         const PL_DEFAULTS = {
@@ -25098,7 +25113,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         let _plRows = { sheet: null, import: [] };    // data: sheet = { rows, loadedAt, meta } | null
         let _plTab = 'sheet';
         let _plSelId = null;
-        let _plItem = null;                           // { nama, lokasi, exp } — data yang sedang dipratinjau/dicetak
+        let _plItem = null;                           // { idProduk, nama, lokasi, exp } — data yang sedang dipratinjau/dicetak
         let _plSearch = '';
         let _plLimit = 100;
         const PL_PAGE = 100;
@@ -25158,6 +25173,14 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // ---------------------------------------------------------------
         // Render label -> canvas (dipakai untuk pratinjau DAN cetak)
         // ---------------------------------------------------------------
+        /** Isi QR Code: ID Produk + Nama Produk (2 baris). ID kosong -> hanya Nama Produk. */
+        function plQrPayload(item) {
+            const id = String(item && item.idProduk || '').trim();
+            const nama = String(item && item.nama || '').trim();
+            if (!nama) return '';
+            return id ? ('ID: ' + id + '\nNama: ' + nama) : nama;
+        }
+
         function plMakeQR(text) {
             const gen = window.NodQRGen;
             if (!gen) throw new Error('Library QR belum termuat.');
@@ -25224,8 +25247,9 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const mc = document.createElement('canvas').getContext('2d');
             let qr = null, n = 0;
             if (nama) {
-                try { qr = plMakeQR(nama); n = qr.getModuleCount(); }
-                catch (e) { warnings.push('Nama Produk terlalu panjang untuk dijadikan QR Code — persingkat namanya.'); }
+                try { qr = plMakeQR(plQrPayload(item)); n = qr.getModuleCount(); }
+                catch (e) { warnings.push('ID + Nama Produk terlalu panjang untuk dijadikan QR Code — persingkat namanya.'); }
+                if (qr && !String(item.idProduk || '').trim()) warnings.push('ID Produk kosong — QR hanya berisi Nama Produk. Isi kotak ID Produk kalau ID ingin ikut di QR.');
             }
             const QZ = 2, totalMods = n + 2 * QZ;
             const gap = Math.max(2, Math.round(0.8 * mm));
@@ -25249,7 +25273,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                         let last = lines[2];
                         while (last.length > 1 && mc.measureText(last + '…').width > aw) last = last.slice(0, -1);
                         lines[2] = last + '…';
-                        const tw = 'Nama Produk panjang — dipotong jadi 3 baris di label (QR tetap berisi nama lengkap).';
+                        const tw = 'Nama Produk panjang — dipotong jadi 3 baris di label (QR tetap berisi ID & nama lengkap).';
                         if (warnings.indexOf(tw) < 0) warnings.push(tw);
                     }
                 }
@@ -25705,22 +25729,23 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // ---------------------------------------------------------------
         // Data: tarik dari spreadsheet & import file
         // ---------------------------------------------------------------
-        function plMakeRow(id, nama, lokasi, exp) {
+        function plMakeRow(id, nama, lokasi, exp, idProduk) {
             nama = String(nama == null ? '' : nama).trim(); lokasi = String(lokasi == null ? '' : lokasi).trim(); exp = String(exp == null ? '' : exp).trim();
-            return { id: id, nama: nama, lokasi: lokasi, exp: exp, _q: (nama + ' ' + lokasi + ' ' + exp).toLowerCase() };
+            idProduk = String(idProduk == null ? '' : idProduk).trim();
+            return { id: id, idProduk: idProduk, nama: nama, lokasi: lokasi, exp: exp, _q: (idProduk + ' ' + nama + ' ' + lokasi + ' ' + exp).toLowerCase() };
         }
 
         async function plLoadSheet() {
             const mySeq = ++_plLoadSeq;
             const btn = document.getElementById('pl-refresh');
-            if (btn) { btn.disabled = true; btn.textContent = '⏳ Memuat…'; }
+            if (btn) { btn.disabled = true; btn.classList.add('is-loading'); btn.innerHTML = PL_IC.refresh + 'Memuat…'; }
             const list = document.getElementById('pl-list');
             if (list && _plTab === 'sheet' && !_plRows.sheet) list.innerHTML = '<div class="pl-empty"><span class="pl-spin"></span>Memuat data dari sheet QRlabel…</div>';
             try {
                 const res = await fetchWithRetry(PO_GAS_URL + '?action=getQRLabelData', {}, 25000);
                 const result = await res.json();
                 if (result.error || result.success === false) throw new Error(result.error || result.message || 'Gagal mengambil data QRlabel.');
-                const rows = (Array.isArray(result.rows) ? result.rows : []).map(function (r) { return plMakeRow('s' + r._row, r.namaProduk, r.kodeLokasi, r.expDate); });
+                const rows = (Array.isArray(result.rows) ? result.rows : []).map(function (r) { return plMakeRow('s' + r._row, r.namaProduk, r.kodeLokasi, r.expDate, r.idProduk); });
                 _plRows.sheet = { rows: rows, loadedAt: Date.now(), meta: result.meta || {} };
                 if (mySeq !== _plLoadSeq) return;
                 if (_plTab === 'sheet') { _plLimit = PL_PAGE; plRenderList(); }
@@ -25733,7 +25758,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 }
             } finally {
                 const b2 = document.getElementById('pl-refresh');
-                if (b2 && mySeq === _plLoadSeq) { b2.disabled = false; b2.textContent = '⟳ Refresh'; }
+                if (b2 && mySeq === _plLoadSeq) { b2.disabled = false; b2.classList.remove('is-loading'); b2.innerHTML = PL_IC.refresh + 'Refresh'; }
             }
         }
 
@@ -25761,23 +25786,25 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const isEmpty = function (r) { return !r || r.every(function (c) { return String(c == null ? '' : c).trim() === ''; }); };
             const rows = (matrix || []).filter(function (r) { return !isEmpty(r); });
             if (!rows.length) return [];
-            const findIdx = function (hdr, regs) {
-                for (const re of regs) { const i = hdr.findIndex(function (h) { return re.test(String(h == null ? '' : h).trim()); }); if (i >= 0) return i; }
+            const findIdx = function (hdr, regs, skip) {
+                for (const re of regs) { const i = hdr.findIndex(function (h, k) { return (!skip || skip.indexOf(k) < 0) && re.test(String(h == null ? '' : h).trim()); }); if (i >= 0) return i; }
                 return -1;
             };
+            const REG_ID = [/^id(\s*(produk|product|barang|item))?$/i, /^(kode|code)\s*(produk|product|barang|item)$/i, /^(sku|item\s*(id|code|no\.?|number))$/i];
             const REG_NAMA = [/^nama\s*(produk|barang|item)$/i, /^(product\s*name|item\s*name)$/i, /nama/i, /produk|product|item|barang/i];
             const REG_LOK = [/^kode\s*lokasi$/i, /kode\s*lokasi|lokasi|location|\bloc\b|\brak\b/i];
             const REG_EXP = [/^exp(\.|ired|iry)?(\s*date)?$/i, /\bexp\b|expired|expiry|kadaluarsa|kedaluwarsa|kadaluwarsa|best\s*before/i];
             const hdr = rows[0];
-            let iN = findIdx(hdr, REG_NAMA), iL = findIdx(hdr, REG_LOK), iE = findIdx(hdr, REG_EXP);
+            const iI = findIdx(hdr, REG_ID);
+            let iN = findIdx(hdr, REG_NAMA, [iI]), iL = findIdx(hdr, REG_LOK, [iI]), iE = findIdx(hdr, REG_EXP, [iI]);
             let start = 1;
-            if (iN < 0 && iL < 0 && iE < 0) { iN = 0; iL = 1; iE = 2; start = 0; }   // tanpa judul: kolom 1-3
-            else { if (iN < 0) iN = 0; }
+            if (iN < 0 && iL < 0 && iE < 0 && iI < 0) { iN = 0; iL = 1; iE = 2; start = 0; }   // tanpa judul: kolom 1-3
+            else { if (iN < 0) iN = (iI === 0 ? 1 : 0); }
             const out = [];
             for (let r = start; r < rows.length; r++) {
                 const nama = iN >= 0 ? rows[r][iN] : '';
                 if (String(nama == null ? '' : nama).trim() === '') continue;
-                out.push(plMakeRow('i' + r, nama, iL >= 0 ? rows[r][iL] : '', iE >= 0 ? rows[r][iE] : ''));
+                out.push(plMakeRow('i' + r, nama, iL >= 0 ? rows[r][iL] : '', iE >= 0 ? rows[r][iE] : '', iI >= 0 ? rows[r][iI] : ''));
             }
             return out;
         }
@@ -25800,7 +25827,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     matrix = plParseDelimited(await file.text());
                 }
                 const rows = plMatrixToRows(matrix);
-                if (!rows.length) throw new Error('Tidak ada baris data yang terbaca. Pastikan ada kolom "Nama Produk", "Kode Lokasi", dan "Exp Date".');
+                if (!rows.length) throw new Error('Tidak ada baris data yang terbaca. Pastikan ada kolom "ID Produk", "Nama Produk", "Kode Lokasi", dan "Exp Date".');
                 _plRows.import = rows; _plTab = 'import'; _plLimit = PL_PAGE; _plSearch = '';
                 showToastAlert('success', 'Import berhasil', rows.length + ' baris dari ' + escapeHtml(file.name));
                 plRenderDataCard();
@@ -25811,7 +25838,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         }
         function plOnImportInput(inp) { const f = inp.files && inp.files[0]; inp.value = ''; plHandleImportFile(f); }
         function plDownloadTemplate() {
-            const csv = '\uFEFFNama Produk,Kode Lokasi,Exp Date\r\nContoh Produk 250g,A-01-03,31 Des 2027\r\n';
+            const csv = '\uFEFFID Produk,Nama Produk,Kode Lokasi,Exp Date\r\nPRD-0001,Contoh Produk 250g,A-01-03,31 Des 2027\r\n';
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
             a.download = 'template_label_produk.csv';
@@ -25822,6 +25849,20 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // ---------------------------------------------------------------
         // Tampilan (UI)
         // ---------------------------------------------------------------
+        // Ikon outline (gaya Heroicons, stroke 2 — keluarga yang sama dengan ikon sidebar) supaya selaras dengan tema aplikasi.
+        function plSvg(d) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d.map(function (x) { return '<path d="' + x + '"/>'; }).join('') + '</svg>'; }
+        const PL_IC = {
+            printer: plSvg(['M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z']),
+            layout: plSvg(['M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z']),
+            eye: plSvg(['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z']),
+            tag: plSvg(['M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z']),
+            bulb: plSvg(['M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z']),
+            pin: plSvg(['M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z', 'M15 11a3 3 0 11-6 0 3 3 0 016 0z']),
+            refresh: plSvg(['M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15']),
+            plus: plSvg(['M12 4v16m8-8H4']),
+            minus: plSvg(['M20 12H4']),
+            x: plSvg(['M6 18L18 6M6 6l12 12'])
+        };
         const PL_ICON_PORTRAIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="3" width="12" height="18" rx="2"/></svg>';
         const PL_ICON_LANDSCAPE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/></svg>';
 
@@ -25859,7 +25900,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 <div class="pl-grid">
                     <div class="pl-col">
                         <section class="pl-card pl-c-printer" aria-label="Printer">
-                            <div class="pl-card-h"><span><span class="pl-ic">🖨️</span>Printer</span></div>
+                            <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.printer}</span>Printer</span></div>
                             <div id="pl-status" class="pl-status"><span class="pl-dot"></span><div><span id="pl-st-title" class="pl-st-title"></span><span id="pl-st-sub" class="pl-st-sub"></span></div></div>
                             <button type="button" id="pl-btn-connect" class="pl-btn pl-btn-dark pl-btn-block" onclick="plConnectClick()">Hubungkan Printer</button>
 
@@ -25877,7 +25918,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                         </section>
 
                         <section class="pl-card pl-c-paper" aria-label="Kertas dan tata letak">
-                            <div class="pl-card-h"><span><span class="pl-ic">📐</span>Kertas &amp; Tata Letak</span></div>
+                            <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.layout}</span>Kertas &amp; Tata Letak</span></div>
                             <label class="pl-lbl" for="pl-paper">Ukuran kertas thermal</label>
                             <select id="pl-paper" class="pl-input" onchange="plOnPaperChange()">${paperOpts}</select>
                             <div id="pl-custom" class="pl-2col pl-hide">
@@ -25896,9 +25937,9 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
                             <label class="pl-lbl" for="pl-qty">Jumlah cetak (Qty)</label>
                             <div class="pl-step">
-                                <button type="button" onclick="plQtyStep(-1)" aria-label="Kurangi">−</button>
+                                <button type="button" onclick="plQtyStep(-1)" aria-label="Kurangi">${PL_IC.minus}</button>
                                 <input id="pl-qty" type="number" min="1" max="500" step="1" inputmode="numeric" oninput="plOnQtyInput()" onblur="plOnQtyBlur()">
-                                <button type="button" onclick="plQtyStep(1)" aria-label="Tambah">+</button>
+                                <button type="button" onclick="plQtyStep(1)" aria-label="Tambah">${PL_IC.plus}</button>
                             </div>
 
                             <details class="pl-adv" id="pl-adv">
@@ -25931,16 +25972,17 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
                     <div class="pl-col">
                         <section class="pl-card pl-c-preview" aria-label="Pratinjau">
-                            <div class="pl-card-h"><span><span class="pl-ic">👁️</span>Pratinjau</span><span><span id="pl-chip-size" class="pl-chip"></span> <span id="pl-chip-orient" class="pl-chip pl-chip-gray"></span></span></div>
+                            <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.eye}</span>Pratinjau</span><span><span id="pl-chip-size" class="pl-chip"></span> <span id="pl-chip-orient" class="pl-chip pl-chip-gray"></span></span></div>
                             <div class="pl-stage" id="pl-stage"><div class="pl-paper"><canvas id="pl-canvas" width="10" height="10"></canvas></div></div>
                             <div class="pl-meta" id="pl-meta"></div>
                             <div id="pl-tips" class="pl-tips pl-hide"></div>
                             <div class="pl-fields">
-                                <div><label class="pl-lbl" for="pl-f-nama">Nama Produk (isi QR)</label><input id="pl-f-nama" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
-                                <div><label class="pl-lbl" for="pl-f-lokasi">Kode Lokasi</label><input id="pl-f-lokasi" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
-                                <div><label class="pl-lbl" for="pl-f-exp">Exp Date</label><input id="pl-f-exp" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                                <div class="pl-f-id"><label class="pl-lbl" for="pl-f-id">ID Produk</label><input id="pl-f-id" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                                <div class="pl-f-nama"><label class="pl-lbl" for="pl-f-nama">Nama Produk</label><input id="pl-f-nama" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                                <div class="pl-f-lok"><label class="pl-lbl" for="pl-f-lokasi">Kode Lokasi</label><input id="pl-f-lokasi" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                                <div class="pl-f-exp"><label class="pl-lbl" for="pl-f-exp">Exp Date</label><input id="pl-f-exp" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
                             </div>
-                            <div class="pl-field-note">Kotak di atas otomatis terisi saat produk diklik. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>
+                            <div class="pl-field-note">Kotak di atas otomatis terisi saat produk diklik. ID Produk dan Nama Produk menjadi isi QR Code. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>
                         </section>
 
                         <section class="pl-card pl-c-data" aria-label="Data yang dicetak" id="pl-data-card"></section>
@@ -26056,23 +26098,26 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     (lay.info.modules ? ' · QR ' + lay.info.modules + '×' + lay.info.modules + ' modul (' + lay.info.modDots + ' dot/modul)' : '');
             }
             // saran otomatis
-            const tips = lay.info.warnings.slice();
+            let tips = lay.info.warnings.slice();
+            const idNotDetected = _plTab === 'sheet' && _plRows.sheet && _plRows.sheet.meta && _plRows.sheet.rows.length && !_plRows.sheet.meta.idColumn;
+            if (idNotDetected) tips = tips.filter(function (w) { return w.indexOf('ID Produk kosong') !== 0; });   // sudah dicakup saran kolom ID di bawah
             const pr = plPrinter();
             const physW = dims.physW;
             if (plLang() === 'escpos' && pr.maxDots && Math.round(physW * mmPx) > pr.maxDots) tips.push('Lebar kertas (' + Math.round(physW * mmPx) + ' dot) melebihi lebar cetak printer (' + pr.maxDots + ' dot) — sisi kanan bisa terpotong.');
+            if (idNotDetected) tips.push('Kolom ID Produk belum terdeteksi di sheet QRlabel — QR hanya berisi Nama Produk. Isi lewat kotak ID Produk, atau kunci kolomnya di GAS (QRLABEL_COL_ID_OVERRIDE).');
             if (_plTab === 'sheet' && _plRows.sheet && _plRows.sheet.meta && _plRows.sheet.rows.length && !_plRows.sheet.meta.expColumn) tips.push('Kolom Exp Date belum terdeteksi di sheet QRlabel — isi manual lewat kotak Exp Date, atau kunci kolomnya di GAS (QRLABEL_COL_EXP_OVERRIDE).');
             if (paper.id !== 'custom' && !paper.auto && plLang() === 'escpos' && paper.h > 0) tips.push('Printer struk (ESC/POS) tidak membaca gap stiker — pastikan kertas pas, atau pakai kertas kontinu.');
             const tb = document.getElementById('pl-tips');
             if (tb) {
-                if (tips.length) { tb.classList.remove('pl-hide'); tb.innerHTML = '<b>✨ Saran otomatis</b><ul>' + tips.map(function (t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('') + '</ul>'; }
+                if (tips.length) { tb.classList.remove('pl-hide'); tb.innerHTML = '<b>' + PL_IC.bulb + 'Saran otomatis</b><ul>' + tips.map(function (t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('') + '</ul>'; }
                 else { tb.classList.add('pl-hide'); tb.innerHTML = ''; }
             }
         }
 
         function plFillFields() {
-            const it = _plItem || { nama: '', lokasi: '', exp: '' };
-            const a = document.getElementById('pl-f-nama'), b = document.getElementById('pl-f-lokasi'), c = document.getElementById('pl-f-exp');
-            if (a) a.value = it.nama; if (b) b.value = it.lokasi; if (c) c.value = it.exp;
+            const it = _plItem || { idProduk: '', nama: '', lokasi: '', exp: '' };
+            const a = document.getElementById('pl-f-nama'), b = document.getElementById('pl-f-lokasi'), c = document.getElementById('pl-f-exp'), d = document.getElementById('pl-f-id');
+            if (a) a.value = it.nama; if (b) b.value = it.lokasi; if (c) c.value = it.exp; if (d) d.value = it.idProduk || '';
         }
 
         // ---- daftar data ----
@@ -26082,7 +26127,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const card = document.getElementById('pl-data-card'); if (!card) return;
             const isSheet = _plTab === 'sheet';
             card.innerHTML = `
-                <div class="pl-card-h"><span><span class="pl-ic">📦</span>Data yang dicetak</span><span id="pl-count" class="pl-count">0 data</span></div>
+                <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.tag}</span>Data yang dicetak</span><span id="pl-count" class="pl-count">0 data</span></div>
                 <div class="pl-tabs" role="tablist">
                     <button type="button" role="tab" class="${isSheet ? 'on' : ''}" onclick="plSetTab('sheet')">Tarik dari Spreadsheet</button>
                     <button type="button" role="tab" class="${isSheet ? '' : 'on'}" onclick="plSetTab('import')">Import File</button>
@@ -26090,17 +26135,17 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 ${isSheet ? '' : `
                 <label class="pl-drop" id="pl-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="event.preventDefault();this.classList.remove('over');plHandleImportFile(event.dataTransfer.files[0])">
                     <b id="pl-drop-t">Klik untuk memilih file, atau tarik file ke sini</b>
-                    <small>CSV / Excel (.xlsx, .xls) dengan kolom: Nama Produk · Kode Lokasi · Exp Date</small>
+                    <small>CSV / Excel (.xlsx, .xls) dengan kolom: ID Produk · Nama Produk · Kode Lokasi · Exp Date</small>
                     <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" class="pl-hide" onchange="plOnImportInput(this)">
                 </label>
                 <div class="pl-note" style="margin:-.25rem 0 .75rem">Belum punya format? <button type="button" class="pl-link" onclick="plDownloadTemplate()">Unduh template CSV</button></div>`}
                 <div class="pl-toolbar">
                     <div class="pl-search">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input id="pl-search" type="text" class="pl-input" placeholder="Cari nama produk, lokasi, exp…" value="${escapeHtml(_plSearch)}" oninput="plOnSearch(this.value)" autocomplete="off">
-                        <button type="button" id="pl-search-x" class="pl-search-x ${_plSearch ? '' : 'pl-hide'}" onclick="plClearSearch()" aria-label="Hapus pencarian">&times;</button>
+                        <input id="pl-search" type="text" class="pl-input" placeholder="Cari ID, nama produk, lokasi, exp…" value="${escapeHtml(_plSearch)}" oninput="plOnSearch(this.value)" autocomplete="off">
+                        <button type="button" id="pl-search-x" class="pl-search-x ${_plSearch ? '' : 'pl-hide'}" onclick="plClearSearch()" aria-label="Hapus pencarian">${PL_IC.x}</button>
                     </div>
-                    ${isSheet ? '<button type="button" id="pl-refresh" class="pl-btn pl-btn-ghost" onclick="plLoadSheet()">⟳ Refresh</button>' : ''}
+                    ${isSheet ? '<button type="button" id="pl-refresh" class="pl-btn pl-btn-ghost" onclick="plLoadSheet()">' + PL_IC.refresh + 'Refresh</button>' : ''}
                 </div>
                 <div id="pl-list" class="pl-list" onclick="plListClick(event)"></div>`;
             plRenderList();
@@ -26120,7 +26165,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             }
             const vis = filtered.slice(0, _plLimit);
             list.innerHTML = vis.map(function (r) {
-                const meta = [r.lokasi ? '📍 ' + escapeHtml(r.lokasi) : '', r.exp ? 'Exp ' + escapeHtml(r.exp) : ''].filter(Boolean).join(' · ');
+                const meta = [r.idProduk ? '<span class="pl-mp">ID ' + escapeHtml(r.idProduk) + '</span>' : '', r.lokasi ? '<span class="pl-mp">' + PL_IC.pin + escapeHtml(r.lokasi) + '</span>' : '', r.exp ? '<span class="pl-mp">Exp ' + escapeHtml(r.exp) + '</span>' : ''].filter(Boolean).join('');
                 return '<button type="button" class="pl-item' + (r.id === _plSelId ? ' sel' : '') + '" data-id="' + escapeHtml(r.id) + '"><span class="pl-item-name">' + escapeHtml(r.nama) + '</span>' +
                     (meta ? '<span class="pl-item-meta">' + meta + '</span>' : '') + '</button>';
             }).join('') + (filtered.length > vis.length ? '<button type="button" class="pl-more" data-more="1">Tampilkan lebih banyak (' + (filtered.length - vis.length) + ' lagi)</button>' : '');
@@ -26136,7 +26181,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const row = plCurrentRows().find(function (r) { return r.id === id; });
             if (!row) return;
             _plSelId = id;
-            _plItem = { nama: row.nama, lokasi: row.lokasi, exp: row.exp };
+            _plItem = { idProduk: row.idProduk || '', nama: row.nama, lokasi: row.lokasi, exp: row.exp };
             document.querySelectorAll('#pl-list .pl-item.sel').forEach(function (n) { n.classList.remove('sel'); });
             if (el) el.classList.add('sel');
             plFillFields();
@@ -26160,6 +26205,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // ---- handler kontrol ----
         function plOnField() {
             _plItem = {
+                idProduk: document.getElementById('pl-f-id').value,
                 nama: document.getElementById('pl-f-nama').value,
                 lokasi: document.getElementById('pl-f-lokasi').value,
                 exp: document.getElementById('pl-f-exp').value
