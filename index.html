@@ -26601,8 +26601,9 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         let _mkMulti = false;                               // mode: Ship To berbeda untuk tiap label di lembar (grid)
         let _mkSlots = {};                                  // { [indeksGlobalLabel 0-based]: {shipTo, alamat} } — override per slot saat _mkMulti aktif
         // [MENU BARU — Marking Pengiriman > Opsional Tujuan Custom] Tab kedua di seksi "Tujuan Pengiriman":
-        // isian manual (bukan dari PO_Data). Ship To & Alamat di sini HANYA catatan (tidak ikut tercetak);
-        // Qty Karton & Exp Date bisa dipilih user untuk ikut tercetak di label atau tidak.
+        // isian manual (bukan dari PO_Data). Ship To & Alamat di sini IKUT TERCETAK di label (sama seperti tab
+        // "Tujuan Pengiriman"); Qty Karton & Exp Date bersifat opsional — dipilih user untuk ikut tercetak (sebagai
+        // baris tambahan di bawah Alamat) atau tidak.
         let _mkDestTab = 'po';                              // tab aktif: 'po' (Tujuan Pengiriman) | 'custom' (Opsional Tujuan Custom)
         let _mkCustom = { shipTo: '', alamat: '', qtyKarton: '', expDate: '', showQty: false, showExp: false };
         let _mkBusy = false;
@@ -26683,19 +26684,22 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const d = mkLayoutDims();
             return { dims: d, render: Object.assign({ lw: d.lw, lh: d.lh, dpi: _mkS.dpi, margin: _mkS.margin, binarize: _mkS.conn !== 'system', logo: _mkS.logo ? _mkLogo : null }, mkCapOpts()) };
         }
-        /** Judul/caption yang digambar di label + placeholder preview — beda antara tab "Tujuan Pengiriman" (PO_Data)
-         *  dan tab "Opsional Tujuan Custom" (isian manual). forcePo=true dipakai untuk Cetak Tes (selalu contoh Ship To). */
+        /** Judul/caption yang digambar di label — sama untuk tab "Tujuan Pengiriman" (PO_Data) dan tab "Opsional
+         *  Tujuan Custom" (isian manual): keduanya mencetak SHIP TO + ALAMAT. forcePo=true dipakai untuk Cetak Tes
+         *  (selalu pakai teks placeholder gaya tab Tujuan Pengiriman). */
         function mkCapOpts(forcePo) {
-            if (!forcePo && _mkDestTab === 'custom') {
-                return { cap1: 'QTY KARTON', cap2: 'EXP DATE', lbl1: 'Qty Karton', lbl2: 'Exp Date', placeholderText: 'Isi Qty Karton / Exp Date lalu centang "Tampilkan di label"' };
-            }
-            return { cap1: 'SHIP TO', cap2: 'ALAMAT', lbl1: 'Ship To', lbl2: 'Alamat', placeholderText: 'Pilih Ship To untuk preview' };
+            const isCustom = !forcePo && _mkDestTab === 'custom';
+            return { cap1: 'SHIP TO', cap2: 'ALAMAT', lbl1: 'Ship To', lbl2: 'Alamat', placeholderText: isCustom ? 'Isi Ship To & Alamat untuk preview' : 'Pilih Ship To untuk preview' };
         }
-        /** Item aktif yang dipratinjau/dicetak sesuai tab: PO_Data (_mkItem) atau isian manual (_mkCustom, hanya
-         *  field yang dicentang "Tampilkan di label" yang dikirim ke penggambar label). */
+        /** Item aktif yang dipratinjau/dicetak sesuai tab: PO_Data (_mkItem) atau isian manual (_mkCustom). Untuk
+         *  tab Custom, Ship To & Alamat ikut tercetak (sama seperti tab Tujuan Pengiriman); Qty Karton & Exp Date
+         *  ikut tercetak sebagai baris tambahan di bawahnya HANYA kalau dicentang "Tampilkan di label". */
         function mkActiveItem() {
             if (_mkDestTab === 'custom') {
-                return { shipTo: _mkCustom.showQty ? mkClean(_mkCustom.qtyKarton) : '', alamat: _mkCustom.showExp ? mkClean(_mkCustom.expDate) : '' };
+                const c = _mkCustom, extra = [];
+                if (c.showQty && mkClean(c.qtyKarton)) extra.push({ cap: 'QTY KARTON', text: mkClean(c.qtyKarton) });
+                if (c.showExp && mkClean(c.expDate)) extra.push({ cap: 'EXP DATE', text: mkClean(c.expDate) });
+                return { shipTo: mkClean(c.shipTo), alamat: mkClean(c.alamat), extra: extra };
             }
             return _mkItem;
         }
@@ -26706,9 +26710,11 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         function mkClean(s) { return String(s == null ? '' : s).replace(/\s*[\r\n]+\s*/g, ' ').replace(/[ \t]+/g, ' ').trim(); }
 
         /**
-         * Gambar 1 label: caption "SHIP TO" + nama (tebal, besar) · garis · caption "ALAMAT" + alamat.
-         * Ukuran font dicari otomatis (terbesar yang muat) sesuai ukuran label.
-         * o = { lw, lh (mm; lh 0 = tinggi otomatis), dpi, margin (mm), binarize, placeholder }
+         * Gambar 1 label: caption "SHIP TO" + nama (tebal, besar) · garis · caption "ALAMAT" + alamat, lalu opsional
+         * baris tambahan di bawahnya untuk item.extra ([{cap, text}], mis. Qty Karton/Exp Date di tab Custom) —
+         * fontnya tetap (tidak ikut mengecil) supaya info tambahan selalu terbaca; Ship To/Alamat yang menyesuaikan.
+         * Ukuran font Ship To/Alamat dicari otomatis (terbesar yang muat) sesuai ukuran label.
+         * item = { shipTo, alamat, extra? }. o = { lw, lh (mm; lh 0 = tinggi otomatis), dpi, margin (mm), binarize, placeholder }
          */
         function mkRenderLabel(item, o) {
             const mm = o.dpi / 25.4;
@@ -26726,6 +26732,23 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const warnings = [];
             const mc = document.createElement('canvas').getContext('2d');
 
+            // Baris tambahan opsional di bawah Ship To/Alamat (dipakai tab "Opsional Tujuan Custom" untuk
+            // Qty Karton / Exp Date). Ukuran font tetap (tidak ikut mengecil bareng nama/alamat) supaya info
+            // tambahan ini selalu terbaca; Ship To/Alamat yang menyesuaikan ruang yang tersisa.
+            const extraItems = (item && Array.isArray(item.extra)) ? item.extra.filter(function (e) { return e && mkClean(e.text); }) : [];
+            const extraPx = Math.max(9, Math.round(2.2 * mm)), extraLhPx = Math.round(extraPx * 1.16);
+            let extraLines = [];
+            if (extraItems.length) {
+                mc.font = fontOf('bold', extraPx);
+                extraItems.forEach(function (e) {
+                    let wl = plWrapText(mc, (e.cap ? e.cap + ': ' : '') + e.text, aw);
+                    if (wl.length > 2) { wl = wl.slice(0, 2); wl[1] = ellipsize(wl[1], aw); }
+                    extraLines = extraLines.concat(wl);
+                });
+            }
+            const extraGap = extraLines.length ? Math.max(2, Math.round(1.0 * mm)) : 0;
+            const extraBlockH = extraLines.length ? (extraGap + extraLines.length * extraLhPx) : 0;
+
             const capPx = Math.max(8, Math.round(1.8 * mm));
             const nameMax = 5.2 * mm, nameMin = 2.5 * mm, addrMax = 3.6 * mm, addrMin = 2.0 * mm;
             const LH = 1.16;
@@ -26740,6 +26763,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 if (logoW > aw * 0.34) { logoW = Math.round(aw * 0.34); logoH = Math.round(logoW * logo.naturalHeight / logo.naturalWidth); }
             }
             const hTop = logo ? Math.max(shipTo ? lhC + gapCap : 0, logoH + gapCap) : (shipTo ? lhC + gapCap : 0);
+            // Ruang yang tersisa untuk Ship To/Alamat setelah menyisihkan tempat baris tambahan (Qty Karton/Exp Date).
+            const ahMain = isFinite(ah) ? Math.max(8, ah - extraBlockH) : ah;
 
             function ellipsize(line, w) {
                 let t = line;
@@ -26761,10 +26786,10 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 const hMid = (shipTo && alamat) ? (gapBlk + rule + gapBlk) : 0;
                 const hAddrFixed = alamat ? (lhC + gapCap) : 0;
                 const total = hHead + hMid + hAddrFixed + al.length * lhA;
-                if (total > ah) {
+                if (total > ahMain) {
                     if (!trunc) return null;
                     // Sudah di ukuran font terkecil dan tetap tidak muat: potong alamat.
-                    const room = ah - hHead - hMid - hAddrFixed;
+                    const room = ahMain - hHead - hMid - hAddrFixed;
                     const maxLines = Math.max(1, Math.floor(room / lhA));
                     if (al.length > maxLines) {
                         mc.font = fontOf(wAddr, addrPx);
@@ -26784,7 +26809,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 if (L.namePx <= nameMin + 1 && L.addrPx <= addrMin + 1 && !L.cut.addr && !L.cut.name) warnings.push('Teks sangat panjang sehingga font mengecil ke batas terkecil — cek keterbacaannya di kertas asli.');
             }
 
-            const H = auto ? (2 * margin + (L ? L.total : Math.round(10 * mm))) : Hfixed;
+            const hasContent = !!(L || extraLines.length);
+            const H = auto ? (2 * margin + (hasContent ? (L ? L.total : 0) + extraBlockH : Math.round(10 * mm))) : Hfixed;
             const canvas = document.createElement('canvas');
             canvas.width = W; canvas.height = Math.max(16, H);
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -26792,8 +26818,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             ctx.fillStyle = '#000000'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
             if (logo) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(logo, margin + aw - logoW, margin, logoW, logoH); }
 
+            let y = margin;   // rata atas (logo terpasang di pojok kanan atas)
             if (L) {
-                let y = margin;   // rata atas (logo terpasang di pojok kanan atas)
                 if (shipTo) { ctx.font = fontOf('bold', capPx); ctx.fillText(o.cap1 || 'SHIP TO', margin, y + lhC / 2); }
                 y += hTop;
                 if (shipTo) {
@@ -26806,17 +26832,24 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     ctx.font = fontOf(wAddr, L.addrPx);
                     L.al.forEach(function (ln) { ctx.fillText(ln, margin, y + L.lhA / 2); y += L.lhA; });
                 }
+            } else if (extraLines.length && logo) {
+                y += hTop;   // sisakan ruang logo walau Ship To/Alamat kosong (mis. hanya Qty Karton/Exp Date yang dicetak)
+            }
+            if (extraLines.length) {
+                if (L) y += extraGap;
+                ctx.font = fontOf('bold', extraPx);
+                extraLines.forEach(function (ln) { ctx.fillText(ln, margin, y + extraLhPx / 2); y += extraLhPx; });
             }
             if (o.binarize) plBinarize(canvas, 170);
 
-            if (!L && o.placeholder) {   // hanya preview
+            if (!hasContent && o.placeholder) {   // hanya preview
                 ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold ' + Math.max(10, Math.round(Math.min(W, canvas.height) * 0.075)) + 'px ' + FONT;
                 ctx.fillText(o.placeholderText || 'Pilih Ship To untuk preview', W / 2, canvas.height / 2);
             }
             return {
                 canvas: canvas, W: canvas.width, H: canvas.height,
-                info: { warnings: warnings, empty: !L, namePt: L ? L.namePx / o.dpi * 72 : 0, addrPt: L ? L.addrPx / o.dpi * 72 : 0, nameLines: L ? L.nl.length : 0, addrLines: L ? L.al.length : 0 }
+                info: { warnings: warnings, empty: !hasContent, namePt: L ? L.namePx / o.dpi * 72 : 0, addrPt: L ? L.addrPx / o.dpi * 72 : 0, nameLines: L ? L.nl.length : 0, addrLines: L ? L.al.length : 0 }
             };
         }
 
@@ -27168,8 +27201,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const multi = !isTest && sheet && _mkMulti && _mkDestTab === 'po';
             if (!multi) {
                 if (isCustom) {
-                    if (!item || (!mkClean(item.shipTo) && !mkClean(item.alamat))) {
-                        showAlert('warning', 'Belum ada data', 'Isi Qty Karton dan/atau Exp Date, lalu centang "Tampilkan di label" dulu.');
+                    if (!item || (!mkClean(item.shipTo) && !mkClean(item.alamat) && !(item.extra && item.extra.length))) {
+                        showAlert('warning', 'Belum ada data', 'Isi Ship To/Alamat, atau isi Qty Karton/Exp Date lalu centang "Tampilkan di label" dulu.');
                         return;
                     }
                 } else if (!item || !mkClean(item.shipTo)) {
@@ -27403,8 +27436,9 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 <div class="mk-datanote"><span id="mk-datanote-t"></span></div>
                 <div class="mk-note">Sumber: sheet <b>PO_Data</b> (kolom D = Ship To, kolom H = Alamat), hanya PO yang statusnya masih kosong. Perubahan di kotak Alamat hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>`;
         }
-        /** Markup tab "Opsional Tujuan Custom" — isian manual (bukan dari PO_Data). Ship To & Alamat hanya catatan
-         *  (tidak ikut tercetak); Qty Karton & Exp Date bisa dipilih user untuk ikut tercetak di label atau tidak. */
+        /** Markup tab "Opsional Tujuan Custom" — isian manual (bukan dari PO_Data). Ship To & Alamat di sini IKUT
+         *  TERCETAK di label (persis seperti tab "Tujuan Pengiriman"); Qty Karton & Exp Date bersifat opsional dan
+         *  baru ikut tercetak (sebagai baris tambahan di bawah Alamat) kalau dicentang "Tampilkan di label". */
         function mkDestCustomHtml() {
             const c = _mkCustom;
             return `
@@ -27417,14 +27451,14 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     <input id="mk-cust-shipto" class="mk-in" type="text" autocomplete="off" placeholder="Ketik manual…" oninput="mkOnCustomField()" value="${escapeHtml(c.shipTo)}"></div>
                 <div class="mk-row mk-row-top"><label for="mk-cust-alamat">Alamat</label>
                     <textarea id="mk-cust-alamat" class="mk-in" rows="3" placeholder="Ketik manual…" oninput="mkOnCustomField()">${escapeHtml(c.alamat)}</textarea></div>
-                <div class="mk-note">Ship To &amp; Alamat di atas hanya catatan internal — <b>tidak ikut tercetak</b> di sticker label.</div>
+                <div class="mk-note">Ship To &amp; Alamat di atas <b>ikut tercetak</b> di sticker label, sama seperti tab "Tujuan Pengiriman".</div>
                 <div class="mk-row mk-row-top"><label for="mk-cust-qty">Qty Karton</label>
                     <input id="mk-cust-qty" class="mk-in" type="text" placeholder="Contoh: 12 Karton" oninput="mkOnCustomField()" value="${escapeHtml(c.qtyKarton)}"></div>
                 <label class="mk-chk"><input id="mk-cust-qty-show" type="checkbox" onchange="mkOnCustomField()"${c.showQty ? ' checked' : ''}><span>Tampilkan Qty Karton di label</span></label>
                 <div class="mk-row mk-row-top"><label for="mk-cust-exp">Exp Date</label>
                     <input id="mk-cust-exp" class="mk-in" type="text" placeholder="Contoh: 31 Des 2027" oninput="mkOnCustomField()" value="${escapeHtml(c.expDate)}"></div>
                 <label class="mk-chk"><input id="mk-cust-exp-show" type="checkbox" onchange="mkOnCustomField()"${c.showExp ? ' checked' : ''}><span>Tampilkan Exp Date di label</span></label>
-                <div class="mk-note">Centang salah satu atau kedua opsi "Tampilkan di label" supaya Qty Karton / Exp Date ikut tercetak di sticker. Kalau tidak dicentang, kotaknya hanya catatan dan tidak muncul di label.</div>`;
+                <div class="mk-note">Centang salah satu atau kedua opsi "Tampilkan di label" supaya Qty Karton / Exp Date ikut tercetak sebagai baris tambahan di bawah Alamat. Kalau tidak dicentang, kotaknya hanya catatan dan tidak muncul di label.</div>`;
         }
         /** Pindah tab "Tujuan Pengiriman" <-> "Opsional Tujuan Custom". Mode "Ship To berbeda per label" (multi-slot)
          *  cuma berlaku untuk tab PO_Data, jadi otomatis dimatikan & disembunyikan saat pindah ke tab Custom. */
