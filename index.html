@@ -26602,10 +26602,12 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         let _mkSlots = {};                                  // { [indeksGlobalLabel 0-based]: {shipTo, alamat} } — override per slot saat _mkMulti aktif
         // [MENU BARU — Marking Pengiriman > Opsional Tujuan Custom] Tab kedua di seksi "Tujuan Pengiriman":
         // isian manual (bukan dari PO_Data). Ship To & Alamat di sini IKUT TERCETAK di label (sama seperti tab
-        // "Tujuan Pengiriman"); Qty Karton & Exp Date bersifat opsional — dipilih user untuk ikut tercetak (sebagai
-        // baris tambahan di bawah Alamat) atau tidak.
+        // "Tujuan Pengiriman"); No. Urut Karton & Exp Date bersifat opsional — dipilih user untuk ikut tercetak
+        // (sebagai baris tambahan di bawah Alamat) atau tidak. No. Urut Karton otomatis bertambah 1 tiap label saat
+        // cetak banyak sekaligus untuk 1 tujuan (mis. Mulai=1 → 1/20, 2/20, … ), dan "Mulai dari No." otomatis maju
+        // tiap selesai cetak supaya sesi cetak lanjutan untuk tujuan yang sama melanjutkan nomor (1-10, lalu 11-20, dst).
         let _mkDestTab = 'po';                              // tab aktif: 'po' (Tujuan Pengiriman) | 'custom' (Opsional Tujuan Custom)
-        let _mkCustom = { shipTo: '', alamat: '', qtyKarton: '', expDate: '', showQty: false, showExp: false };
+        let _mkCustom = { shipTo: '', alamat: '', totalKarton: '', startKarton: '1', expDate: '', showKarton: false, showExp: false };
         let _mkBusy = false;
         let _mkDetected = [];                              // printer USB yang sudah diizinkan browser
         let _mkLastDev = '';
@@ -26691,16 +26693,31 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const isCustom = !forcePo && _mkDestTab === 'custom';
             return { cap1: 'SHIP TO', cap2: 'ALAMAT', lbl1: 'Ship To', lbl2: 'Alamat', placeholderText: isCustom ? 'Isi Ship To & Alamat untuk preview' : 'Pilih Ship To untuk preview' };
         }
-        /** Item aktif yang dipratinjau/dicetak sesuai tab: PO_Data (_mkItem) atau isian manual (_mkCustom). Untuk
-         *  tab Custom, Ship To & Alamat ikut tercetak (sama seperti tab Tujuan Pengiriman); Qty Karton & Exp Date
-         *  ikut tercetak sebagai baris tambahan di bawahnya HANYA kalau dicentang "Tampilkan di label". */
-        function mkActiveItem() {
-            if (_mkDestTab === 'custom') {
-                const c = _mkCustom, extra = [];
-                if (c.showQty && mkClean(c.qtyKarton)) extra.push({ cap: 'QTY KARTON', text: mkClean(c.qtyKarton) });
-                if (c.showExp && mkClean(c.expDate)) extra.push({ cap: 'EXP DATE', text: mkClean(c.expDate) });
-                return { shipTo: mkClean(c.shipTo), alamat: mkClean(c.alamat), extra: extra };
+        /** Baris tambahan (No. Urut Karton + Exp Date, opsional) untuk label ke-i (0-based) dalam satu sesi cetak
+         *  tab Custom. No. Urut Karton (kalau dicentang) bertambah 1 tiap label, mulai dari _mkCustom.startKarton —
+         *  ditulis "n / total" kalau Total Karton diisi, atau cuma "n" kalau tidak. */
+        function mkCustomExtraFor(i) {
+            const c = _mkCustom, extra = [];
+            if (c.showKarton) {
+                const start = Math.max(1, Math.round(Number(c.startKarton) || 1));
+                const n = start + i, total = mkClean(c.totalKarton);
+                extra.push({ cap: 'NO. KARTON', text: total ? (n + ' / ' + total) : String(n) });
             }
+            if (c.showExp && mkClean(c.expDate)) extra.push({ cap: 'EXP DATE', text: mkClean(c.expDate) });
+            return extra;
+        }
+        /** Item tab Custom untuk label ke-i (0-based) dalam satu sesi cetak — Ship To/Alamat sama untuk semua
+         *  label, No. Urut Karton (kalau dicentang) mengikuti mkCustomExtraFor(i). */
+        function mkActiveItemForIndex(i) {
+            const c = _mkCustom;
+            return { shipTo: mkClean(c.shipTo), alamat: mkClean(c.alamat), extra: mkCustomExtraFor(i) };
+        }
+        /** Item aktif yang dipratinjau/dicetak sesuai tab: PO_Data (_mkItem) atau isian manual (_mkCustom, label
+         *  pertama/contoh — dipakai untuk preview per-label & sebagai dasar sebelum sesi cetak dimulai). Ship To &
+         *  Alamat tab Custom ikut tercetak (sama seperti tab Tujuan Pengiriman); No. Urut Karton & Exp Date ikut
+         *  tercetak sebagai baris tambahan di bawahnya HANYA kalau dicentang "Tampilkan di label". */
+        function mkActiveItem() {
+            if (_mkDestTab === 'custom') return mkActiveItemForIndex(0);
             return _mkItem;
         }
 
@@ -26711,7 +26728,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
         /**
          * Gambar 1 label: caption "SHIP TO" + nama (tebal, besar) · garis · caption "ALAMAT" + alamat, lalu opsional
-         * baris tambahan di bawahnya untuk item.extra ([{cap, text}], mis. Qty Karton/Exp Date di tab Custom) —
+         * baris tambahan di bawahnya untuk item.extra ([{cap, text}], mis. No. Urut Karton/Exp Date di tab Custom) —
          * fontnya tetap (tidak ikut mengecil) supaya info tambahan selalu terbaca; Ship To/Alamat yang menyesuaikan.
          * Ukuran font Ship To/Alamat dicari otomatis (terbesar yang muat) sesuai ukuran label.
          * item = { shipTo, alamat, extra? }. o = { lw, lh (mm; lh 0 = tinggi otomatis), dpi, margin (mm), binarize, placeholder }
@@ -26733,7 +26750,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const mc = document.createElement('canvas').getContext('2d');
 
             // Baris tambahan opsional di bawah Ship To/Alamat (dipakai tab "Opsional Tujuan Custom" untuk
-            // Qty Karton / Exp Date). Ukuran font tetap (tidak ikut mengecil bareng nama/alamat) supaya info
+            // No. Urut Karton / Exp Date). Ukuran font tetap (tidak ikut mengecil bareng nama/alamat) supaya info
             // tambahan ini selalu terbaca; Ship To/Alamat yang menyesuaikan ruang yang tersisa.
             const extraItems = (item && Array.isArray(item.extra)) ? item.extra.filter(function (e) { return e && mkClean(e.text); }) : [];
             const extraPx = Math.max(9, Math.round(2.2 * mm)), extraLhPx = Math.round(extraPx * 1.16);
@@ -26763,7 +26780,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 if (logoW > aw * 0.34) { logoW = Math.round(aw * 0.34); logoH = Math.round(logoW * logo.naturalHeight / logo.naturalWidth); }
             }
             const hTop = logo ? Math.max(shipTo ? lhC + gapCap : 0, logoH + gapCap) : (shipTo ? lhC + gapCap : 0);
-            // Ruang yang tersisa untuk Ship To/Alamat setelah menyisihkan tempat baris tambahan (Qty Karton/Exp Date).
+            // Ruang yang tersisa untuk Ship To/Alamat setelah menyisihkan tempat baris tambahan (No. Urut Karton/Exp Date).
             const ahMain = isFinite(ah) ? Math.max(8, ah - extraBlockH) : ah;
 
             function ellipsize(line, w) {
@@ -26833,7 +26850,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     L.al.forEach(function (ln) { ctx.fillText(ln, margin, y + L.lhA / 2); y += L.lhA; });
                 }
             } else if (extraLines.length && logo) {
-                y += hTop;   // sisakan ruang logo walau Ship To/Alamat kosong (mis. hanya Qty Karton/Exp Date yang dicetak)
+                y += hTop;   // sisakan ruang logo walau Ship To/Alamat kosong (mis. hanya No. Urut Karton/Exp Date yang dicetak)
             }
             if (extraLines.length) {
                 if (L) y += extraGap;
@@ -26937,7 +26954,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const capOpts = o.capOpts || mkCapOpts();
             const labCache = {};
             const getLab = function (item) {
-                const key = mkClean(item.shipTo) + '\u0001' + mkClean(item.alamat);
+                const ex = (item.extra || []).map(function (e) { return e.cap + ':' + e.text; }).join('\u0002');
+                const key = mkClean(item.shipTo) + '\u0001' + mkClean(item.alamat) + '\u0001' + ex;
                 if (!(key in labCache)) labCache[key] = mkRenderLabel(item, Object.assign({ lw: cfg.lw, lh: cfg.lh, dpi: o.dpi, margin: _mkS.margin, binarize: false, logo: _mkS.logo ? _mkLogo : null, placeholder: false }, capOpts));
                 return labCache[key];
             };
@@ -27199,10 +27217,14 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const sheet = mkIsSheet();
             const isCustom = !isTest && _mkDestTab === 'custom';
             const multi = !isTest && sheet && _mkMulti && _mkDestTab === 'po';
+            // Mode nomor urut karton berkelanjutan: hanya aktif di tab Custom saat "Tampilkan No. Urut Karton di
+            // label" dicentang — tiap label dalam sesi cetak ini dirender ulang dengan nomor berbeda (bukan 1 gambar
+            // yang digandakan begitu saja), lalu "Mulai dari No." digeser maju setelah cetak selesai.
+            const seqKarton = isCustom && !!_mkCustom.showKarton;
             if (!multi) {
                 if (isCustom) {
                     if (!item || (!mkClean(item.shipTo) && !mkClean(item.alamat) && !(item.extra && item.extra.length))) {
-                        showAlert('warning', 'Belum ada data', 'Isi Ship To/Alamat, atau isi Qty Karton/Exp Date lalu centang "Tampilkan di label" dulu.');
+                        showAlert('warning', 'Belum ada data', 'Isi Ship To/Alamat, atau isi No. Urut Karton/Exp Date lalu centang "Tampilkan di label" dulu.');
                         return;
                     }
                 } else if (!item || !mkClean(item.shipTo)) {
@@ -27228,7 +27250,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     const cfg0 = mkSheetCfg();
                     if (!cfg0.fits) throw new Error('Grid label (' + Math.round(cfg0.gw) + ' × ' + Math.round(cfg0.gh) + ' mm) tidak muat di lembar ' + cfg0.pw + ' × ' + cfg0.ph + ' mm. Ubah ukuran lembar, jumlah kolom/baris, jarak, atau orientasi label.');
                     const cfg = isTest ? Object.assign({}, cfg0, { start: 1, qty: cfg0.slots, pages: 1 }) : cfg0;
-                    const itemFor = multi ? mkItemForGlobal : function () { return item; };
+                    const itemFor = multi ? mkItemForGlobal : (seqKarton ? function (i) { return mkActiveItemForIndex(i); } : function () { return item; });
                     if (multi) {
                         let missing = 0;
                         for (let i = 0; i < cfg.qty; i++) { if (!mkClean(itemFor(i).shipTo)) missing++; }
@@ -27237,7 +27259,11 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     const cache = {}, pages = [];
                     for (let pg = 0; pg < cfg.pages; pg++) {
                         const map = mkFilledMap(cfg, pg);
-                        const key = map.map(function (m) { const it = itemFor(m.i); return m.slot + ':' + mkClean(it.shipTo) + '|' + mkClean(it.alamat); }).join(';');
+                        const key = map.map(function (m) {
+                            const it = itemFor(m.i);
+                            const ex = (it.extra || []).map(function (e) { return e.cap + ':' + e.text; }).join(',');
+                            return m.slot + ':' + mkClean(it.shipTo) + '|' + mkClean(it.alamat) + (ex ? '|' + ex : '');
+                        }).join(';');
                         if (!cache[key]) cache[key] = mkRenderSheet({ cfg: cfg, dpi: 300, map: map, itemFor: itemFor, guides: _mkS.guides || isTest, capOpts: mkCapOpts(isTest) });
                         pages.push(cache[key].canvas);
                         if (pg % 4 === 3) await plSleep(0);
@@ -27247,31 +27273,51 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     setBtn('Membuka dialog cetak…');
                     await mkPrintViaSystem(pages, cfg.pw, cfg.ph);
                     if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak marking pengiriman (lembar): ' + (multi ? cfg.qty + ' label, Ship To berbeda-beda' : mkClean(item.shipTo) + ' ×' + cfg.qty));
+                    if (!isTest && seqKarton) mkAdvanceKartonStart(cfg.qty);
                     return;
                 }
                 const ro = mkRenderOpts();
                 const renderO = isTest ? Object.assign({}, ro.render, mkCapOpts(true)) : ro.render;
-                const lay = mkRenderLabel(item, renderO);
+                const layFor = function (i) { return mkRenderLabel(seqKarton ? mkActiveItemForIndex(i) : item, renderO); };
+                const lay = layFor(0);
                 if (lay.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(lay.info.warnings[0]));
                 if (_mkS.conn === 'system') {
                     setBtn('Membuka dialog cetak…');
                     const hMm = ro.dims.lh > 0 ? ro.dims.lh : Math.round(lay.canvas.height / (_mkS.dpi / 25.4) * 100) / 100;
-                    const list = []; for (let i = 0; i < qty; i++) list.push(lay.canvas);
+                    const list = [];
+                    for (let i = 0; i < qty; i++) list.push(seqKarton ? layFor(i).canvas : lay.canvas);
                     await mkPrintViaSystem(list, ro.dims.lw, hMm);
                 } else {
                     const lang = mkLang();
                     if (lang === 'system') throw new Error('Tipe printer ini hanya bisa dicetak lewat mode Driver.');
-                    const phys = mkToPhysical(lay.canvas, ro.dims);
-                    const bmp = plPackBitmap(phys);
                     const mmPx = _mkS.dpi / 25.4;
-                    const bytes = plBuildJob(lang, bmp, {
-                        wMm: ro.dims.physW, hMm: ro.dims.physH > 0 ? ro.dims.physH : Math.ceil(phys.height / mmPx),
-                        gapMm: _mkS.gap, qty: qty, invert: _mkS.invert
-                    });
-                    await mkSendBytes(bytes, function (p) { setBtn('Mengirim… ' + Math.round(p * 100) + '%'); });
+                    if (seqKarton) {
+                        // Nomor beda tiap label -> tiap label jadi 1 job tersendiri (qty:1), lalu digabung jadi 1 kiriman.
+                        const parts = [];
+                        for (let i = 0; i < qty; i++) {
+                            const layI = layFor(i);
+                            const physI = mkToPhysical(layI.canvas, ro.dims);
+                            const bmpI = plPackBitmap(physI);
+                            parts.push(plBuildJob(lang, bmpI, {
+                                wMm: ro.dims.physW, hMm: ro.dims.physH > 0 ? ro.dims.physH : Math.ceil(physI.height / mmPx),
+                                gapMm: _mkS.gap, qty: 1, invert: _mkS.invert
+                            }));
+                            if (i % 20 === 19) await plSleep(0);
+                        }
+                        await mkSendBytes(plConcat(parts), function (p) { setBtn('Mengirim… ' + Math.round(p * 100) + '%'); });
+                    } else {
+                        const phys = mkToPhysical(lay.canvas, ro.dims);
+                        const bmp = plPackBitmap(phys);
+                        const bytes = plBuildJob(lang, bmp, {
+                            wMm: ro.dims.physW, hMm: ro.dims.physH > 0 ? ro.dims.physH : Math.ceil(phys.height / mmPx),
+                            gapMm: _mkS.gap, qty: qty, invert: _mkS.invert
+                        });
+                        await mkSendBytes(bytes, function (p) { setBtn('Mengirim… ' + Math.round(p * 100) + '%'); });
+                    }
                     showToastAlert('success', isTest ? 'Cetak tes terkirim' : 'Label terkirim ke printer', escapeHtml(mkClean(item.shipTo)) + (isTest ? '' : ' × ' + qty));
                 }
                 if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak marking pengiriman: ' + mkClean(item.shipTo) + ' ×' + qty);
+                if (!isTest && seqKarton) mkAdvanceKartonStart(qty);
             } catch (e) {
                 showAlert('error', 'Gagal mencetak', plErrMsg(e));
             } finally {
@@ -27279,6 +27325,16 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 if (btn) btn.textContent = oldText || 'Cetak Label';
                 mkSyncButtons();
             }
+        }
+        /** Setelah sesi cetak sukses dengan No. Urut Karton aktif, geser "Mulai dari No." maju sebanyak jumlah label
+         *  yang barusan dicetak — supaya sesi cetak berikutnya untuk tujuan yang sama melanjutkan nomor
+         *  (mis. tercetak 1-10, field ini otomatis jadi 11 untuk sesi berikutnya). */
+        function mkAdvanceKartonStart(printedQty) {
+            const start = Math.max(1, Math.round(Number(_mkCustom.startKarton) || 1));
+            _mkCustom = Object.assign({}, _mkCustom, { startKarton: String(start + printedQty) });
+            const el = document.getElementById('mk-cust-start');
+            if (el) el.value = _mkCustom.startKarton;
+            mkRenderPreview();
         }
 
         // ---------------------------------------------------------------
@@ -27437,14 +27493,16 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 <div class="mk-note">Sumber: sheet <b>PO_Data</b> (kolom D = Ship To, kolom H = Alamat), hanya PO yang statusnya masih kosong. Perubahan di kotak Alamat hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>`;
         }
         /** Markup tab "Opsional Tujuan Custom" — isian manual (bukan dari PO_Data). Ship To & Alamat di sini IKUT
-         *  TERCETAK di label (persis seperti tab "Tujuan Pengiriman"); Qty Karton & Exp Date bersifat opsional dan
-         *  baru ikut tercetak (sebagai baris tambahan di bawah Alamat) kalau dicentang "Tampilkan di label". */
+         *  TERCETAK di label (persis seperti tab "Tujuan Pengiriman"); No. Urut Karton & Exp Date bersifat opsional
+         *  dan baru ikut tercetak (sebagai baris tambahan di bawah Alamat) kalau dicentang "Tampilkan di label".
+         *  No. Urut Karton bertambah 1 tiap label dalam satu sesi cetak (dari "Mulai dari No."), dan field itu
+         *  otomatis maju tiap selesai cetak supaya sesi cetak lanjutan untuk tujuan yang sama melanjutkan nomor. */
         function mkDestCustomHtml() {
             const c = _mkCustom;
             return `
                 <label class="pl-drop" id="mk-cust-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="event.preventDefault();this.classList.remove('over');mkHandleCustomImportFile(event.dataTransfer.files[0])">
                     <b id="mk-cust-drop-t">Klik untuk memilih file, atau tarik file ke sini</b>
-                    <small>Opsional — CSV / Excel (.xlsx, .xls) dengan kolom: Ship To · Alamat · Qty Karton · Exp Date</small>
+                    <small>Opsional — CSV / Excel (.xlsx, .xls) dengan kolom: Ship To · Alamat · Total Karton · Exp Date</small>
                     <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" class="pl-hide" onchange="mkOnCustomImportInput(this)">
                 </label>
                 <div class="mk-row mk-row-top mk-first"><label for="mk-cust-shipto">Ship To</label>
@@ -27452,13 +27510,16 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 <div class="mk-row mk-row-top"><label for="mk-cust-alamat">Alamat</label>
                     <textarea id="mk-cust-alamat" class="mk-in" rows="3" placeholder="Ketik manual…" oninput="mkOnCustomField()">${escapeHtml(c.alamat)}</textarea></div>
                 <div class="mk-note">Ship To &amp; Alamat di atas <b>ikut tercetak</b> di sticker label, sama seperti tab "Tujuan Pengiriman".</div>
-                <div class="mk-row mk-row-top"><label for="mk-cust-qty">Qty Karton</label>
-                    <input id="mk-cust-qty" class="mk-in" type="text" placeholder="Contoh: 12 Karton" oninput="mkOnCustomField()" value="${escapeHtml(c.qtyKarton)}"></div>
-                <label class="mk-chk"><input id="mk-cust-qty-show" type="checkbox" onchange="mkOnCustomField()"${c.showQty ? ' checked' : ''}><span>Tampilkan Qty Karton di label</span></label>
+                <div class="mk-row mk-row-top"><label for="mk-cust-total">Total Karton</label>
+                    <input id="mk-cust-total" class="mk-in" type="text" inputmode="numeric" placeholder="Contoh: 20" oninput="mkOnCustomField()" value="${escapeHtml(c.totalKarton)}"></div>
+                <div class="mk-row mk-row-top"><label for="mk-cust-start">Mulai dari No.</label>
+                    <input id="mk-cust-start" class="mk-in" type="text" inputmode="numeric" placeholder="1" oninput="mkOnCustomField()" value="${escapeHtml(c.startKarton)}"></div>
+                <label class="mk-chk"><input id="mk-cust-karton-show" type="checkbox" onchange="mkOnCustomField()"${c.showKarton ? ' checked' : ''}><span>Tampilkan No. Urut Karton di label</span></label>
+                <div class="mk-note">Kalau dicentang, tiap label yang dicetak dalam satu sesi otomatis diberi nomor urut berkelanjutan mulai dari "Mulai dari No." — mis. Total Karton 20, Mulai 1, Jumlah Cetak 10 → label mencetak 1/20 s.d. 10/20. Setelah selesai cetak, "Mulai dari No." otomatis maju ke nomor berikutnya (jadi 11) supaya sesi cetak lanjutan untuk tujuan yang sama tinggal klik Cetak lagi (11/20 s.d. 20/20, dst).</div>
                 <div class="mk-row mk-row-top"><label for="mk-cust-exp">Exp Date</label>
                     <input id="mk-cust-exp" class="mk-in" type="text" placeholder="Contoh: 31 Des 2027" oninput="mkOnCustomField()" value="${escapeHtml(c.expDate)}"></div>
                 <label class="mk-chk"><input id="mk-cust-exp-show" type="checkbox" onchange="mkOnCustomField()"${c.showExp ? ' checked' : ''}><span>Tampilkan Exp Date di label</span></label>
-                <div class="mk-note">Centang salah satu atau kedua opsi "Tampilkan di label" supaya Qty Karton / Exp Date ikut tercetak sebagai baris tambahan di bawah Alamat. Kalau tidak dicentang, kotaknya hanya catatan dan tidak muncul di label.</div>`;
+                <div class="mk-note">Centang "Tampilkan Exp Date di label" supaya Exp Date ikut tercetak sebagai baris tambahan di bawah Alamat.</div>`;
         }
         /** Pindah tab "Tujuan Pengiriman" <-> "Opsional Tujuan Custom". Mode "Ship To berbeda per label" (multi-slot)
          *  cuma berlaku untuk tab PO_Data, jadi otomatis dimatikan & disembunyikan saat pindah ke tab Custom. */
@@ -27483,8 +27544,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const c = function (id) { const e = document.getElementById(id); return !!(e && e.checked); };
             _mkCustom = {
                 shipTo: g('mk-cust-shipto'), alamat: g('mk-cust-alamat'),
-                qtyKarton: g('mk-cust-qty'), expDate: g('mk-cust-exp'),
-                showQty: c('mk-cust-qty-show'), showExp: c('mk-cust-exp-show')
+                totalKarton: g('mk-cust-total'), startKarton: g('mk-cust-start') || '1', expDate: g('mk-cust-exp'),
+                showKarton: c('mk-cust-karton-show'), showExp: c('mk-cust-exp-show')
             };
             mkRenderPreview();
         }
@@ -27500,7 +27561,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             };
             const REG_SHIP = [/^ship\s*to$/i, /ship\s*to|tujuan\s*pengiriman|penerima|customer|outlet/i];
             const REG_ADDR = [/^alamat$/i, /alamat|address/i];
-            const REG_QTY = [/^qty\s*karton$/i, /qty|jumlah|karton|carton/i];
+            const REG_QTY = [/^total\s*karton$/i, /total\s*karton|qty|jumlah|karton|carton/i];
             const REG_EXP = [/^exp(\.|ired|iry)?(\s*date)?$/i, /\bexp\b|expired|expiry|kadaluarsa|kedaluwarsa|kadaluwarsa|best\s*before/i];
             const hdr = rows[0];
             let iS = findIdx(hdr, REG_SHIP), iA = findIdx(hdr, REG_ADDR), iQ = findIdx(hdr, REG_QTY), iE = findIdx(hdr, REG_EXP);
@@ -27509,7 +27570,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const r = rows[start] || rows[0];
             if (!r) return null;
             const val = function (i) { return i >= 0 && r[i] != null ? String(r[i]).trim() : ''; };
-            return { shipTo: val(iS), alamat: val(iA), qtyKarton: val(iQ), expDate: val(iE) };
+            return { shipTo: val(iS), alamat: val(iA), totalKarton: val(iQ), expDate: val(iE) };
         }
         async function mkHandleCustomImportFile(file) {
             if (!file) return;
@@ -27527,7 +27588,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     matrix = plParseDelimited(await file.text());
                 }
                 const row = mkCustomMatrixToRow(matrix);
-                if (!row || (!row.shipTo && !row.alamat && !row.qtyKarton && !row.expDate)) throw new Error('Tidak ada data yang terbaca. Pastikan file berisi kolom Ship To, Alamat, Qty Karton, dan/atau Exp Date.');
+                if (!row || (!row.shipTo && !row.alamat && !row.totalKarton && !row.expDate)) throw new Error('Tidak ada data yang terbaca. Pastikan file berisi kolom Ship To, Alamat, Total Karton, dan/atau Exp Date.');
                 _mkCustom = Object.assign({}, _mkCustom, row);
                 const body = document.getElementById('mk-dest-body');
                 if (body) body.innerHTML = mkDestCustomHtml();
@@ -27648,7 +27709,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 const dpr = Math.min(2, window.devicePixelRatio || 1);
                 const dpi = Math.max(110, Math.min(220, Math.round(availW * dpr / (rw / 25.4))));
                 const mkMap = mkFilledMap(cfg, _mkPage);
-                const mkItemFor = (_mkMulti && _mkDestTab === 'po') ? mkItemForGlobal : function () { return mkActiveItem(); };
+                const seqKartonPrev = _mkDestTab === 'custom' && !!_mkCustom.showKarton;
+                const mkItemFor = (_mkMulti && _mkDestTab === 'po') ? mkItemForGlobal : (seqKartonPrev ? function (i) { return mkActiveItemForIndex(i); } : function () { return mkActiveItem(); });
                 const capL = mkCapOpts();
                 const sh = mkRenderSheet({ cfg: cfg, dpi: dpi, map: mkMap, itemFor: mkItemFor, preview: true });
                 const mmS = dpi / 25.4;
@@ -28099,7 +28161,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         function mkResetOnLogout() {
             _mkData = null; _mkLoad = { state: 'idle', msg: '' }; _mkItem = { shipTo: '', alamat: '' }; _mkSelId = null; _mkQuery = ''; _mkIdx = -1; _mkPage = 0;
             _mkMulti = false; _mkSlots = {};
-            _mkDestTab = 'po'; _mkCustom = { shipTo: '', alamat: '', qtyKarton: '', expDate: '', showQty: false, showExp: false };
+            _mkDestTab = 'po'; _mkCustom = { shipTo: '', alamat: '', totalKarton: '', startKarton: '1', expDate: '', showKarton: false, showExp: false };
         }
     </script>
 
