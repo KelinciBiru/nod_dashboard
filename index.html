@@ -26586,7 +26586,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             printerId: 'sys-epson', conn: 'system', connRaw: 'usb', paperId: 'tj121', cw: 75, ch: 38, orientation: 'landscape',
             copies: 10, dpi: 300, lang: 'auto', margin: 2, gap: 2, rot180: false, invert: false,
             layout: 'sheet', sheetPaper: 'a4p', sheetW: 210, sheetH: 297, cols: 2, rows: 5,
-            gapX: 2, gapY: 2, shiftX: 0, shiftY: 0, startSlot: 1, guides: false, logo: true
+            gapX: 2, gapY: 2, shiftX: 0, shiftY: 0, startSlot: 1, guides: false, logo: true, cornerOrigin: false
         };
         const MK_COMBO_MAX = 60;
 
@@ -26638,7 +26638,13 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             d.sheetW = plClamp(d.sheetW, 50, 600); d.sheetH = plClamp(d.sheetH, 50, 900);
             d.cols = Math.round(plClamp(d.cols, 1, 6)); d.rows = Math.round(plClamp(d.rows, 1, 20));
             d.gapX = plClamp(d.gapX, 0, 30); d.gapY = plClamp(d.gapY, 0, 30);
-            d.shiftX = plClamp(d.shiftX, -40, 40); d.shiftY = plClamp(d.shiftY, -60, 60);
+            // [MIGRASI SEKALI] Grid dulu diletakkan di TENGAH lembar lalu digeser shiftX/shiftY;
+            // sekarang basisnya PINDAH ke POJOK KIRI ATAS lembar. Nilai Geser lama (dihitung dari
+            // tengah) tidak relevan lagi di basis baru — reset ke 0 sekali saja, lalu tandai
+            // cornerOrigin=true supaya migrasi ini tidak terjadi lagi di load berikutnya.
+            if (!s.cornerOrigin) { d.shiftX = 0; d.shiftY = 0; }
+            d.cornerOrigin = true;
+            d.shiftX = plClamp(d.shiftX, -20, 300); d.shiftY = plClamp(d.shiftY, -20, 500);
             d.startSlot = Math.round(plClamp(d.startSlot, 1, d.cols * d.rows));
             d.guides = !!d.guides; d.logo = d.logo !== false;
             if (['usb', 'bluetooth'].indexOf(d.connRaw) < 0) d.connRaw = 'usb';
@@ -26830,12 +26836,15 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const sh = MK_SHEETS.find(function (x) { return x.id === _mkS.sheetPaper; }) || MK_SHEETS[0];
             return sh.id === 'custom' ? (_mkS.sheetW + ' × ' + _mkS.sheetH + ' mm') : sh.label.split(' (')[0];
         }
-        /** Semua ukuran/posisi grid (mm). Grid diletakkan di tengah lembar, lalu digeser sebesar shiftX/shiftY. */
+        /** Semua ukuran/posisi grid (mm). Grid diletakkan di POJOK KIRI ATAS lembar (ujung kertas) —
+         *  bukan di tengah — supaya cocok dgn lembar stiker fisik (Tom & Jerry dkk) yang labelnya
+         *  memang dicetak mepet ke pojok/ujung kertas, bukan tersebar simetris ke tengah. shiftX/shiftY
+         *  ("Geser kanan/bawah") dipakai untuk koreksi halus kalau printer masih sedikit meleset. */
         function mkSheetCfg() {
             const d = mkLayoutDims(), pg = mkSheetPage();
             const cols = _mkS.cols, rows = _mkS.rows, slots = cols * rows;
             const gw = cols * d.lw + (cols - 1) * _mkS.gapX, gh = rows * d.lh + (rows - 1) * _mkS.gapY;
-            const x0 = (pg.w - gw) / 2 + _mkS.shiftX, y0 = (pg.h - gh) / 2 + _mkS.shiftY;
+            const x0 = _mkS.shiftX, y0 = _mkS.shiftY;
             const start = Math.min(Math.max(1, _mkS.startSlot), slots);
             const qty = Math.round(plClamp(_mkS.copies, 1, 500));
             const pages = Math.max(1, Math.ceil((start - 1 + qty) / slots));
@@ -27634,10 +27643,10 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                                         <div class="mk-adv-grid">
                                             <div><label for="mk-gapx">Jarak antar kolom (mm)</label><input id="mk-gapx" type="number" min="0" max="30" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
                                             <div><label for="mk-gapy">Jarak antar baris (mm)</label><input id="mk-gapy" type="number" min="0" max="30" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
-                                            <div><label for="mk-shiftx">Geser kanan (mm)</label><input id="mk-shiftx" type="number" min="-40" max="40" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
-                                            <div><label for="mk-shifty">Geser bawah (mm)</label><input id="mk-shifty" type="number" min="-60" max="60" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                            <div><label for="mk-shiftx">Geser kanan (mm)</label><input id="mk-shiftx" type="number" min="-20" max="300" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
+                                            <div><label for="mk-shifty">Geser bawah (mm)</label><input id="mk-shifty" type="number" min="-20" max="500" step="0.5" class="mk-in" oninput="mkOnAdv()"></div>
                                         </div>
-                                        <div class="mk-note">Grid otomatis di tengah lembar. Isi Geser dengan angka negatif untuk menggeser ke kiri / ke atas.</div>
+                                        <div class="mk-note">Grid otomatis mepet ke pojok kiri atas lembar (ujung kertas). Isi Geser kalau printer masih sedikit meleset — angka positif menggeser ke kanan/bawah.</div>
                                         <label class="mk-chk"><input id="mk-guides" type="checkbox" onchange="mkOnAdv()"><span>Garis bantu di sekeliling label<small>Untuk uji posisi di kertas biasa. Cetak Tes selalu memakai garis bantu.</small></span></label>
                                     </div>
                                     <div id="mk-adv-raw">
@@ -27896,8 +27905,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const gp = parseFloat(document.getElementById('mk-gap').value); if (isFinite(gp)) _mkS.gap = plClamp(gp, 0, 10);
             const gx = parseFloat(document.getElementById('mk-gapx').value); if (isFinite(gx)) _mkS.gapX = plClamp(gx, 0, 30);
             const gy = parseFloat(document.getElementById('mk-gapy').value); if (isFinite(gy)) _mkS.gapY = plClamp(gy, 0, 30);
-            const sx = parseFloat(document.getElementById('mk-shiftx').value); if (isFinite(sx)) _mkS.shiftX = plClamp(sx, -40, 40);
-            const sy = parseFloat(document.getElementById('mk-shifty').value); if (isFinite(sy)) _mkS.shiftY = plClamp(sy, -60, 60);
+            const sx = parseFloat(document.getElementById('mk-shiftx').value); if (isFinite(sx)) _mkS.shiftX = plClamp(sx, -20, 300);
+            const sy = parseFloat(document.getElementById('mk-shifty').value); if (isFinite(sy)) _mkS.shiftY = plClamp(sy, -20, 500);
             _mkS.guides = document.getElementById('mk-guides').checked;
             _mkS.rot180 = document.getElementById('mk-rot180').checked;
             _mkS.invert = document.getElementById('mk-invert').checked;
