@@ -26600,6 +26600,11 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         let _mkIdx = -1;
         let _mkMulti = false;                               // mode: Ship To berbeda untuk tiap label di lembar (grid)
         let _mkSlots = {};                                  // { [indeksGlobalLabel 0-based]: {shipTo, alamat} } — override per slot saat _mkMulti aktif
+        // [MENU BARU — Marking Pengiriman > Opsional Tujuan Custom] Tab kedua di seksi "Tujuan Pengiriman":
+        // isian manual (bukan dari PO_Data). Ship To & Alamat di sini HANYA catatan (tidak ikut tercetak);
+        // Qty Karton & Exp Date bisa dipilih user untuk ikut tercetak di label atau tidak.
+        let _mkDestTab = 'po';                              // tab aktif: 'po' (Tujuan Pengiriman) | 'custom' (Opsional Tujuan Custom)
+        let _mkCustom = { shipTo: '', alamat: '', qtyKarton: '', expDate: '', showQty: false, showExp: false };
         let _mkBusy = false;
         let _mkDetected = [];                              // printer USB yang sudah diizinkan browser
         let _mkLastDev = '';
@@ -26676,7 +26681,23 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         }
         function mkRenderOpts() {
             const d = mkLayoutDims();
-            return { dims: d, render: { lw: d.lw, lh: d.lh, dpi: _mkS.dpi, margin: _mkS.margin, binarize: _mkS.conn !== 'system', logo: _mkS.logo ? _mkLogo : null } };
+            return { dims: d, render: Object.assign({ lw: d.lw, lh: d.lh, dpi: _mkS.dpi, margin: _mkS.margin, binarize: _mkS.conn !== 'system', logo: _mkS.logo ? _mkLogo : null }, mkCapOpts()) };
+        }
+        /** Judul/caption yang digambar di label + placeholder preview — beda antara tab "Tujuan Pengiriman" (PO_Data)
+         *  dan tab "Opsional Tujuan Custom" (isian manual). forcePo=true dipakai untuk Cetak Tes (selalu contoh Ship To). */
+        function mkCapOpts(forcePo) {
+            if (!forcePo && _mkDestTab === 'custom') {
+                return { cap1: 'QTY KARTON', cap2: 'EXP DATE', lbl1: 'Qty Karton', lbl2: 'Exp Date', placeholderText: 'Isi Qty Karton / Exp Date lalu centang "Tampilkan di label"' };
+            }
+            return { cap1: 'SHIP TO', cap2: 'ALAMAT', lbl1: 'Ship To', lbl2: 'Alamat', placeholderText: 'Pilih Ship To untuk preview' };
+        }
+        /** Item aktif yang dipratinjau/dicetak sesuai tab: PO_Data (_mkItem) atau isian manual (_mkCustom, hanya
+         *  field yang dicentang "Tampilkan di label" yang dikirim ke penggambar label). */
+        function mkActiveItem() {
+            if (_mkDestTab === 'custom') {
+                return { shipTo: _mkCustom.showQty ? mkClean(_mkCustom.qtyKarton) : '', alamat: _mkCustom.showExp ? mkClean(_mkCustom.expDate) : '' };
+            }
+            return _mkItem;
         }
 
         // ---------------------------------------------------------------
@@ -26758,8 +26779,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             if (shipTo || alamat) {
                 for (let s = 1; s > 0.02 && !L; s -= 0.03) L = build(s, false);
                 if (!L) L = build(0, true);
-                if (L.cut.name) warnings.push('Ship To terlalu panjang — dipotong jadi 3 baris di label.');
-                if (L.cut.addr) warnings.push('Alamat terlalu panjang untuk ukuran label ini — dipotong. Pilih kertas lebih besar, atau persingkat alamat.');
+                if (L.cut.name) warnings.push((o.lbl1 || 'Ship To') + ' terlalu panjang — dipotong jadi 3 baris di label.');
+                if (L.cut.addr) warnings.push((o.lbl2 || 'Alamat') + ' terlalu panjang untuk ukuran label ini — dipotong. Pilih kertas lebih besar, atau persingkat isinya.');
                 if (L.namePx <= nameMin + 1 && L.addrPx <= addrMin + 1 && !L.cut.addr && !L.cut.name) warnings.push('Teks sangat panjang sehingga font mengecil ke batas terkecil — cek keterbacaannya di kertas asli.');
             }
 
@@ -26773,7 +26794,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
             if (L) {
                 let y = margin;   // rata atas (logo terpasang di pojok kanan atas)
-                if (shipTo) { ctx.font = fontOf('bold', capPx); ctx.fillText('SHIP TO', margin, y + lhC / 2); }
+                if (shipTo) { ctx.font = fontOf('bold', capPx); ctx.fillText(o.cap1 || 'SHIP TO', margin, y + lhC / 2); }
                 y += hTop;
                 if (shipTo) {
                     ctx.font = fontOf(wName, L.namePx);
@@ -26781,7 +26802,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 }
                 if (shipTo && alamat) { y += gapBlk; ctx.fillRect(margin, y, aw, rule); y += rule + gapBlk; }
                 if (alamat) {
-                    ctx.font = fontOf('bold', capPx); ctx.fillText('ALAMAT', margin, y + lhC / 2); y += lhC + gapCap;
+                    ctx.font = fontOf('bold', capPx); ctx.fillText(o.cap2 || 'ALAMAT', margin, y + lhC / 2); y += lhC + gapCap;
                     ctx.font = fontOf(wAddr, L.addrPx);
                     L.al.forEach(function (ln) { ctx.fillText(ln, margin, y + L.lhA / 2); y += L.lhA; });
                 }
@@ -26791,7 +26812,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             if (!L && o.placeholder) {   // hanya preview
                 ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold ' + Math.max(10, Math.round(Math.min(W, canvas.height) * 0.075)) + 'px ' + FONT;
-                ctx.fillText('Pilih Ship To untuk preview', W / 2, canvas.height / 2);
+                ctx.fillText(o.placeholderText || 'Pilih Ship To untuk preview', W / 2, canvas.height / 2);
             }
             return {
                 canvas: canvas, W: canvas.width, H: canvas.height,
@@ -26880,10 +26901,11 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
             const map = o.map || mkFilledMap(cfg, o.page || 0);
             const itemFor = o.itemFor || function () { return o.item || { shipTo: '', alamat: '' }; };
+            const capOpts = o.capOpts || mkCapOpts();
             const labCache = {};
             const getLab = function (item) {
                 const key = mkClean(item.shipTo) + '\u0001' + mkClean(item.alamat);
-                if (!(key in labCache)) labCache[key] = mkRenderLabel(item, { lw: cfg.lw, lh: cfg.lh, dpi: o.dpi, margin: _mkS.margin, binarize: false, logo: _mkS.logo ? _mkLogo : null, placeholder: false });
+                if (!(key in labCache)) labCache[key] = mkRenderLabel(item, Object.assign({ lw: cfg.lw, lh: cfg.lh, dpi: o.dpi, margin: _mkS.margin, binarize: false, logo: _mkS.logo ? _mkLogo : null, placeholder: false }, capOpts));
                 return labCache[key];
             };
             const bySlot = {}; map.forEach(function (m) { bySlot[m.slot] = m.i; });
@@ -27140,12 +27162,20 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
         async function mkPrint(isTest) {
             if (_mkBusy) return;
-            const item = isTest ? MK_SAMPLE : _mkItem;
+            const item = isTest ? MK_SAMPLE : mkActiveItem();
             const sheet = mkIsSheet();
-            const multi = !isTest && sheet && _mkMulti;
-            if (!multi && (!item || !mkClean(item.shipTo))) {
-                showAlert('warning', 'Belum ada data', 'Pilih Ship To dari daftar (atau ketik manual) dulu. Kotak Ship To wajib terisi.');
-                return;
+            const isCustom = !isTest && _mkDestTab === 'custom';
+            const multi = !isTest && sheet && _mkMulti && _mkDestTab === 'po';
+            if (!multi) {
+                if (isCustom) {
+                    if (!item || (!mkClean(item.shipTo) && !mkClean(item.alamat))) {
+                        showAlert('warning', 'Belum ada data', 'Isi Qty Karton dan/atau Exp Date, lalu centang "Tampilkan di label" dulu.');
+                        return;
+                    }
+                } else if (!item || !mkClean(item.shipTo)) {
+                    showAlert('warning', 'Belum ada data', 'Pilih Ship To dari daftar (atau ketik manual) dulu. Kotak Ship To wajib terisi.');
+                    return;
+                }
             }
             const qty = isTest ? 1 : Math.round(plClamp(_mkS.copies, 1, 500));
             const btn = document.getElementById('mk-print-btn');
@@ -27175,7 +27205,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     for (let pg = 0; pg < cfg.pages; pg++) {
                         const map = mkFilledMap(cfg, pg);
                         const key = map.map(function (m) { const it = itemFor(m.i); return m.slot + ':' + mkClean(it.shipTo) + '|' + mkClean(it.alamat); }).join(';');
-                        if (!cache[key]) cache[key] = mkRenderSheet({ cfg: cfg, dpi: 300, map: map, itemFor: itemFor, guides: _mkS.guides || isTest });
+                        if (!cache[key]) cache[key] = mkRenderSheet({ cfg: cfg, dpi: 300, map: map, itemFor: itemFor, guides: _mkS.guides || isTest, capOpts: mkCapOpts(isTest) });
                         pages.push(cache[key].canvas);
                         if (pg % 4 === 3) await plSleep(0);
                     }
@@ -27187,7 +27217,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     return;
                 }
                 const ro = mkRenderOpts();
-                const lay = mkRenderLabel(item, ro.render);
+                const renderO = isTest ? Object.assign({}, ro.render, mkCapOpts(true)) : ro.render;
+                const lay = mkRenderLabel(item, renderO);
                 if (lay.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(lay.info.warnings[0]));
                 if (_mkS.conn === 'system') {
                     setBtn('Membuka dialog cetak…');
@@ -27355,6 +27386,127 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         }
 
         // ---------------------------------------------------------------
+        // [MENU BARU] Tab "Tujuan Pengiriman" vs "Opsional Tujuan Custom"
+        // ---------------------------------------------------------------
+        /** Markup tab "Tujuan Pengiriman" (dari PO_Data) — persis seperti sebelumnya, dipindah ke fungsi supaya bisa
+         *  dirender ulang saat pindah tab tanpa menulis ulang seluruh halaman. */
+        function mkDestPoHtml() {
+            return `
+                <div class="mk-row mk-row-top mk-first"><label for="mk-shipto">Ship To</label>
+                    <div class="mk-combo" id="mk-combo">
+                        <input id="mk-shipto" class="mk-in" type="text" autocomplete="off" placeholder="Pilih dari daftar atau ketik manual…" oninput="mkOnShipInput()" onfocus="mkOpenCombo()" onkeydown="mkComboKey(event)">
+                        <button type="button" id="mk-shipto-x" class="mk-combo-x mk-hide" onclick="mkClearShip()" aria-label="Kosongkan">${PL_IC.x}</button>
+                        <div id="mk-combo-list" class="mk-combo-list mk-hide" onmousedown="event.preventDefault()" onclick="mkComboClick(event)"></div>
+                    </div></div>
+                <div class="mk-row mk-row-top"><label for="mk-alamat">Alamat</label>
+                    <textarea id="mk-alamat" class="mk-in" rows="4" placeholder="Terisi otomatis saat Ship To dipilih — bisa diedit" oninput="mkOnAddrInput()"></textarea></div>
+                <div class="mk-datanote"><span id="mk-datanote-t"></span></div>
+                <div class="mk-note">Sumber: sheet <b>PO_Data</b> (kolom D = Ship To, kolom H = Alamat), hanya PO yang statusnya masih kosong. Perubahan di kotak Alamat hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>`;
+        }
+        /** Markup tab "Opsional Tujuan Custom" — isian manual (bukan dari PO_Data). Ship To & Alamat hanya catatan
+         *  (tidak ikut tercetak); Qty Karton & Exp Date bisa dipilih user untuk ikut tercetak di label atau tidak. */
+        function mkDestCustomHtml() {
+            const c = _mkCustom;
+            return `
+                <label class="pl-drop" id="mk-cust-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="event.preventDefault();this.classList.remove('over');mkHandleCustomImportFile(event.dataTransfer.files[0])">
+                    <b id="mk-cust-drop-t">Klik untuk memilih file, atau tarik file ke sini</b>
+                    <small>Opsional — CSV / Excel (.xlsx, .xls) dengan kolom: Ship To · Alamat · Qty Karton · Exp Date</small>
+                    <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" class="pl-hide" onchange="mkOnCustomImportInput(this)">
+                </label>
+                <div class="mk-row mk-row-top mk-first"><label for="mk-cust-shipto">Ship To</label>
+                    <input id="mk-cust-shipto" class="mk-in" type="text" autocomplete="off" placeholder="Ketik manual…" oninput="mkOnCustomField()" value="${escapeHtml(c.shipTo)}"></div>
+                <div class="mk-row mk-row-top"><label for="mk-cust-alamat">Alamat</label>
+                    <textarea id="mk-cust-alamat" class="mk-in" rows="3" placeholder="Ketik manual…" oninput="mkOnCustomField()">${escapeHtml(c.alamat)}</textarea></div>
+                <div class="mk-note">Ship To &amp; Alamat di atas hanya catatan internal — <b>tidak ikut tercetak</b> di sticker label.</div>
+                <div class="mk-row mk-row-top"><label for="mk-cust-qty">Qty Karton</label>
+                    <input id="mk-cust-qty" class="mk-in" type="text" placeholder="Contoh: 12 Karton" oninput="mkOnCustomField()" value="${escapeHtml(c.qtyKarton)}"></div>
+                <label class="mk-chk"><input id="mk-cust-qty-show" type="checkbox" onchange="mkOnCustomField()"${c.showQty ? ' checked' : ''}><span>Tampilkan Qty Karton di label</span></label>
+                <div class="mk-row mk-row-top"><label for="mk-cust-exp">Exp Date</label>
+                    <input id="mk-cust-exp" class="mk-in" type="text" placeholder="Contoh: 31 Des 2027" oninput="mkOnCustomField()" value="${escapeHtml(c.expDate)}"></div>
+                <label class="mk-chk"><input id="mk-cust-exp-show" type="checkbox" onchange="mkOnCustomField()"${c.showExp ? ' checked' : ''}><span>Tampilkan Exp Date di label</span></label>
+                <div class="mk-note">Centang salah satu atau kedua opsi "Tampilkan di label" supaya Qty Karton / Exp Date ikut tercetak di sticker. Kalau tidak dicentang, kotaknya hanya catatan dan tidak muncul di label.</div>`;
+        }
+        /** Pindah tab "Tujuan Pengiriman" <-> "Opsional Tujuan Custom". Mode "Ship To berbeda per label" (multi-slot)
+         *  cuma berlaku untuk tab PO_Data, jadi otomatis dimatikan & disembunyikan saat pindah ke tab Custom. */
+        function mkSetDestTab(t) {
+            if ((t !== 'po' && t !== 'custom') || t === _mkDestTab) return;
+            _mkDestTab = t;
+            const tabs = document.getElementById('mk-dest-tabs');
+            if (tabs) tabs.querySelectorAll('button[role="tab"]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === t); });
+            const body = document.getElementById('mk-dest-body');
+            if (body) body.innerHTML = t === 'custom' ? mkDestCustomHtml() : mkDestPoHtml();
+            if (t === 'po') {
+                const si = document.getElementById('mk-shipto'), ai = document.getElementById('mk-alamat');
+                if (si) si.value = _mkItem.shipTo; if (ai) ai.value = _mkItem.alamat;
+                const x = document.getElementById('mk-shipto-x'); if (x) x.classList.toggle('mk-hide', !_mkItem.shipTo);
+                mkRenderDataNote(); mkRenderCombo();
+            }
+            mkRefreshAll();
+        }
+        /** Ambil isian tab Custom dari form -> state, lalu render ulang preview. */
+        function mkOnCustomField() {
+            const g = function (id) { const e = document.getElementById(id); return e ? e.value : ''; };
+            const c = function (id) { const e = document.getElementById(id); return !!(e && e.checked); };
+            _mkCustom = {
+                shipTo: g('mk-cust-shipto'), alamat: g('mk-cust-alamat'),
+                qtyKarton: g('mk-cust-qty'), expDate: g('mk-cust-exp'),
+                showQty: c('mk-cust-qty-show'), showExp: c('mk-cust-exp-show')
+            };
+            mkRenderPreview();
+        }
+        /** Cari baris data pertama dari file import (CSV/Excel) untuk tab Custom, cocokkan kolom lewat nama header
+         *  (fleksibel — ada/tanpa judul kolom). Dipakai ulang parser plParseDelimited/_ensureXlsx milik Label Produk. */
+        function mkCustomMatrixToRow(matrix) {
+            const isEmpty = function (r) { return !r || r.every(function (c) { return String(c == null ? '' : c).trim() === ''; }); };
+            const rows = (matrix || []).filter(function (r) { return !isEmpty(r); });
+            if (!rows.length) return null;
+            const findIdx = function (hdr, regs) {
+                for (const re of regs) { const i = hdr.findIndex(function (h) { return re.test(String(h == null ? '' : h).trim()); }); if (i >= 0) return i; }
+                return -1;
+            };
+            const REG_SHIP = [/^ship\s*to$/i, /ship\s*to|tujuan\s*pengiriman|penerima|customer|outlet/i];
+            const REG_ADDR = [/^alamat$/i, /alamat|address/i];
+            const REG_QTY = [/^qty\s*karton$/i, /qty|jumlah|karton|carton/i];
+            const REG_EXP = [/^exp(\.|ired|iry)?(\s*date)?$/i, /\bexp\b|expired|expiry|kadaluarsa|kedaluwarsa|kadaluwarsa|best\s*before/i];
+            const hdr = rows[0];
+            let iS = findIdx(hdr, REG_SHIP), iA = findIdx(hdr, REG_ADDR), iQ = findIdx(hdr, REG_QTY), iE = findIdx(hdr, REG_EXP);
+            let start = 1;
+            if (iS < 0 && iA < 0 && iQ < 0 && iE < 0) { iS = 0; iA = 1; iQ = 2; iE = 3; start = 0; }   // tanpa judul: kolom 1-4
+            const r = rows[start] || rows[0];
+            if (!r) return null;
+            const val = function (i) { return i >= 0 && r[i] != null ? String(r[i]).trim() : ''; };
+            return { shipTo: val(iS), alamat: val(iA), qtyKarton: val(iQ), expDate: val(iE) };
+        }
+        async function mkHandleCustomImportFile(file) {
+            if (!file) return;
+            const drop = document.getElementById('mk-cust-drop-t');
+            if (drop) drop.textContent = 'Membaca ' + file.name + '…';
+            try {
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                let matrix;
+                if (ext === 'xlsx' || ext === 'xls') {
+                    await _ensureXlsx();
+                    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', dateNF: 'yyyy-mm-dd' });
+                } else {
+                    matrix = plParseDelimited(await file.text());
+                }
+                const row = mkCustomMatrixToRow(matrix);
+                if (!row || (!row.shipTo && !row.alamat && !row.qtyKarton && !row.expDate)) throw new Error('Tidak ada data yang terbaca. Pastikan file berisi kolom Ship To, Alamat, Qty Karton, dan/atau Exp Date.');
+                _mkCustom = Object.assign({}, _mkCustom, row);
+                const body = document.getElementById('mk-dest-body');
+                if (body) body.innerHTML = mkDestCustomHtml();
+                showToastAlert('success', 'Import berhasil', escapeHtml(file.name));
+                mkRenderPreview();
+            } catch (e) {
+                showAlert('error', 'Gagal import file', plErrMsg(e));
+                if (drop) drop.textContent = 'Klik untuk memilih file, atau tarik file ke sini';
+            }
+        }
+        function mkOnCustomImportInput(inp) { const f = inp.files && inp.files[0]; inp.value = ''; mkHandleCustomImportFile(f); }
+
+        // ---------------------------------------------------------------
         // Ship To berbeda per label (mode "Ship To per Label" di lembar/grid)
         // ---------------------------------------------------------------
         function mkOnMultiToggle() {
@@ -27462,7 +27614,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 const dpr = Math.min(2, window.devicePixelRatio || 1);
                 const dpi = Math.max(110, Math.min(220, Math.round(availW * dpr / (rw / 25.4))));
                 const mkMap = mkFilledMap(cfg, _mkPage);
-                const mkItemFor = _mkMulti ? mkItemForGlobal : function () { return _mkItem; };
+                const mkItemFor = (_mkMulti && _mkDestTab === 'po') ? mkItemForGlobal : function () { return mkActiveItem(); };
+                const capL = mkCapOpts();
                 const sh = mkRenderSheet({ cfg: cfg, dpi: dpi, map: mkMap, itemFor: mkItemFor, preview: true });
                 const mmS = dpi / 25.4;
                 canvas.width = Math.max(50, Math.round(rw * mmS)); canvas.height = Math.max(50, Math.round(rh * mmS));
@@ -27477,7 +27630,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 setT('mk-dim-h', _mkZoom ? 'grid ' + r1(cfg.gh) + ' mm' : r1(cfg.ph) + ' mm');
                 const zr = document.getElementById('mk-zoomrow'); if (zr) zr.classList.remove('mk-hide');
                 setT('mk-zoom', _mkZoom ? 'Tampilkan lembar penuh (' + mkSheetShort() + ')' : 'Perbesar area label');
-                setT('mk-meta', 'Lembar ' + (_mkPage + 1) + ' dari ' + cfg.pages + ' · ' + sh.filled + ' label di lembar ini · grid ' + r1(cfg.gw) + ' × ' + r1(cfg.gh) + ' mm' + (sh.info.empty ? '' : ' · font otomatis: Ship To ' + r1(sh.info.namePt) + ' pt, Alamat ' + r1(sh.info.addrPt) + ' pt'));
+                setT('mk-meta', 'Lembar ' + (_mkPage + 1) + ' dari ' + cfg.pages + ' · ' + sh.filled + ' label di lembar ini · grid ' + r1(cfg.gw) + ' × ' + r1(cfg.gh) + ' mm' + (sh.info.empty ? '' : ' · font otomatis: ' + capL.lbl1 + ' ' + r1(sh.info.namePt) + ' pt, ' + capL.lbl2 + ' ' + r1(sh.info.addrPt) + ' pt'));
                 if (pager) {
                     pager.classList.toggle('mk-hide', cfg.pages <= 1);
                     setT('mk-pager-t', 'Lembar ' + (_mkPage + 1) + ' / ' + cfg.pages);
@@ -27486,7 +27639,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 sh.info.warnings.forEach(function (t) { tips.push(t); });
                 if (!cfg.fits) tips.unshift('Grid label (' + r1(cfg.gw) + ' × ' + r1(cfg.gh) + ' mm) tidak muat di lembar ' + r1(cfg.pw) + ' × ' + r1(cfg.ph) + ' mm — tidak bisa dicetak. Ubah ukuran lembar, jumlah kolom/baris, jarak antar label, atau orientasi label.');
                 if (cfg.start > 1) tips.push('Mulai dari slot ' + cfg.start + ': ' + (cfg.start - 1) + ' slot pertama dilewati (untuk lembar stiker yang sudah terpakai sebagian).');
-                if (_mkMulti) tips.push('Ship To berbeda per label aktif — atur tujuan tiap slot di daftar "Ship To per Label" di bawah pratinjau. Slot yang tidak diatur memakai Ship To utama.');
+                if (_mkMulti && _mkDestTab === 'po') tips.push('Ship To berbeda per label aktif — atur tujuan tiap slot di daftar "Ship To per Label" di bawah pratinjau. Slot yang tidak diatur memakai Ship To utama.');
                 tips.push('Di dialog cetak browser: pilih printer, ukuran kertas ' + mkSheetShort() + ', Scale/Skala = 100% (Actual size), Margins = None.');
                 tips.push('Sebelum mencetak di stiker asli, klik Cetak Tes di kertas biasa, lalu tempelkan ke lembar stiker (arahkan ke cahaya) untuk mengecek posisi. Kalau meleset, geser di Pengaturan lanjutan (Geser X/Y).');
                 mkRenderSlotList();
@@ -27497,7 +27650,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 const sl = document.getElementById('mk-slotlist'); if (sl) sl.classList.add('mk-hide');
                 const ro = mkRenderOpts();
                 const o = Object.assign({}, ro.render, { placeholder: true });
-                const lay = mkRenderLabel(_mkItem, o);
+                const lay = mkRenderLabel(mkActiveItem(), o);
                 canvas.width = lay.W; canvas.height = lay.H;
                 canvas.getContext('2d').drawImage(lay.canvas, 0, 0);
                 const maxHL = window.innerWidth < 640 ? 300 : 400;
@@ -27512,7 +27665,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 setT('mk-chip-orient', dims.auto ? 'Kontinu' : (dims.lw > dims.lh ? 'Lanskap' : (dims.lw < dims.lh ? 'Potret' : 'Persegi')));
                 setT('mk-dim-w', dims.lw + ' mm');
                 setT('mk-dim-h', hMm + ' mm');
-                setT('mk-meta', lay.W + ' × ' + lay.H + ' dot · ' + _mkS.dpi + ' dpi' + (lay.info.empty ? '' : ' · font otomatis: Ship To ' + r1(lay.info.namePt) + ' pt, Alamat ' + r1(lay.info.addrPt) + ' pt'));
+                setT('mk-meta', lay.W + ' × ' + lay.H + ' dot · ' + _mkS.dpi + ' dpi' + (lay.info.empty ? '' : ' · font otomatis: ' + ro.render.lbl1 + ' ' + r1(lay.info.namePt) + ' pt, ' + ro.render.lbl2 + ' ' + r1(lay.info.addrPt) + ' pt'));
                 lay.info.warnings.forEach(function (t) { tips.push(t); });
                 if (_mkS.conn === 'system') {
                     tips.push('Di dialog cetak browser: pilih printer, set Scale/Skala = 100% (Actual size) dan Margins = None supaya ukuran label persis ' + dims.lw + ' × ' + hMm + ' mm.');
@@ -27698,16 +27851,11 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                         <section class="mk-sec mk-c-dest" aria-label="Tujuan pengiriman">
                                 <div class="mk-sec-h"><span><span class="mk-ic">${PL_IC.pin}</span>Tujuan Pengiriman</span>
                                     <button type="button" id="mk-refresh" class="mk-btn mk-btn-ghost mk-btn-sm" onclick="mkLoadData()">${PL_IC.refresh}Refresh</button></div>
-                                <div class="mk-row mk-row-top mk-first"><label for="mk-shipto">Ship To</label>
-                                    <div class="mk-combo" id="mk-combo">
-                                        <input id="mk-shipto" class="mk-in" type="text" autocomplete="off" placeholder="Pilih dari daftar atau ketik manual…" oninput="mkOnShipInput()" onfocus="mkOpenCombo()" onkeydown="mkComboKey(event)">
-                                        <button type="button" id="mk-shipto-x" class="mk-combo-x mk-hide" onclick="mkClearShip()" aria-label="Kosongkan">${PL_IC.x}</button>
-                                        <div id="mk-combo-list" class="mk-combo-list mk-hide" onmousedown="event.preventDefault()" onclick="mkComboClick(event)"></div>
-                                    </div></div>
-                                <div class="mk-row mk-row-top"><label for="mk-alamat">Alamat</label>
-                                    <textarea id="mk-alamat" class="mk-in" rows="4" placeholder="Terisi otomatis saat Ship To dipilih — bisa diedit" oninput="mkOnAddrInput()"></textarea></div>
-                                <div class="mk-datanote"><span id="mk-datanote-t"></span></div>
-                                <div class="mk-note">Sumber: sheet <b>PO_Data</b> (kolom D = Ship To, kolom H = Alamat), hanya PO yang statusnya masih kosong. Perubahan di kotak Alamat hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>
+                                <div class="pl-tabs" role="tablist" id="mk-dest-tabs">
+                                    <button type="button" role="tab" data-tab="po" class="${_mkDestTab === 'po' ? 'on' : ''}" onclick="mkSetDestTab('po')">Tujuan Pengiriman</button>
+                                    <button type="button" role="tab" data-tab="custom" class="${_mkDestTab === 'custom' ? 'on' : ''}" onclick="mkSetDestTab('custom')">Opsional Tujuan Custom</button>
+                                </div>
+                                <div id="mk-dest-body">${_mkDestTab === 'custom' ? mkDestCustomHtml() : mkDestPoHtml()}</div>
                             </section>
                     </div>
                 </div>
@@ -27798,9 +27946,9 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             if (ln) ln.textContent = paper.auto ? 'Kertas kontinu memakai tata letak Per label.' : (sheet ? 'Preview = satu lembar penuh siap cetak: ' + _mkS.cols + ' kolom × ' + _mkS.rows + ' baris (' + (_mkS.cols * _mkS.rows) + ' label per lembar).' : 'Satu label per halaman / per feed printer.');
             const sb = document.getElementById('mk-sheetbox'); if (sb) sb.classList.toggle('mk-hide', !sheet);
             const fr = document.getElementById('mk-fillrow'); if (fr) fr.classList.toggle('mk-hide', !sheet);
-            const mr = document.getElementById('mk-multirow'); if (mr) mr.classList.toggle('mk-hide', !sheet);
+            const mr = document.getElementById('mk-multirow'); if (mr) mr.classList.toggle('mk-hide', !sheet || _mkDestTab === 'custom');
             const mc = document.getElementById('mk-multi'); if (mc) mc.checked = _mkMulti;
-            if (!sheet) _mkMulti = false;
+            if (!sheet || _mkDestTab === 'custom') _mkMulti = false;
             const asx = document.getElementById('mk-adv-sheet'); if (asx) asx.classList.toggle('mk-hide', !sheet);
             const arw = document.getElementById('mk-adv-raw'); if (arw) arw.classList.toggle('mk-hide', sheet || isSys);
             const sc = document.getElementById('mk-sheet-custom'); if (sc) sc.classList.toggle('mk-hide', _mkS.sheetPaper !== 'custom');
@@ -27917,6 +28065,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         function mkResetOnLogout() {
             _mkData = null; _mkLoad = { state: 'idle', msg: '' }; _mkItem = { shipTo: '', alamat: '' }; _mkSelId = null; _mkQuery = ''; _mkIdx = -1; _mkPage = 0;
             _mkMulti = false; _mkSlots = {};
+            _mkDestTab = 'po'; _mkCustom = { shipTo: '', alamat: '', qtyKarton: '', expDate: '', showQty: false, showExp: false };
         }
     </script>
 
