@@ -20296,7 +20296,7 @@
         // [FIX BARU] Ikut memanaskan cache getItemAutoFillData() (UOM &
         // Description) supaya begitu user mulai mengisi tabel Detail Item,
         // auto-isi UOM/Description tidak menunggu fetch pertama.
-        function preloadSourceItems() { getSourceItems(); getItemAutoFillData(); ensureGlobalItemDatalist(); }
+        function preloadSourceItems() { getSourceItems(); getItemAutoFillData(); }
 
         // =========================================================================
         // [FIX BARU] AUTO-ISI UOM & DESCRIPTION BERDASARKAN "Item" DI FORM PO / FORM RO
@@ -20369,69 +20369,41 @@
         }
 
         // =========================================================================
-        // AUTOCOMPLETE ITEM — SEKARANG MEMAKAI <datalist> NATIVE
-        // [FIX] Sebelumnya dropdown pilihan item ("Nama Barang"/"Item") dibuat
-        // manual: <ul> yang di-portal ke <body>, diposisikan pakai position:fixed
-        // + hitungan JS (getBoundingClientRect, visualViewport, dst). Di HP,
-        // pendekatan itu tetap rawan "nyasar" karena harus menebak-nebak kapan
-        // keyboard virtual & auto-scroll browser selesai bergerak.
+        // AUTOCOMPLETE ITEM — dropdown custom (portal ke <body>, position:fixed)
+        // [FIX] Versi sebelumnya sempat diganti memakai <datalist> bawaan
+        // browser supaya posisinya presisi tanpa hitungan JS manual. Ternyata
+        // di banyak browser dalam-aplikasi (WebView WhatsApp/IG dkk — kasus
+        // yang sama dengan catatan "--app-vh" di paling atas file ini) dan
+        // sebagian besar Safari iOS, dropdown saran <datalist> TIDAK PERNAH
+        // tampil sama sekali (bukan cuma salah posisi) — makanya dropdown Item
+        // / Nama Barang terlihat "hilang" di 4 menu (Form PO, Form RO, Process
+        // Inbound, Process PO) dan tabel Pick Up/Return Form Service.
         //
-        // Sekarang dropdown-nya memakai <datalist> bawaan browser — TEPAT
-        // mekanisme yang sama dengan dropdown <select> UOM/Kategori/Description
-        // yang selama ini SUDAH selalu tampil pas di bawah kolomnya. Karena
-        // posisinya 100% ditentukan browser/OS (bukan JS kita), dropdown ini
-        // otomatis konsisten, tidak pernah salah tempat, dan filter-nya (ketik
-        // untuk mencari) juga bawaan browser.
+        // Dropdown-nya dikembalikan jadi elemen <ul> custom (di-portal ke
+        // <body>, position:fixed — sama seperti pendekatan lama), TAPI kali
+        // ini posisinya dihitung ULANG SECARA LIVE (listener scroll, resize,
+        // dan window.visualViewport saat keyboard virtual HP buka/tutup) —
+        // bukan cuma sekali seperti implementasi lama, supaya tidak "nyasar"
+        // di HP seperti yang jadi alasan awal pindah ke <datalist>.
         //
-        // Satu <datalist> dipakai bersama oleh SEMUA baris di SEMUA menu (Form
-        // PO, Form RO, Form Service, Process PO, Process Inbound) karena semua
-        // sumber datanya sama (getSourceItems() — sheet "LIST"). Dipopulate
-        // sekali saja lalu dipakai berulang; jauh lebih ringan dibanding
-        // render ulang <li> tiap baris/tiap ketik seperti sebelumnya.
+        // Satu fungsi ini dipakai bersama oleh SEMUA baris di SEMUA menu (Form
+        // PO, Form RO, Form Service, Process PO, Process Inbound) — sumber
+        // datanya tetap sama (getSourceItems() — sheet "LIST"), dan logic
+        // auto-isi ID/UOM/Description (parameter onSelect di tiap pemanggil)
+        // TIDAK diubah sama sekali.
         // =========================================================================
-        const GLOBAL_ITEM_DATALIST_ID = 'global-item-datalist';
-        let _globalItemDatalistFillPromise = null;
-
-        function ensureGlobalItemDatalist() {
-            let dl = document.getElementById(GLOBAL_ITEM_DATALIST_ID);
-            if (!dl) {
-                dl = document.createElement('datalist');
-                dl.id = GLOBAL_ITEM_DATALIST_ID;
-                document.body.appendChild(dl);
-            }
-            if (!_globalItemDatalistFillPromise) {
-                _globalItemDatalistFillPromise = getSourceItems().then(items => {
-                    const seen = new Set();
-                    const frag = document.createDocumentFragment();
-                    items.forEach(item => {
-                        const nama = (item.nama || '').trim();
-                        if (!nama) return;
-                        const key = nama.toLowerCase();
-                        if (seen.has(key)) return;
-                        seen.add(key);
-                        const opt = document.createElement('option');
-                        opt.value = nama;
-                        frag.appendChild(opt);
-                    });
-                    dl.innerHTML = '';
-                    dl.appendChild(frag);
-                });
-            }
-            return _globalItemDatalistFillPromise;
-        }
-
         function attachItemAutocomplete(input, list, tr, tbody, opts = {}) {
             const onSelect = opts.onSelect || (() => { });
 
-            // <ul> lama (kalau ada, dari markup sebelum fix ini) sudah tidak
-            // dipakai sama sekali — cukup dibuang supaya tidak numpuk di DOM.
+            // <ul> lama dari markup dibuang — dropdown-nya sekarang dibuat baru
+            // & di-portal langsung ke <body>, supaya tidak pernah terpotong
+            // wrapper tabel yang overflow-x:auto dan z-index-nya selalu paling atas.
             if (list && list.parentNode) list.remove();
 
-            // Hubungkan input ke datalist global lewat attribute "list" — ini
-            // yang membuat browser menampilkan dropdown native tepat di bawah
-            // kolom, sama seperti dropdown <select> lainnya.
-            ensureGlobalItemDatalist();
-            input.setAttribute('list', GLOBAL_ITEM_DATALIST_ID);
+            const dropdown = document.createElement('ul');
+            dropdown.className = 'item-autocomplete-portal-list text-sm';
+            dropdown.style.cssText = 'position:fixed; display:none; z-index:99999; background:#fff; border:1px solid #e5e7eb; border-radius:.5rem; box-shadow:0 10px 15px -3px rgba(0,0,0,.15),0 4px 6px -4px rgba(0,0,0,.15); overflow-y:auto; -webkit-overflow-scrolling:touch; margin:0; padding:0; list-style:none;';
+            document.body.appendChild(dropdown);
 
             // Sinkronkan attribute "title" dengan isi input, supaya saat teks
             // panjang terpotong (ellipsis) di layar kecil, user tetap bisa
@@ -20440,11 +20412,77 @@
             function syncTitle() { input.title = input.value; }
             syncTitle();
 
-            // Karena <datalist> tidak memberi kita event "item dipilih" secara
-            // langsung (browser cuma mengisi value input-nya), auto-isi ID/UOM/
-            // Description dilakukan dengan mencocokkan isi input ke master data
-            // setiap kali berubah — baik karena diklik dari saran datalist,
-            // diketik manual persis sama, ataupun setelah blur.
+            function isOpen() { return dropdown.style.display !== 'none'; }
+
+            function reposition() {
+                if (!isOpen()) return;
+                if (!document.body.contains(input)) { closeDropdown(); return; }
+                const rect = input.getBoundingClientRect();
+                if (rect.width === 0 && rect.height === 0) { closeDropdown(); return; }
+                const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+                const vTop = (window.visualViewport && window.visualViewport.offsetTop) || 0;
+                const spaceBelow = (vTop + vh) - rect.bottom;
+                const spaceAbove = rect.top - vTop;
+                const desiredMaxH = 224; // ~max-h-56 (sama seperti sebelumnya)
+                dropdown.style.width = Math.max(rect.width, 220) + 'px';
+                const rawLeft = Math.max(4, rect.left);
+                dropdown.style.left = Math.min(rawLeft, Math.max(4, window.innerWidth - dropdown.offsetWidth - 4)) + 'px';
+                if (spaceBelow < 130 && spaceAbove > spaceBelow) {
+                    // Ruang di bawah mepet (mis. keyboard virtual HP sedang
+                    // terbuka) — tampilkan dropdown di ATAS input, bukan di bawah.
+                    dropdown.style.top = '';
+                    dropdown.style.bottom = (vh - rect.top + vTop + 4) + 'px';
+                    dropdown.style.maxHeight = Math.max(80, Math.min(desiredMaxH, spaceAbove - 8)) + 'px';
+                } else {
+                    dropdown.style.bottom = '';
+                    dropdown.style.top = (rect.bottom + 4) + 'px';
+                    dropdown.style.maxHeight = Math.max(80, Math.min(desiredMaxH, spaceBelow - 8)) + 'px';
+                }
+            }
+
+            function closeDropdown() {
+                dropdown.style.display = 'none';
+                dropdown.innerHTML = '';
+                window.removeEventListener('scroll', reposition, true);
+                window.removeEventListener('resize', reposition);
+                if (window.visualViewport) window.visualViewport.removeEventListener('resize', reposition);
+            }
+
+            async function renderList() {
+                const items = await getSourceItems();
+                const q = input.value.trim().toLowerCase();
+                const filtered = (q ? items.filter(i => (i.nama || '').toLowerCase().includes(q)) : items).slice(0, 50);
+                if (!document.body.contains(input) || filtered.length === 0) { closeDropdown(); return; }
+
+                dropdown.innerHTML = '';
+                const frag = document.createDocumentFragment();
+                filtered.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'px-3 py-2 hover:bg-amber-50 cursor-pointer border-b border-gray-50 last:border-b-0';
+                    li.textContent = item.nama;
+                    // mousedown (bukan click) supaya pemilihan item terjadi
+                    // SEBELUM event blur pada input menutup dropdown duluan.
+                    li.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        input.value = item.nama;
+                        syncTitle();
+                        closeDropdown();
+                        onSelect(item);
+                    });
+                    frag.appendChild(li);
+                });
+                dropdown.appendChild(frag);
+                dropdown.style.display = 'block';
+                reposition();
+                window.addEventListener('scroll', reposition, true);
+                window.addEventListener('resize', reposition);
+                if (window.visualViewport) window.visualViewport.addEventListener('resize', reposition);
+            }
+
+            // Auto-isi ID/UOM/Description tetap dilakukan dengan mencocokkan
+            // isi input ke master data setiap kali berubah — baik karena
+            // diklik dari dropdown, diketik manual persis sama, ataupun
+            // setelah blur. Perilaku ini SAMA seperti sebelumnya, tidak diubah.
             async function trySelectExact() {
                 const val = input.value.trim();
                 if (!val) return;
@@ -20453,15 +20491,15 @@
                 if (matched) onSelect(matched);
             }
 
-            input.addEventListener('input', () => { syncTitle(); trySelectExact(); });
-            input.addEventListener('change', () => { syncTitle(); trySelectExact(); });
-            input.addEventListener('blur', () => setTimeout(trySelectExact, 150));
+            input.addEventListener('focus', () => { renderList(); });
+            input.addEventListener('input', () => { syncTitle(); renderList(); trySelectExact(); });
+            input.addEventListener('blur', () => setTimeout(() => { closeDropdown(); trySelectExact(); }, 150));
 
             // Enter memicu "tambah baris" HANYA kalau isi kolom sudah cocok
             // persis dengan salah satu item (artinya sudah benar-benar dipilih/
-            // selesai diketik) — supaya tidak bertabrakan dengan Enter yang
-            // dipakai browser untuk menerima saran datalist yang sedang di-highlight.
+            // selesai diketik) — perilaku sama seperti sebelumnya.
             input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Escape') { closeDropdown(); return; }
                 if (e.key !== 'Enter' || !opts.onEnterNoList) return;
                 const val = input.value.trim();
                 if (!val) return;
@@ -20469,9 +20507,22 @@
                 const isExact = items.some(i => (i.nama || '').trim().toLowerCase() === val.toLowerCase());
                 if (isExact) {
                     e.preventDefault();
+                    closeDropdown();
                     opts.onEnterNoList(e);
                 }
             });
+
+            // Bersihkan dropdown yatim kalau baris <tr>-nya dihapus dari tabel
+            // (klik tombol Hapus baris), supaya <ul> hasil portal tidak
+            // menumpuk selamanya di <body>.
+            const cleanupObserver = new MutationObserver(() => {
+                if (!document.body.contains(tr)) {
+                    closeDropdown();
+                    dropdown.remove();
+                    cleanupObserver.disconnect();
+                }
+            });
+            if (tbody) cleanupObserver.observe(tbody, { childList: true });
 
             return {};
         }
