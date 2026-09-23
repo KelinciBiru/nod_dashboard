@@ -22151,7 +22151,7 @@
                 fsReturnRows.forEach(row => {
                     const noTiket = row[1] || '-';
                     const orderedBy = row[2] || '-';  // kolom C = Nama (PO_Data)
-                    const shipTo = row[6] || '-';  // kolom G = Ship To (PO_Data)
+                    const shipTo = row[3] || '-';  // [FIX] kolom D = Ship To (PO_COL_SHIP_TO, PO_Data) — sebelumnya salah ambil kolom G (Kategori)
                     const status = row[4] || '';
                     const link = row[5] || '';
                     const statusStr = status ? status.toString().trim() : '';
