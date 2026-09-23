@@ -14312,6 +14312,25 @@
             }
         }
 
+        /** Ambil jam (HH:MM) dari berbagai kemungkinan format nilai waktu, termasuk hasil toString() objek Date (mis. "Sat Dec 30 1899 12:48:00 GMT+0700 ..."). */
+        function _extractClockOnly(val) {
+            if (val === null || val === undefined || val === '') return '';
+            const raw = String(val).trim();
+            const m = raw.match(/(\d{1,2}):(\d{2})(:\d{2})?/);
+            if (!m) return '';
+            return `${m[1].padStart(2, '0')}:${m[2]}`;
+        }
+
+        /** Ambil tanggal (YYYY-MM-DD) dari nilai yang tersedia; jika tidak ada/tidak valid, pakai fallback. */
+        function _extractDateOnly(val, fallback) {
+            if (val) {
+                const raw = String(val).trim();
+                const m = raw.match(/(\d{4}-\d{2}-\d{2})/);
+                if (m) return m[1];
+            }
+            return fallback;
+        }
+
         /** Render popup vertical timeline riwayat pengiriman (stop-by-stop) untuk 1 driver/tanggal. */
         function _renderPoolDriverTimelineModal(driver, date, stops) {
             _closePoolDriverTimelineModal();
@@ -14327,10 +14346,11 @@
                     const isActive = i === 0; // entri teratas = status terkini/paling baru
                     const isLastRow = i === list.length - 1;
 
-                    const rowDate = s.date || s.tanggal || date;
-                    const rowTime = isArrived ? (s.jamTiba || s.jamBerangkat || '-')
-                        : (isOnDelivery ? (s.jamBerangkat || s.jamTiba || '-')
-                        : (s.jamTiba || s.jamBerangkat || '-'));
+                    const rowDate = _extractDateOnly(s.date || s.tanggal, date);
+                    const rawTime = isArrived ? (s.jamTiba || s.jamBerangkat)
+                        : (isOnDelivery ? (s.jamBerangkat || s.jamTiba)
+                        : (s.jamTiba || s.jamBerangkat));
+                    const rowTime = _extractClockOnly(rawTime) || '-';
 
                     const desc = isArrived ? 'Telah Tiba'
                         : (isOnDelivery ? 'Diberangkatkan' : (s.status || '-'));
@@ -14344,9 +14364,9 @@
 
                     return `
                     <div class="relative flex gap-3 ${isLastRow ? '' : 'pb-6'}">
-                        <div class="w-16 flex-shrink-0 text-right pt-0.5">
-                            <p class="text-[11px] leading-tight ${dateTimeCls}">${escapeHtml(rowDate)}</p>
-                            <p class="text-[11px] leading-tight ${dateTimeCls}">${escapeHtml(rowTime)}</p>
+                        <div class="w-[68px] flex-shrink-0 text-right pt-0.5">
+                            <p class="text-[11px] leading-tight whitespace-nowrap ${dateTimeCls}">${escapeHtml(rowDate)}</p>
+                            <p class="text-[11px] leading-tight whitespace-nowrap ${dateTimeCls}">${escapeHtml(rowTime)}</p>
                         </div>
                         <div class="relative flex-shrink-0 w-4 flex justify-center">
                             <span class="h-3.5 w-3.5 rounded-full border-2 ${dotCls} z-10 mt-1 flex-shrink-0"></span>
@@ -14361,8 +14381,8 @@
                 }).join('');
 
             const modalHtml = `
-            <div id="pool-driver-timeline-modal" class="fixed inset-0 z-[9999] bg-black/60 flex items-end sm:items-center justify-center">
-                <div class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height:88vh;">
+            <div id="pool-driver-timeline-modal" class="fixed inset-0 flex items-center justify-center" style="z-index:9999;background:rgba(0,0,0,0.6);padding:16px;" onmousedown="if(event.target===this) _closePoolDriverTimelineModal();">
+                <div class="bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="width:100%;max-width:380px;max-height:80vh;" onmousedown="event.stopPropagation();">
                     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
                         <div class="min-w-0">
                             <p class="text-sm font-bold text-gray-700 truncate">🕒 Riwayat Pengiriman — ${escapeHtml(driver)}</p>
