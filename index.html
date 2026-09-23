@@ -26090,6 +26090,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             bulb: plSvg(['M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z']),
             pin: plSvg(['M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z', 'M15 11a3 3 0 11-6 0 3 3 0 016 0z']),
             refresh: plSvg(['M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15']),
+            download: plSvg(['M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3']),
             plus: plSvg(['M12 4v16m8-8H4']),
             minus: plSvg(['M20 12H4']),
             x: plSvg(['M6 18L18 6M6 6l12 12'])
@@ -26892,6 +26893,46 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 }
                 done(null);
             });
+        }
+
+        // [MENU BARU — Marking Pengiriman] Unduh Template (Ms. Word) — dokumen .doc siap-print berisi
+        // grid label kosong (Tom & Jerry No. 121, 38x75mm, 5 baris x 2 kolom) untuk diisi manual/dijadikan
+        // acuan offline. File dibuat murni di browser (HTML disisipi sebagai .doc, dibuka normal oleh Word),
+        // tanpa dependensi tambahan — tidak menyentuh alur cetak/pratinjau yang sudah ada.
+        function mkDownloadTemplate() {
+            try {
+                var logoEl = document.querySelector('img[alt="Logo"][src^="data:image"]');
+                var logoSrc = logoEl ? logoEl.getAttribute('src') : '';
+                var logoCell = logoSrc
+                    ? '<img src="' + logoSrc + '" style="height:9mm;max-width:22mm;object-fit:contain;" />'
+                    : '<div style="font-size:7.5pt;font-weight:bold;color:#b45309;">[LOGO NOD]</div>';
+                var cellHtml = '<td style="width:75mm;height:38mm;border:1px dashed #9ca3af;padding:2.5mm;vertical-align:top;font-family:Arial,sans-serif;">' +
+                    '<div style="margin-bottom:1.5mm;">' + logoCell + '</div>' +
+                    '<div style="font-size:9pt;font-weight:bold;margin-bottom:1mm;">Ship To:</div>' +
+                    '<div style="font-size:9pt;border-bottom:1px solid #9ca3af;height:4mm;margin-bottom:2mm;">&nbsp;</div>' +
+                    '<div style="font-size:9pt;font-weight:bold;margin-bottom:1mm;">Alamat:</div>' +
+                    '<div style="font-size:9pt;border-bottom:1px solid #9ca3af;height:4mm;">&nbsp;</div>' +
+                    '</td>';
+                var rowsHtml = '';
+                for (var i = 0; i < 5; i++) rowsHtml += '<tr>' + cellHtml + cellHtml + '</tr>';
+                var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
+                    '<head><meta charset="utf-8"><title>Template Marking Pengiriman</title>' +
+                    '<style>@page{size:21cm 29.7cm;margin:1.2cm;} table{border-collapse:collapse;} body{font-family:Arial,sans-serif;}</style>' +
+                    '</head><body>' +
+                    '<p style="font-family:Arial,sans-serif;font-size:11pt;font-weight:bold;margin:0 0 3mm 0;">Template Label Marking Pengiriman</p>' +
+                    '<p style="font-family:Arial,sans-serif;font-size:8.5pt;color:#6b7280;margin:0 0 4mm 0;">Ukuran label: Tom &amp; Jerry No. 121 (38 x 75 mm) — 1 lembar berisi 5 baris x 2 kolom. Isi Ship To dan Alamat secara manual, lalu cetak di kertas label yang sesuai.</p>' +
+                    '<table>' + rowsHtml + '</table>' +
+                    '</body></html>';
+                var blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'Template_Marking_Pengiriman.doc';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+                if (typeof showToastAlert === 'function') showToastAlert('success', 'Template diunduh', 'Template_Marking_Pengiriman.doc berhasil dibuat.');
+            } catch (e) {
+                if (typeof showAlert === 'function') showAlert('error', 'Gagal membuat template', (e && e.message) ? e.message : 'Terjadi kesalahan tak terduga.');
+            }
         }
 
         // ---------------------------------------------------------------
@@ -27925,7 +27966,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
                     <div class="mk-col mk-col-r">
                         <section class="mk-sec mk-c-preview" aria-label="Pratinjau">
-                                <div class="mk-sec-h"><span><span class="mk-ic">${PL_IC.eye}</span>Pratinjau</span><span><span id="mk-chip-size" class="mk-chip"></span> <span id="mk-chip-orient" class="mk-chip mk-chip-g"></span></span></div>
+                                <div class="mk-sec-h"><span><span class="mk-ic">${PL_IC.eye}</span>Pratinjau<button type="button" id="mk-download-template-btn" class="mk-btn mk-btn-ghost mk-btn-sm" onclick="mkDownloadTemplate()" title="Unduh template label kosong (Ms. Word)">${PL_IC.download}Unduh Template</button></span><span><span id="mk-chip-size" class="mk-chip"></span> <span id="mk-chip-orient" class="mk-chip mk-chip-g"></span></span></div>
                                 <div class="mk-stage" id="mk-stage">
                                     <div class="mk-pageblock">
                                         <div class="mk-dim mk-dim-top"><i></i><span id="mk-dim-w"></span><i></i></div>
