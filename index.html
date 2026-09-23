@@ -16657,6 +16657,24 @@
 
         // [FIX] Guard anti-dobel-submit Form PO — mencegah PO terkirim 2x kalau
         // tombol "Kirim PO" sempat diklik/tap berkali-kali.
+        // [FIX BUG DUPLIKAT PO — ISI SAMA, No. PO BEDA] idempotencyKey dibuat
+        // SEKALI per percobaan submit PO, dan dipakai ULANG kalau
+        // fetchWriteWithRetry retry otomatis (GAS sibuk) ATAU user klik
+        // "Kirim PO" lagi setelah error/timeout TANPA reset form dulu.
+        // Backend (PO_GAS) memakai key ini untuk mendeteksi request yang
+        // sebenarnya sudah berhasil diproses sebelumnya, dan mengembalikan
+        // No. PO yang SAMA alih-alih membuat baris/PO baru. Key ini HANYA
+        // direset ke null setelah submit benar-benar SUKSES (lihat di bawah)
+        // — supaya klik ulang setelah gagal tetap dianggap "percobaan yang
+        // sama", tapi PO baru yang beda tetap dapat key baru.
+        let _poIdempotencyKey = null;
+        function _newPOIdempotencyKey() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID();
+            }
+            return 'po-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        }
+
         let _isSubmittingFormPO = false;
         async function submitPO() {
             if (window._revisiPOActive) { return _doSubmitRevisiPO(); }
@@ -16724,9 +16742,15 @@
                 const fileData = doc.output('datauristring').split(',')[1];
                 setProgressOverlay(45, 'Mengirim PO ke server...');
 
+                // [FIX BUG DUPLIKAT PO] Buat idempotencyKey HANYA kalau belum
+                // ada (percobaan pertama utk PO ini) — retry otomatis/klik
+                // ulang di bawah tetap memakai key yang SAMA sampai sukses.
+                if (!_poIdempotencyKey) _poIdempotencyKey = _newPOIdempotencyKey();
+
                 const payload = {
                     action: 'submitPO',
                     token: sessionToken,
+                    idempotencyKey: _poIdempotencyKey,
                     nama: namaEl.value,
                     allocatedTo: allocatedToEl ? allocatedToEl.value.trim() : '',
                     alamat: document.getElementById('po-alamat')?.value?.trim() || '',
@@ -16755,6 +16779,9 @@
                     : result.status === 'Need Approval'
                         ? ' (status: Need Approval — menunggu Release dari Finance)'
                         : '';
+                // [FIX BUG DUPLIKAT PO] Baru reset key SETELAH submit ini
+                // benar-benar sukses — supaya PO berikutnya dapat key baru.
+                _poIdempotencyKey = null;
                 _b2bQueueOnSubmitted('PO'); // antrian Request B2B/B2C: tandai selesai & lanjut ke data berikutnya
                 resetFormPO();
                 _clearDraft(DRAFT_KEYS.formPO);
