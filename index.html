@@ -12119,7 +12119,7 @@
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
                     <table class="w-full text-left">
                         <thead>
-                            <tr class="bg-[#0f1f3d] border-b border-[#0f1f3d]">
+                            <tr class="bg-gray-800 border-b border-gray-800">
                                 <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">No. PO/RO/Tiket</th>
                                 <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">From Location</th>
                                 <th class="px-4 py-3 text-xs font-bold text-white uppercase tracking-wide">Ship To</th>
@@ -14807,7 +14807,7 @@
                 <div class="overflow-x-auto w-full bg-white rounded-lg shadow-sm border border-gray-300 max-w-2xl">
                     <table class="w-full border-collapse text-[10px]">
                         <thead>
-                            <tr class="bg-gray-100 border-b border-gray-300 text-gray-700">
+                            <tr class="bg-gray-800 text-white">
                                 <th class="p-2 text-center w-1/2">Machine Detail</th>
                                 <th class="p-2 text-center w-1/2">Stock Available</th>
                             </tr>
@@ -15300,7 +15300,7 @@
                 <div class="overflow-y-auto p-4">
                     <table class="w-full text-left border-collapse">
                         <thead>
-                            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+                            <tr class="bg-gray-800 text-white text-xs uppercase">
                                 <th class="p-2">ID</th>
                                 <th class="p-2">Nama Barang</th>
                                 <th class="p-2 text-center">Qty</th>
@@ -15594,7 +15594,7 @@
                 <div class="overflow-x-auto border border-gray-400 mb-8">
                     <table class="w-full text-[10px] text-center border-collapse">
                         <thead>
-                            <tr class="bg-gray-200 border-b border-gray-400">
+                            <tr class="bg-gray-800 text-white border-b border-gray-400">
                                 <th class="p-2 border-r" rowspan="2">Machine Detail</th>
                                 <th class="p-1 border-b border-r" colspan="2">W1</th>
                                 <th class="p-1 border-b border-r" colspan="2">W2</th>
@@ -15602,7 +15602,7 @@
                                 <th class="p-1 border-b border-r" colspan="2">W4</th>
                                 <th class="p-2" rowspan="2">Total Outbound</th>
                             </tr>
-                            <tr class="bg-gray-100 border-b border-gray-400">
+                            <tr class="bg-gray-700 text-white border-b border-gray-400">
                                 ${"<th>Res</th><th>Out</th>".repeat(4)}
                             </tr>
                         </thead>
@@ -15647,7 +15647,7 @@
                 <div class="overflow-x-auto border border-gray-400">
                     <table class="w-full text-[10px] text-center border-collapse">
                         <thead>
-                            <tr class="bg-gray-200 border-b border-gray-400">
+                            <tr class="bg-gray-800 text-white border-b border-gray-400">
                                 ${activeCols.map(i => `<th class="p-2 border-r">${MONTHS[i]}</th>`).join('')}
                             </tr>
                         </thead>
@@ -15771,7 +15771,7 @@
                         <div class="rounded-lg shadow-sm border border-gray-300 overflow-hidden">
                             <table class="min-w-full border-collapse">
                                 <thead>
-                                    <tr class="bg-gray-100 border-b border-gray-300 text-gray-700 text-xs">
+                                    <tr class="bg-gray-800 text-white text-xs">
                                         ${headers.map(h => `<th class="p-3 text-center border-r whitespace-nowrap">${h}</th>`).join('')}
                                     </tr>
                                 </thead>
@@ -21876,6 +21876,12 @@
                     // Status "Open" murni = bukan Closed/Done/Ready/On-Delivery/Pre-Order/Need Approval.
                     const isTrulyOpen = !isClosed && !isDone && !isReady && !isOnDelivery && !isPreOrderStatus && !isNeedApprovalStatus;
 
+                    // [BARU] Label status dipakai sebagai data-status di <tr> untuk fitur
+                    // filter badge (Open/Ready To Ship/Done) di menu Report Status.
+                    const badgeStatus = isClosed ? 'Closed' : isDone ? 'Done' : isReady ? 'Ready To Ship'
+                        : isOnDelivery ? 'On-Delivery' : isPreOrderStatus ? 'Pre-Order'
+                            : isNeedApprovalStatus ? 'Need Approval' : 'Open';
+
                     // [BARU] Tombol icon "Print" — hanya tampil untuk status "Open" (cetak
                     // Request Order) atau "Ready To Ship" (cetak Delivery Order). PDF-nya
                     // ditarik langsung dari folder Google Drive (FOLDER_ID di Code.gs),
@@ -21959,7 +21965,7 @@
                         : escapeHtml(noPO);
 
                     rows_html += `
-                    <tr id="row-${noPO}" class="${rowBg}">
+                    <tr id="row-${noPO}" class="${rowBg}" data-status="${badgeStatus}">
                         ${selectCell}
                         <td class="p-3 border-b font-mono text-left">${noPOCell}</td>
                         <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
@@ -21984,6 +21990,11 @@
                     const isReadyPickup = statusStr === 'Ready To PickUp';
                     const isOnDeliveryRO = statusStr === 'On Delivery';
                     const isOpen = !isClosed;
+
+                    // [BARU] Label status dipakai sebagai data-status di <tr> untuk fitur
+                    // filter badge (Open/Ready To Ship/Done) di menu Report Status.
+                    const badgeStatus = isClosed ? 'Closed' : isOnDeliveryRO ? 'On Delivery'
+                        : isReadyPickup ? 'Ready To PickUp' : (statusStr || 'Open');
 
                     // [FIX 8] Status RO sekarang: "Ready To PickUp" → "On Delivery" → ... → "Closed"
                     const statusBadge = isClosed
@@ -22021,7 +22032,7 @@
 
                     const rowBg = isClosed ? 'bg-gray-50 opacity-60' : 'hover:bg-purple-50';
                     ro_rows_html += `
-                    <tr id="row-ro-${roKey}" class="${rowBg}">
+                    <tr id="row-ro-${roKey}" class="${rowBg}" data-status="${escapeHtml(badgeStatus)}">
                         <td class="p-3 border-b font-mono text-left">${escapeHtml(noRO)}</td>
                         <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
                         <td class="p-3 border-b">${escapeHtml(fromLocation)}</td>
@@ -22038,7 +22049,7 @@
                 <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                     <table class="w-full text-xs text-center border-collapse">
                         <thead>
-                            <tr class="bg-purple-900 text-white">
+                            <tr class="bg-gray-800 text-white">
                                 <th class="p-3 text-left">No. RO</th>
                                 <th class="p-3">Ordered By</th>
                                 <th class="p-3">From Location</th>
@@ -22065,6 +22076,11 @@
                     const isClosed = statusStr === 'Closed';
                     const isReadyPickup = statusStr === 'Ready To PickUp';
                     const isOnDeliveryRO = statusStr === 'On Delivery';
+
+                    // [BARU] Label status dipakai sebagai data-status di <tr> untuk fitur
+                    // filter badge (Open/Ready To Ship/Done) di menu Report Status.
+                    const badgeStatus = isClosed ? 'Closed' : isOnDeliveryRO ? 'On Delivery'
+                        : isReadyPickup ? 'Ready To PickUp' : (statusStr || 'Open');
 
                     // [FIX 8] Alur status RO: "Ready To PickUp" → "On Delivery" → "Closed"
                     const statusBadge = isClosed
@@ -22115,7 +22131,7 @@
                     const rowBg = isClosed ? 'bg-gray-50 opacity-60' : 'hover:bg-amber-50';
 
                     fs_pickup_rows_html += `
-                    <tr id="row-ro-${fsPickupKey}" class="${rowBg}">
+                    <tr id="row-ro-${fsPickupKey}" class="${rowBg}" data-status="${escapeHtml(badgeStatus)}">
                         <td class="p-3 border-b font-mono text-left">${escapeHtml(noTiket)}</td>
                         <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
                         <td class="p-3 border-b">${escapeHtml(fromLoc)}</td>
@@ -22132,7 +22148,7 @@
                 <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                     <table class="w-full text-xs text-center border-collapse">
                         <thead>
-                            <tr class="bg-amber-700 text-white">
+                            <tr class="bg-gray-800 text-white">
                                 <th class="p-3 text-left">No. Tiket</th>
                                 <th class="p-3">Ordered By</th>
                                 <th class="p-3">From Location</th>
@@ -22159,6 +22175,11 @@
                     const isReady = statusStr === 'Ready To Ship';
                     const isOnDelivery = statusStr === 'On-Delivery';
                     const isDone = statusStr === 'Done';
+
+                    // [BARU] Label status dipakai sebagai data-status di <tr> untuk fitur
+                    // filter badge (Open/Ready To Ship/Done) di menu Report Status.
+                    const badgeStatus = isClosed ? 'Closed' : isDone ? 'Done' : isReady ? 'Ready To Ship'
+                        : isOnDelivery ? 'On-Delivery' : 'Open';
 
                     const statusBadge = isClosed
                         ? `<span class="inline-block px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">Closed</span>`
@@ -22212,7 +22233,7 @@
                             : isReady ? 'bg-blue-50'
                                 : 'hover:bg-purple-50';
                     fs_return_rows_html += `
-                    <tr id="row-${fsKey}" class="${rowBg}">
+                    <tr id="row-${fsKey}" class="${rowBg}" data-status="${badgeStatus}">
                         <td class="p-3 border-b font-mono text-left">${escapeHtml(noTiket)}</td>
                         <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
                         <td class="p-3 border-b">${escapeHtml(shipTo)}</td>
@@ -22228,7 +22249,7 @@
                 <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                     <table class="w-full text-xs text-center border-collapse">
                         <thead>
-                            <tr class="bg-purple-900 text-white">
+                            <tr class="bg-gray-800 text-white">
                                 <th class="p-3 text-left">No. Tiket</th>
                                 <th class="p-3">Ordered By</th>
                                 <th class="p-3">Ship To</th>
@@ -22287,7 +22308,20 @@
                     ${closeSelectedBtn}
                     ${removeSelectedBtn}
                 </div>
-                <p id="report-status-search-empty" class="hidden text-sm text-gray-500 italic mb-3">Tidak ada hasil yang cocok dengan pencarian.</p>
+                <!-- [BARU] Filter badge status: klik untuk menyaring baris di semua tabel
+                     Report Status (PO, RO, Form Service) berdasarkan status Open/Ready To
+                     Ship/Done. Bisa pilih lebih dari satu badge sekaligus (union); tidak
+                     ada yang aktif = tampilkan semua (lihat toggleReportStatusBadgeFilter()). -->
+                <div class="mb-3 flex items-center flex-wrap gap-2" id="report-status-badge-filter">
+                    <span class="text-xs font-semibold text-gray-500 mr-1">Filter Status:</span>
+                    <button type="button" data-status-filter="Open" onclick="toggleReportStatusBadgeFilter('Open')"
+                        class="report-status-filter-badge bg-white text-red-700 border-red-300 px-3 py-1 rounded-full text-xs font-bold border transition hover:bg-red-50">Open</button>
+                    <button type="button" data-status-filter="Ready To Ship" onclick="toggleReportStatusBadgeFilter('Ready To Ship')"
+                        class="report-status-filter-badge bg-white text-blue-700 border-blue-300 px-3 py-1 rounded-full text-xs font-bold border transition hover:bg-blue-50">Ready To Ship</button>
+                    <button type="button" data-status-filter="Done" onclick="toggleReportStatusBadgeFilter('Done')"
+                        class="report-status-filter-badge bg-white text-emerald-700 border-emerald-300 px-3 py-1 rounded-full text-xs font-bold border transition hover:bg-emerald-50">Done</button>
+                </div>
+                <p id="report-status-search-empty" class="hidden text-sm text-gray-500 italic mb-3">Tidak ada hasil yang cocok dengan pencarian/filter.</p>
                 <div class="overflow-x-auto bg-white shadow-sm border border-gray-200 rounded-lg">
                     <table class="w-full text-xs text-center border-collapse">
                         <thead>
@@ -22306,6 +22340,12 @@
                 ${roSection}
                 ${fsPickupSection}
                 ${fsReturnSection}`);
+
+                // [BARU] Terapkan ulang state visual badge filter (kalau user sudah
+                // pernah mengaktifkan badge sebelum tabel di-render ulang, mis. oleh
+                // LiveSync) + jalankan ulang filter supaya baris yang tampil tetap sesuai.
+                _applyReportStatusBadgeVisuals();
+                filterReportStatusTable(document.getElementById('report-status-search-input')?.value || '');
 
                 // ── Daftarkan LiveSync sekali saja (aman dipanggil berkali-kali) ──
                 LiveSync.register('Report Status', {
@@ -22339,23 +22379,64 @@
             } catch (err) { setError(err.message); }
         }
 
-        // ── Fitur Search: filter baris di semua tabel Report Status (PO, RO, Form Service) ──
+        // ── Fitur Search + Filter Badge: filter baris di semua tabel Report Status (PO, RO, Form Service) ──
         // Mencocokkan teks pada seluruh kolom baris (No. PO/RO, Ordered By, Ship To, Status, dll)
+        // DAN, kalau ada badge status yang aktif (lihat toggleReportStatusBadgeFilter()),
+        // hanya menampilkan baris yang data-status-nya cocok dengan salah satu badge aktif.
+        window._reportStatusActiveBadges = window._reportStatusActiveBadges || new Set();
+
         window.filterReportStatusTable = function (query) {
             const q = (query || '').toLowerCase().trim();
+            const activeBadges = window._reportStatusActiveBadges;
             const tbodyIds = ['po-table-body', 'ro-table-body', 'fs-pickup-table-body', 'fs-return-table-body'];
             let totalVisible = 0;
             tbodyIds.forEach(tbodyId => {
                 const tbody = document.getElementById(tbodyId);
                 if (!tbody) return;
                 tbody.querySelectorAll('tr').forEach(row => {
-                    const match = q === '' || row.textContent.toLowerCase().includes(q);
+                    const matchText = q === '' || row.textContent.toLowerCase().includes(q);
+                    const matchBadge = activeBadges.size === 0 || activeBadges.has(row.getAttribute('data-status') || '');
+                    const match = matchText && matchBadge;
                     row.style.display = match ? '' : 'none';
                     if (match) totalVisible++;
                 });
             });
             const emptyMsg = document.getElementById('report-status-search-empty');
-            if (emptyMsg) emptyMsg.classList.toggle('hidden', q === '' || totalVisible > 0);
+            const anyFilterActive = q !== '' || activeBadges.size > 0;
+            if (emptyMsg) emptyMsg.classList.toggle('hidden', !anyFilterActive || totalVisible > 0);
+        };
+
+        // [BARU] Warna badge saat aktif (terisi) vs tidak aktif (outline) — dipetakan
+        // per label status supaya konsisten dengan warna statusBadge di tabel.
+        const REPORT_STATUS_BADGE_COLORS = {
+            'Open': { active: ['bg-red-600', 'border-red-600', 'text-white'], inactive: ['bg-white', 'text-red-700', 'border-red-300'] },
+            'Ready To Ship': { active: ['bg-blue-600', 'border-blue-600', 'text-white'], inactive: ['bg-white', 'text-blue-700', 'border-blue-300'] },
+            'Done': { active: ['bg-emerald-600', 'border-emerald-600', 'text-white'], inactive: ['bg-white', 'text-emerald-700', 'border-emerald-300'] },
+        };
+
+        // [BARU] Terapkan ulang tampilan (warna) semua badge filter sesuai state
+        // window._reportStatusActiveBadges saat ini — dipanggil tiap kali tabel
+        // Report Status di-render ulang (search awal, LiveSync, dsb).
+        window._applyReportStatusBadgeVisuals = function () {
+            const activeBadges = window._reportStatusActiveBadges;
+            document.querySelectorAll('#report-status-badge-filter .report-status-filter-badge').forEach(btn => {
+                const st = btn.getAttribute('data-status-filter');
+                const colors = REPORT_STATUS_BADGE_COLORS[st];
+                if (!colors) return;
+                const isActive = activeBadges.has(st);
+                btn.classList.remove(...colors.active, ...colors.inactive);
+                btn.classList.add(...(isActive ? colors.active : colors.inactive));
+            });
+        };
+
+        // [BARU] Diklik saat user menekan salah satu badge filter (Open/Ready To
+        // Ship/Done) di menu Report Status — toggle aktif/nonaktif badge tsb lalu
+        // jalankan ulang filterReportStatusTable() supaya tabel ikut tersaring.
+        window.toggleReportStatusBadgeFilter = function (status) {
+            const activeBadges = window._reportStatusActiveBadges;
+            if (activeBadges.has(status)) activeBadges.delete(status); else activeBadges.add(status);
+            _applyReportStatusBadgeVisuals();
+            filterReportStatusTable(document.getElementById('report-status-search-input')?.value || '');
         };
 
         // =========================================================================
