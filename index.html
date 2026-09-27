@@ -21025,7 +21025,15 @@
                 contentArea.removeEventListener('input', _processInboundAutosaveHandler);
                 contentArea.removeEventListener('change', _processInboundAutosaveHandler);
             }
-            _processInboundAutosaveHandler = () => _saveDraft(DRAFT_KEYS.processInbound, _collectProcessInboundDraft());
+            _processInboundAutosaveHandler = () => {
+                _saveDraft(DRAFT_KEYS.processInbound, _collectProcessInboundDraft());
+                // Form berubah → batch item BISA JADI sudah beda dari yang
+                // sempat gagal/timeout sebelumnya, jadi idempotencyKey lama
+                // tidak boleh dipakai ulang (supaya bukan ikut dianggap
+                // "retry" dari submit yang lama). Submit berikutnya akan
+                // membuat key baru di prosesInbound().
+                _inboundIdempotencyKey = null;
+            };
             contentArea.addEventListener('input', _processInboundAutosaveHandler);
             contentArea.addEventListener('change', _processInboundAutosaveHandler);
         }
@@ -21579,6 +21587,19 @@
         // sebelum tombol sempat ter-disable (misalnya saat modal konfirmasi masih
         // terbuka), sehingga terkirim 2x ke server.
         let _inboundSubmitting = false;
+        // [FIX — Process Inbound: cegah notif "Waktu tunggu server habis"
+        // berujung data dobel] idempotencyKey dibuat SEKALI per percobaan
+        // submit & dipakai ULANG selama retry otomatis maupun klik ulang
+        // tombol "Proses Inbound" — SELAMA isi form belum diubah. GAS
+        // (simpanInbound, lihat FIX 32 di Code.gs) sekarang mengenali key
+        // yang sama sebagai request yang SAMA dan tidak menulis baris baru
+        // lagi kalau percobaan sebelumnya sudah sukses — jadi retry/klik
+        // ulang setelah timeout AMAN, tidak lagi menggandakan data.
+        // Direset (null) begitu submit BENAR-BENAR selesai (sukses), atau
+        // begitu user mengubah isi form (lihat _attachProcessInboundAutosave)
+        // supaya batch item yang benar-benar berbeda tetap dianggap submit
+        // baru, bukan ikut dianggap "retry" dari yang lama.
+        let _inboundIdempotencyKey = null;
         async function prosesInbound() {
             if (_inboundSubmitting) return; // sudah ada proses simpan yang berjalan, abaikan klik tambahan
 
@@ -21641,9 +21662,21 @@
             }
             showProgressOverlay('Menyimpan data inbound ke server...');
 
+            // [FIX — cegah data dobel] Buat idempotencyKey SEKALI, lalu
+            // pakai ULANG selama retry otomatis/klik ulang tombol ini
+            // (selama form belum diubah — lihat _attachProcessInboundAutosave
+            // & deklarasi _inboundIdempotencyKey di atas). GAS (FIX 32 di
+            // Code.gs) memakai key ini untuk mengenali & menolak menulis
+            // ulang batch item yang sama kalau percobaan sebelumnya sudah
+            // sukses.
+            if (!_inboundIdempotencyKey) {
+                _inboundIdempotencyKey = 'inbound_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+            }
+
             const payload = {
                 action: 'simpanInbound',
                 token: sessionToken,
+                idempotencyKey: _inboundIdempotencyKey,
                 tanggalProses: tanggal,
                 crew: crew,
                 exLocation: exLokasi,
@@ -21651,13 +21684,32 @@
                 items: items
             };
 
+            const doInboundRequest = () => fetchWriteWithRetry(INBOUND_GAS_URL, {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(payload)
+            }, 25000);
+
             try {
-                const result = await fetchWriteWithRetry(INBOUND_GAS_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(payload)
-                }, 25000);
+                let result;
+                try {
+                    result = await doInboundRequest();
+                } catch (err) {
+                    if (err.isGasTimeout) {
+                        // [FIX — cegah data dobel] Backend sekarang idempotent
+                        // (idempotencyKey — lihat FIX 32 di Code.gs), jadi
+                        // retry otomatis di sini AMAN: kalau percobaan
+                        // pertama tadi sebenarnya sudah sukses di server,
+                        // server akan mengembalikan hasil yang SAMA tanpa
+                        // menulis baris baru lagi — bukan menggandakan data.
+                        console.warn('[prosesInbound] Timeout, mencoba ulang otomatis (aman berkat idempotencyKey):', err.message);
+                        showProgressOverlay('Koneksi lambat, mencoba ulang secara otomatis...');
+                        result = await doInboundRequest();
+                    } else {
+                        throw err;
+                    }
+                }
 
                 if (result.success) {
                     setProgressOverlay(100, 'Selesai!');
@@ -21670,11 +21722,21 @@
                     document.getElementById('inb-table-body').innerHTML =
                         '<tr data-placeholder><td colspan="6" class="p-6 text-center text-gray-400 italic">Belum ada data. Klik "Tambah Baris" atau scan QR Code.</td></tr>';
                     _clearDraft(DRAFT_KEYS.processInbound);
+                    // Submit selesai sukses — key ini sudah "terpakai", batch
+                    // berikutnya (form baru/kosong) harus dapat key baru.
+                    _inboundIdempotencyKey = null;
                 } else {
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
                 }
             } catch (err) {
-                showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + err.message);
+                // idempotencyKey SENGAJA TIDAK direset di sini — kalau user
+                // klik "Proses Inbound" lagi tanpa mengubah form, request
+                // berikutnya memakai key yang SAMA sehingga AMAN dari data
+                // dobel walau percobaan-percobaan sebelumnya sempat gagal
+                // sampai ke browser tapi sebenarnya sudah tersimpan di server.
+                showAlert('error', 'Terjadi Kesalahan',
+                    'Tidak dapat terhubung ke server setelah dicoba ulang: ' + err.message +
+                    '\n\nData sudah dilindungi dari duplikat — silakan klik "Proses Inbound" lagi kapan saja untuk mencoba ulang dengan aman.');
             } finally {
                 _inboundSubmitting = false;
                 if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
