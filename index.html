@@ -533,6 +533,19 @@
             .pl-m-opt .pl-f-qty, .pl-m-opt .pl-f-exp { grid-column: span 2; }
         }
 
+        /* [LABEL PRODUK > OPSIONAL] kartu Printer / Kertas / Cetak versi "printer umum" (meniru Marking Pengiriman).
+           Kartu Standar disembunyikan di mode Opsional; kartu Opsional hanya tampil di mode Opsional. */
+        .pl-m-opt .pl-std-only { display: none; }
+        .pl-page:not(.pl-m-opt) .plo-only { display: none; }
+        .plo-sub { margin-top: .75rem; padding: .25rem .75rem .75rem; border: 1px solid #f0f1f4; border-radius: .85rem; background: #fafafa; }
+        .plo-sub.pl-hide { display: none; }
+        .plo-zoomrow { margin-top: .4rem; text-align: center; }
+        .plo-zoomrow.pl-hide { display: none; }
+        .plo-pager { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: .5rem; font-size: .75rem; font-weight: 700; color: #6b7280; }
+        .plo-pager.pl-hide { display: none; }
+        .plo-pager button { width: 1.9rem; height: 1.9rem; border: 1px solid #e5e7eb; border-radius: .6rem; background: #fff; font-size: 1rem; line-height: 1; color: #374151; cursor: pointer; }
+        .plo-pager button:disabled { opacity: .4; cursor: not-allowed; }
+
         /* data */
         .pl-tabs { display: flex; gap: .25rem; padding: .2rem; background: #f3f4f6; border-radius: .8rem; margin-bottom: .75rem; }
         .pl-tabs button { flex: 1 1 0; padding: .5rem .5rem; border: 0; border-radius: .62rem; background: transparent; font-size: .8125rem; font-weight: 700; color: #6b7280; cursor: pointer; }
@@ -26062,7 +26075,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             if (qtyText) block(L.lhQty, function (yy) { ctx.font = fontOf(L.qtyPx); ctx.fillText(qtyText, W / 2, yy + L.lhQty / 2); });
             if (expText) block(L.lhExp, function (yy) { ctx.font = fontOf(L.expPx); ctx.fillText(expText, W / 2, yy + L.lhExp / 2); });
 
-            plBinarize(canvas, 170);
+            if (o.binarize !== false) plBinarize(canvas, 170);   // [OPSIONAL] thermal mentah = 1-bit (default); Driver inkjet/laser = anti-alias (o.binarize === false)
 
             if (!nama && o.placeholder) {   // hanya pratinjau
                 ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -26596,6 +26609,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 return;
             }
             plLoadSettings();
+            if (typeof ploLoadSettings === 'function') ploLoadSettings();   // [OPSIONAL] pengaturan printer umum
             _plTab = _plRows.import.length && !_plRows.sheet ? 'import' : 'sheet';
             _plLimit = PL_PAGE; _plSearch = '';
 
@@ -26625,7 +26639,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 </div>
                 <div class="pl-grid">
                     <div class="pl-col">
-                        <section class="pl-card pl-c-printer" aria-label="Printer">
+                        <section class="pl-card pl-c-printer pl-std-only" aria-label="Printer">
                             <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.printer}</span>Printer</span></div>
                             <div id="pl-status" class="pl-status"><span class="pl-dot"></span><div><span id="pl-st-title" class="pl-st-title"></span><span id="pl-st-sub" class="pl-st-sub"></span></div></div>
                             <button type="button" id="pl-btn-connect" class="pl-btn pl-btn-dark pl-btn-block" onclick="plConnectClick()">Hubungkan Printer</button>
@@ -26642,8 +26656,9 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                             </div>
                             <div id="pl-conn-hint" class="pl-note"></div>
                         </section>
+${typeof ploPrinterCardHtml === 'function' ? ploPrinterCardHtml() : ''}
 
-                        <section class="pl-card pl-c-paper" aria-label="Kertas dan tata letak">
+                        <section class="pl-card pl-c-paper pl-std-only" aria-label="Kertas dan tata letak">
                             <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.layout}</span>Kertas &amp; Tata Letak</span></div>
                             <label class="pl-lbl" for="pl-paper">Ukuran kertas thermal</label>
                             <select id="pl-paper" class="pl-input" onchange="plOnPaperChange()">${paperOpts}</select>
@@ -26686,14 +26701,16 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                                 <label class="pl-chk"><input id="pl-invert" type="checkbox" onchange="plOnAdv()"><span>Balik polaritas bitmap<small>Aktifkan jika hasil cetak negatif (latar hitam) atau kosong.</small></span></label>
                             </details>
                         </section>
+${typeof ploPaperCardHtml === 'function' ? ploPaperCardHtml() : ''}
 
-                        <section class="pl-card pl-c-actions" aria-label="Cetak">
+                        <section class="pl-card pl-c-actions pl-std-only" aria-label="Cetak">
                             <div class="pl-actions">
                                 <button type="button" id="pl-print-btn" class="pl-btn pl-btn-primary pl-btn-lg pl-btn-block" onclick="plPrint(false)">Cetak Label</button>
                                 <button type="button" id="pl-test-btn" class="pl-btn pl-btn-ghost pl-btn-block" onclick="plPrint(true)">Cetak Tes (contoh label)</button>
                             </div>
                             <div class="pl-note">Cetak Tes memakai data contoh — berguna untuk mengecek arah, ukuran, dan warna cetak sebelum mencetak produk sungguhan.</div>
                         </section>
+${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
                     </div>
 
                     <div class="pl-col">
@@ -26701,6 +26718,10 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                             <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.eye}</span>Pratinjau</span><span><span id="pl-chip-size" class="pl-chip"></span> <span id="pl-chip-orient" class="pl-chip pl-chip-gray"></span></span></div>
                             <div class="pl-stage" id="pl-stage"><div class="pl-paper"><canvas id="pl-canvas" width="10" height="10"></canvas></div></div>
                             <div class="pl-meta" id="pl-meta"></div>
+                            <div class="plo-only">
+                                <div id="plo-zoomrow" class="plo-zoomrow pl-hide"><button type="button" id="plo-zoom" class="pl-link" onclick="ploToggleZoom()"></button></div>
+                                <div id="plo-pager" class="plo-pager pl-hide"><button type="button" onclick="ploPageStep(-1)" aria-label="Lembar sebelumnya">‹</button><span id="plo-pager-t"></span><button type="button" onclick="ploPageStep(1)" aria-label="Lembar berikutnya">›</button></div>
+                            </div>
                             <div id="pl-tips" class="pl-tips pl-hide"></div>
                             <label class="pl-chk pl-opt-only"><input id="pl-showqty" type="checkbox" onchange="plOnShowQty()"><span>Tampilkan QTY di label<small>Matikan kalau label hanya perlu Nama Produk dan Exp Date.</small></span></label>
                             <div class="pl-fields">
@@ -26736,6 +26757,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
             plRenderDataCard();
             plRefreshAll();
+            if (typeof ploInit === 'function') ploInit();   // [OPSIONAL] isi nilai awal kontrol printer umum
             plBindUsbEvents();
             plUsbAutoConnect();
             if (_plTab === 'sheet' && !_plRows.sheet) plLoadSheet();
@@ -26771,10 +26793,13 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const pb = document.getElementById('pl-print-btn'), tb = document.getElementById('pl-test-btn');
             if (pb) pb.disabled = _plBusy;
             if (tb) tb.disabled = _plBusy;
+            const ob = document.getElementById('plo-print-btn'), ot = document.getElementById('plo-test-btn');   // [OPSIONAL]
+            if (ob) ob.disabled = _plBusy;
+            if (ot) ot.disabled = _plBusy;
         }
 
-        function plStatusModel() {
-            const c = _plS.conn;
+        function plStatusModel(connOverride) {
+            const c = connOverride || _plS.conn;
             if (c === 'system') return { cls: 'pl-st-blue', title: 'Mode Driver / Dialog Cetak', sub: 'Printer dipilih di dialog cetak browser saat mencetak.', btn: null };
             const isUsb = c === 'usb';
             const st = isUsb ? _plUsb : _plBle;
@@ -26787,6 +26812,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             return { cls: 'pl-st-gray', title: 'Belum ada printer terhubung', sub: isUsb ? 'Colokkan printer via USB. Pertama kali: klik Hubungkan Printer & beri izin.' : 'Nyalakan Bluetooth printer, lalu klik Hubungkan Printer.', btn: 'connect' };
         }
         function plRenderStatus() {
+            if (typeof ploRenderStatus === 'function') ploRenderStatus();   // [LABEL PRODUK > OPSIONAL] indikator printer versi Opsional
             if (typeof mkRenderStatus === 'function') mkRenderStatus();   // [MARKING PENGIRIMAN] koneksi printer dipakai bersama — ikut perbarui indikator di halaman itu
             const box = document.getElementById('pl-status'); if (!box) return;
             const m = plStatusModel();
@@ -26803,6 +26829,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
         function plRenderPreview() {
             const canvas = document.getElementById('pl-canvas'); if (!canvas) return;
+            if (_plS.mode === 'opsional' && typeof ploRenderPreview === 'function' && _plO) return ploRenderPreview();   // [OPSIONAL] pratinjau lembar/label sesuai pengaturan printer umum
             const ro = plRenderOpts();
             const o = Object.assign({}, ro.render, { placeholder: true });
             const lay = plRenderCurrent(_plItem || {}, o);
@@ -26946,7 +26973,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         }
         // ---- [LABEL PRODUK > OPSIONAL] pilih mode & tampilkan/sembunyikan QTY ----
         const PL_SUB_QR = 'Atur printer thermal, pilih produk, cek pratinjau, lalu cetak label QR Code.';
-        const PL_SUB_OPT = 'Label sederhana tanpa QR Code: hanya Nama Produk, QTY (boleh disembunyikan), dan Exp Date.';
+        const PL_SUB_OPT = 'Label sederhana tanpa QR Code (Nama Produk, QTY, Exp Date) — bisa dicetak ke printer umum, jenis kertas, dan setelan adjustment seperti Marking Pengiriman.';
         const PL_NOTE_QR = 'Kotak di atas otomatis terisi saat produk diklik. ID Produk dan Nama Produk menjadi isi QR Code. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.';
         const PL_NOTE_OPT = 'Kotak di atas otomatis terisi saat produk diklik, atau isi manual. QTY ikut terisi bila ada kolom QTY di file import. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.';
         function plApplyMode() {
@@ -26961,7 +26988,8 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         function plSetMode(m) {
             m = m === 'opsional' ? 'opsional' : 'qr';
             if (_plS.mode === m) return;
-            _plS.mode = m; plSaveSettings(); plApplyMode(); plRenderPreview();
+            _plS.mode = m; plSaveSettings(); plApplyMode();
+            if (m === 'opsional' && typeof ploRefreshAll === 'function') { _ploPage = 0; ploRefreshAll(); } else plRenderPreview();
         }
         function plOnShowQty() {
             _plS.showQty = document.getElementById('pl-showqty').checked;
@@ -27721,7 +27749,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
          * Mode "Driver": cetak lewat dialog cetak browser (printer inkjet/laser atau thermal ber-driver).
          * list = daftar canvas, satu per halaman (boleh berisi canvas yang sama berulang); wMm × hMm = ukuran halaman.
          */
-        function mkPrintViaSystem(list, wMm, hMm) {
+        function mkPrintViaSystem(list, wMm, hMm, docTitle) {
             return new Promise(function (resolve, reject) {
                 const uniq = Array.from(new Set(list));
                 const urls = new Map();
@@ -27742,7 +27770,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     // kalau img diberi ukuran penuh sedangkan wadah dikurangi, img "meluber" dari wadahnya dan sebagian
                     // printer/driver tetap menghitungnya sebagai konten tambahan meski overflow:hidden, sehingga
                     // printer thermal/label ikut mencetak satu halaman kosong ekstra di antara setiap label.
-                    doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Marking Pengiriman</title><style>' +
+                    doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + (docTitle || 'Marking Pengiriman') + '</title><style>' +
                         '@page{size:' + wMm + 'mm ' + hMm + 'mm;margin:0}html,body{margin:0;padding:0;background:#fff}' +
                         '.p{width:' + wMm + 'mm;height:' + (hMm - 0.3) + 'mm;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}' +
                         '.p:last-child{page-break-after:auto;break-after:auto}' +
@@ -28728,6 +28756,661 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             _mkDestTab = 'po'; _mkCustom = { shipTo: '', alamat: '', totalKarton: '', startKarton: '1', expDate: '', showKarton: false, showExp: false };
         }
     </script>
+
+    <!-- [LABEL PRODUK > OPSIONAL] Printer umum + jenis kertas + setelan adjustment — MENIRU menu Marking Pengiriman.
+         Dipisah dari modul Label Produk & Marking Pengiriman (dimuat SETELAH keduanya) supaya error di sini tidak
+         mengganggu menu lain. Mode Standar (QR) tidak tersentuh: kartu Printer / Kertas / Cetak miliknya tetap dipakai
+         seperti semula; kartu versi Opsional di bawah hanya tampil saat tab "Opsional" aktif.
+         Memakai ulang (tanpa menduplikasi): daftar printer & kertas milik Marking (MK_PRINTERS, MK_PAPERS, MK_SHEETS),
+         renderer label plRenderLabelOpsional, koneksi USB/Bluetooth milik Label Produk, mkPrintViaSystem & mkFilledMap.
+         Pengaturannya disimpan TERPISAH dari Marking Pengiriman (key sendiri); pertama kali dibuka, nilainya disalin dari
+         pengaturan Marking yang sudah ada (printer, kertas, geser, dst.) supaya kalibrasi printer tidak perlu diulang. -->
+    <script>
+        // =====================================================================
+        // [LABEL PRODUK > OPSIONAL]
+        // Alur: pilih printer (inkjet/laser via Driver, atau thermal USB/Bluetooth) -> pilih jenis kertas
+        // (Tom & Jerry, thermal, A6, kontinu, kustom) -> pilih tata letak:
+        //   • Lembar (grid): 1 halaman = 1 lembar berisi grid label (default 2 × 5), dicetak lewat dialog cetak browser.
+        //     Bisa mulai dari slot tertentu, atur jarak kolom/baris, Geser kanan/bawah, dan garis bantu.
+        //   • Per label: 1 label per halaman / per feed (thermal langsung via TSPL/ZPL/ESC-POS, atau lewat Driver).
+        // Isi label = Nama Produk · QTY (opsional) · Exp Date (tanpa QR Code), digambar oleh plRenderLabelOpsional.
+        // =====================================================================
+        const PLO_STORAGE_KEY = 'nodLabelOpsionalSettingsV1';
+
+        let _plO = null;              // pengaturan aktif mode Opsional
+        let _ploPage = 0;             // lembar yang sedang dipratinjau (0-based)
+        let _ploZoom = true;          // pratinjau diperbesar ke area grid label (false = lembar penuh)
+        let _ploResizeBound = false;
+
+        // ---------------------------------------------------------------
+        // Pengaturan
+        // ---------------------------------------------------------------
+        function ploSanitize(s) {
+            const d = Object.assign({}, MK_DEFAULTS, s);
+            if (!mkFindPrinter(d.printerId)) d.printerId = MK_DEFAULTS.printerId;
+            if (!mkFindPaper(d.paperId)) d.paperId = MK_DEFAULTS.paperId;
+            if (['usb', 'bluetooth', 'system'].indexOf(d.conn) < 0) d.conn = 'usb';
+            if (['portrait', 'landscape'].indexOf(d.orientation) < 0) d.orientation = 'landscape';
+            if (['auto', 'tspl', 'zpl', 'escpos'].indexOf(d.lang) < 0) d.lang = 'auto';
+            d.dpi = (Number(d.dpi) === 300) ? 300 : 203;
+            d.copies = Math.round(plClamp(d.copies, 1, 500));
+            d.cw = plClamp(d.cw, 10, 300); d.ch = plClamp(d.ch, 10, 400);
+            d.margin = plClamp(d.margin, 0, 10); d.gap = plClamp(d.gap, 0, 10);
+            d.rot180 = !!d.rot180; d.invert = !!d.invert;
+            if (['sheet', 'label'].indexOf(d.layout) < 0) d.layout = 'sheet';
+            if (!MK_SHEETS.some(function (x) { return x.id === d.sheetPaper; })) d.sheetPaper = 'a4p';
+            d.sheetW = plClamp(d.sheetW, 50, 600); d.sheetH = plClamp(d.sheetH, 50, 900);
+            d.cols = Math.round(plClamp(d.cols, 1, 6)); d.rows = Math.round(plClamp(d.rows, 1, 20));
+            d.gapX = plClamp(d.gapX, 0, 30); d.gapY = plClamp(d.gapY, 0, 30);
+            // Grid berbasis POJOK KIRI ATAS lembar (sama dengan Marking). Nilai Geser lama yang dihitung dari tengah
+            // lembar (belum ada tanda cornerOrigin) di-reset ke 0 sekali saja.
+            if (!s.cornerOrigin) { d.shiftX = 0; d.shiftY = 0; }
+            d.cornerOrigin = true;
+            d.shiftX = plClamp(d.shiftX, -20, 300); d.shiftY = plClamp(d.shiftY, -20, 500);
+            d.startSlot = Math.round(plClamp(d.startSlot, 1, d.cols * d.rows));
+            d.guides = !!d.guides;
+            if (['usb', 'bluetooth'].indexOf(d.connRaw) < 0) d.connRaw = 'usb';
+            const pp = mkFindPaper(d.paperId);
+            const paperAuto = pp.id !== 'custom' && !(pp.h > 0);
+            if (mkFindPrinter(d.printerId).lang === 'system') d.conn = 'system';
+            else if (d.layout === 'sheet' && !paperAuto && d.conn !== 'system') { d.connRaw = d.conn; d.conn = 'system'; }   // lembar dicetak lewat Driver
+            return d;
+        }
+        function ploLoadSettings() {
+            let s = null;
+            try { s = JSON.parse(localStorage.getItem(PLO_STORAGE_KEY) || 'null'); } catch (_) { s = null; }
+            if (!s || typeof s !== 'object') {
+                // Pertama kali: salin dari pengaturan Marking Pengiriman (kalau ada) — printer & kalibrasi yang sama.
+                try { s = JSON.parse(localStorage.getItem(MK_STORAGE_KEY) || 'null'); } catch (_) { s = null; }
+                if (!s || typeof s !== 'object') s = {};
+            }
+            _plO = ploSanitize(s);
+        }
+        function ploSave() { try { localStorage.setItem(PLO_STORAGE_KEY, JSON.stringify(_plO)); } catch (_) { } }
+
+        function ploPrinter() { return mkFindPrinter(_plO.printerId) || mkFindPrinter(MK_DEFAULTS.printerId); }
+        function ploLang() { return _plO.lang === 'auto' ? ploPrinter().lang : _plO.lang; }
+        function ploPaperInfo() {
+            const p = mkFindPaper(_plO.paperId) || MK_PAPERS[0];
+            if (p.id === 'custom') return { id: 'custom', w: _plO.cw, h: _plO.ch, auto: false, g: 'ot' };
+            return { id: p.id, w: p.w, h: p.h, auto: !(p.h > 0), g: p.g, label: p.label };
+        }
+        /** Ukuran desain sesuai orientasi + apakah bitmap harus diputar 90° agar pas ke kertas fisik. */
+        function ploLayoutDims() {
+            const p = ploPaperInfo();
+            if (p.auto) return { lw: p.w, lh: 0, needRotate: false, auto: true, physW: p.w, physH: 0, fixedShape: true };
+            const mn = Math.min(p.w, p.h), mx = Math.max(p.w, p.h);
+            if (p.w === p.h) return { lw: p.w, lh: p.h, needRotate: false, auto: false, physW: p.w, physH: p.h, fixedShape: true };
+            const lw = _plO.orientation === 'portrait' ? mn : mx;
+            const lh = _plO.orientation === 'portrait' ? mx : mn;
+            return { lw: lw, lh: lh, needRotate: lw !== p.w, auto: false, physW: p.w, physH: p.h, fixedShape: false };
+        }
+        function ploPaperIsAuto() { return ploPaperInfo().auto; }
+        function ploIsSheet() { return _plO.layout === 'sheet' && !ploPaperIsAuto(); }
+        function ploSheetPage() {
+            const sh = MK_SHEETS.find(function (x) { return x.id === _plO.sheetPaper; }) || MK_SHEETS[0];
+            return sh.id === 'custom' ? { w: _plO.sheetW, h: _plO.sheetH } : { w: sh.w, h: sh.h };
+        }
+        /** Semua ukuran/posisi grid (mm) — grid mepet ke POJOK KIRI ATAS lembar; shiftX/shiftY untuk koreksi halus. */
+        function ploSheetCfg() {
+            const d = ploLayoutDims(), pg = ploSheetPage();
+            const cols = _plO.cols, rows = _plO.rows, slots = cols * rows;
+            const gw = cols * d.lw + (cols - 1) * _plO.gapX, gh = rows * d.lh + (rows - 1) * _plO.gapY;
+            const x0 = _plO.shiftX, y0 = _plO.shiftY;
+            const start = Math.min(Math.max(1, _plO.startSlot), slots);
+            const qty = Math.round(plClamp(_plO.copies, 1, 500));
+            const pages = Math.max(1, Math.ceil((start - 1 + qty) / slots));
+            const e = 0.01;
+            const fits = x0 >= -e && y0 >= -e && x0 + gw <= pg.w + e && y0 + gh <= pg.h + e;
+            return { lw: d.lw, lh: d.lh, pw: pg.w, ph: pg.h, cols: cols, rows: rows, slots: slots, gw: gw, gh: gh, x0: x0, y0: y0, start: start, qty: qty, pages: pages, fits: fits };
+        }
+        /** Opsi render 1 label Opsional (mm -> px sesuai dpi). Thermal mentah di-binarize; Driver (inkjet/laser) tidak. */
+        function ploLabelOpts(extra) {
+            const d = ploLayoutDims();
+            return Object.assign({ lw: d.lw, lh: d.lh, dpi: _plO.dpi, margin: _plO.margin, expPrefix: _plS.expPrefix, showQty: _plS.showQty, binarize: _plO.conn !== 'system' }, extra || {});
+        }
+        function ploToPhysical(canvas, dims) {
+            let c = canvas;
+            if (dims.needRotate) c = plRotate(c, 90);
+            if (_plO.rot180) c = plRotate(c, 180);
+            return c;
+        }
+
+        // ---------------------------------------------------------------
+        // Gambar 1 lembar penuh (grid label) — dipakai pratinjau DAN cetak
+        // ---------------------------------------------------------------
+        /** o = { cfg, dpi, page | map ([{slot,i}]), item, preview, guides }.
+         *  preview=true: slot kosong digambar putus-putus + nomor slot (TIDAK ikut tercetak). guides=true: garis tipis di tiap label. */
+        function ploRenderSheet(o) {
+            const cfg = o.cfg || ploSheetCfg();
+            const mm = o.dpi / 25.4;
+            const W = Math.max(50, Math.round(cfg.pw * mm)), H = Math.max(50, Math.round(cfg.ph * mm));
+            const boxW = Math.max(1, Math.round(cfg.lw * mm)), boxH = Math.max(1, Math.round(cfg.lh * mm));
+            const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+            const map = o.map || mkFilledMap(cfg, o.page || 0);
+            const item = o.item || {};
+            const hasData = !!String(item.nama || '').trim();
+            const lab = hasData ? plRenderLabelOpsional(item, ploLabelOpts({ lw: cfg.lw, lh: cfg.lh, dpi: o.dpi, binarize: false, placeholder: false })) : null;
+            const bySlot = {}; map.forEach(function (m) { bySlot[m.slot] = m.i; });
+            const line = Math.max(1, Math.round(0.2 * mm));
+            const dashed = function (x, y, text, fs) {
+                ctx.strokeStyle = '#c2c2c2'; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1); ctx.setLineDash([]);
+                ctx.fillStyle = '#b5b5b5'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = 'bold ' + Math.max(10, Math.round(Math.min(boxW, boxH) * fs)) + 'px Arial, sans-serif';
+                ctx.fillText(text, x + boxW / 2, y + boxH / 2);
+            };
+            let filled = 0;
+            for (let s = 0; s < cfg.slots; s++) {
+                const r = Math.floor(s / cfg.cols), c = s % cfg.cols;
+                const x = Math.round((cfg.x0 + c * (cfg.lw + _plO.gapX)) * mm), y = Math.round((cfg.y0 + r * (cfg.lh + _plO.gapY)) * mm);
+                if (s in bySlot) {
+                    if (lab) {
+                        filled++;
+                        ctx.drawImage(lab.canvas, x, y);
+                        if (o.guides) { ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = line; ctx.setLineDash([]); ctx.strokeRect(x + line / 2, y + line / 2, boxW - line, boxH - line); }
+                        else if (o.preview) { ctx.strokeStyle = '#dcdcdc'; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1); }
+                    } else if (o.preview) dashed(x, y, 'Pilih data', 0.13);
+                } else if (o.preview) dashed(x, y, String(s + 1), 0.16);
+            }
+            return { canvas: canvas, W: W, H: H, cfg: cfg, filled: filled, warnings: lab ? lab.info.warnings : [] };
+        }
+
+        // ---------------------------------------------------------------
+        // Pratinjau
+        // ---------------------------------------------------------------
+        function ploShowTips(tips) {
+            const tb = document.getElementById('pl-tips'); if (!tb) return;
+            if (tips.length) { tb.classList.remove('pl-hide'); tb.innerHTML = '<b>' + PL_IC.bulb + 'Saran otomatis</b><ul>' + tips.map(function (t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('') + '</ul>'; }
+            else { tb.classList.add('pl-hide'); tb.innerHTML = ''; }
+        }
+        function ploRenderPreview() {
+            const canvas = document.getElementById('pl-canvas'); if (!canvas || !_plO) return;
+            const item = _plItem || {};
+            const sheet = ploIsSheet();
+            const stage = document.getElementById('pl-stage');
+            const availW = Math.max(120, (stage ? stage.clientWidth : 360) - 40);
+            let tips = [], drawW, drawH, chipSize, chipOrient, metaText;
+            const pager = document.getElementById('plo-pager'), zoomRow = document.getElementById('plo-zoomrow');
+            if (sheet) {
+                const cfg = ploSheetCfg();
+                if (_ploPage > cfg.pages - 1) _ploPage = cfg.pages - 1;
+                if (_ploPage < 0) _ploPage = 0;
+                const PDPI = 150, mmP = PDPI / 25.4;
+                const r = ploRenderSheet({ cfg: cfg, dpi: PDPI, page: _ploPage, item: item, preview: true, guides: _plO.guides });
+                let sx = 0, sy = 0, sw = r.W, sh = r.H;
+                if (_ploZoom) {
+                    const pad = 3 * mmP;
+                    sx = Math.max(0, Math.floor(cfg.x0 * mmP - pad)); sy = Math.max(0, Math.floor(cfg.y0 * mmP - pad));
+                    sw = Math.max(20, Math.min(r.W - sx, Math.ceil(cfg.gw * mmP + 2 * pad)));
+                    sh = Math.max(20, Math.min(r.H - sy, Math.ceil(cfg.gh * mmP + 2 * pad)));
+                }
+                canvas.width = sw; canvas.height = sh;
+                canvas.getContext('2d').drawImage(r.canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+                drawW = sw; drawH = sh;
+                const sheetName = (MK_SHEETS.find(function (x) { return x.id === _plO.sheetPaper; }) || MK_SHEETS[0]);
+                chipSize = cfg.pw + ' × ' + cfg.ph + ' mm';
+                chipOrient = 'Lembar ' + cfg.cols + ' × ' + cfg.rows;
+                metaText = (sheetName.id === 'custom' ? 'Lembar kustom' : sheetName.label.split(' (')[0]) + ' · label ' + cfg.lw + ' × ' + cfg.lh + ' mm · ' + cfg.slots + ' slot/lembar · ' + cfg.qty + ' label' + (cfg.pages > 1 ? ' · ' + cfg.pages + ' lembar' : '');
+                if (!cfg.fits) tips.push('Grid label (' + Math.round(cfg.gw) + ' × ' + Math.round(cfg.gh) + ' mm) tidak muat di lembar ' + cfg.pw + ' × ' + cfg.ph + ' mm. Ubah ukuran lembar, jumlah kolom/baris, jarak, atau orientasi label.');
+                r.warnings.forEach(function (w) { tips.push(w); });
+                if (pager) {
+                    pager.classList.toggle('pl-hide', cfg.pages <= 1);
+                    const t = document.getElementById('plo-pager-t'); if (t) t.textContent = 'Lembar ' + (_ploPage + 1) + ' dari ' + cfg.pages;
+                    const bs = pager.querySelectorAll('button'); if (bs[0]) bs[0].disabled = _ploPage <= 0; if (bs[1]) bs[1].disabled = _ploPage >= cfg.pages - 1;
+                }
+                if (zoomRow) {
+                    zoomRow.classList.remove('pl-hide');
+                    const zb = document.getElementById('plo-zoom'); if (zb) zb.textContent = _ploZoom ? 'Tampilkan lembar penuh' : 'Perbesar ke area label';
+                }
+            } else {
+                const dims = ploLayoutDims();
+                const lay = plRenderLabelOpsional(item, ploLabelOpts({ placeholder: true }));
+                canvas.width = lay.W; canvas.height = lay.H;
+                canvas.getContext('2d').drawImage(lay.canvas, 0, 0);
+                drawW = lay.W; drawH = lay.H;
+                const mmPx = _plO.dpi / 25.4;
+                const hMm = dims.auto ? Math.round(lay.H / mmPx * 10) / 10 : dims.lh;
+                chipSize = dims.lw + ' × ' + hMm + ' mm';
+                chipOrient = dims.auto ? 'Kontinu' : (dims.lw > dims.lh ? 'Lanskap' : (dims.lw < dims.lh ? 'Potret' : 'Persegi'));
+                metaText = lay.W + ' × ' + lay.H + ' dot · ' + _plO.dpi + ' dpi';
+                lay.info.warnings.forEach(function (w) { tips.push(w); });
+                const pr = ploPrinter();
+                if (_plO.conn !== 'system' && ploLang() === 'escpos' && pr.maxDots && Math.round(dims.physW * mmPx) > pr.maxDots) tips.push('Lebar kertas (' + Math.round(dims.physW * mmPx) + ' dot) melebihi lebar cetak printer (' + pr.maxDots + ' dot) — sisi kanan bisa terpotong.');
+                if (_plO.conn !== 'system' && ploLang() === 'escpos' && !dims.auto) tips.push('Printer struk (ESC/POS) tidak membaca gap stiker — pastikan kertas pas, atau pakai kertas kontinu.');
+                if (pager) pager.classList.add('pl-hide');
+                if (zoomRow) zoomRow.classList.add('pl-hide');
+            }
+            const maxH = sheet ? (window.innerWidth < 640 ? 380 : 520) : (window.innerWidth < 640 ? 300 : 380);
+            const scale = Math.min(availW / drawW, maxH / drawH);
+            canvas.style.width = Math.round(drawW * scale) + 'px';
+            canvas.style.height = Math.round(drawH * scale) + 'px';
+            canvas.style.imageRendering = scale > 1 ? 'pixelated' : 'auto';
+            const chip = document.getElementById('pl-chip-size'); if (chip) chip.textContent = chipSize;
+            const co = document.getElementById('pl-chip-orient'); if (co) co.textContent = chipOrient;
+            const meta = document.getElementById('pl-meta'); if (meta) meta.textContent = metaText;
+            ploShowTips(tips);
+        }
+        function ploPageStep(d) { _ploPage += d; ploRenderPreview(); }
+        function ploToggleZoom() { _ploZoom = !_ploZoom; ploRenderPreview(); }
+
+        // ---------------------------------------------------------------
+        // Kartu UI (HTML) — memakai class pl-* yang sudah ada
+        // ---------------------------------------------------------------
+        function ploPrinterCardHtml() {
+            const printerOpts = MK_PRINTERS.map(function (g) {
+                return '<optgroup label="' + escapeHtml(g.group) + '">' + g.items.map(function (p) {
+                    return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>';
+                }).join('') + '</optgroup>';
+            }).join('');
+            return `
+                        <section class="pl-card pl-c-printer plo-only" aria-label="Printer (Opsional)">
+                            <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.printer}</span>Printer</span></div>
+                            <div id="plo-status" class="pl-status"><span class="pl-dot"></span><div><span id="plo-st-title" class="pl-st-title"></span><span id="plo-st-sub" class="pl-st-sub"></span></div></div>
+                            <button type="button" id="plo-btn-connect" class="pl-btn pl-btn-dark pl-btn-block" onclick="ploConnectClick()">Hubungkan Printer</button>
+
+                            <label class="pl-lbl" for="plo-printer">Type Printer</label>
+                            <select id="plo-printer" class="pl-input" onchange="ploOnPrinterChange()">${printerOpts}</select>
+                            <div id="plo-printer-note" class="pl-note"></div>
+
+                            <label class="pl-lbl">Koneksi</label>
+                            <div class="pl-seg" id="plo-conn-seg">
+                                <button type="button" data-v="usb" onclick="ploSetConn('usb')">USB</button>
+                                <button type="button" data-v="bluetooth" onclick="ploSetConn('bluetooth')">Bluetooth</button>
+                                <button type="button" data-v="system" onclick="ploSetConn('system')">Driver</button>
+                            </div>
+                            <div id="plo-conn-hint" class="pl-note"></div>
+                        </section>`;
+        }
+        function ploPaperCardHtml() {
+            return `
+                        <section class="pl-card pl-c-paper plo-only" aria-label="Kertas dan tata letak (Opsional)">
+                            <div class="pl-card-h"><span><span class="pl-ic">${PL_IC.layout}</span>Kertas &amp; Tata Letak</span></div>
+                            <label class="pl-lbl" for="plo-paper">Type Paper Label</label>
+                            <select id="plo-paper" class="pl-input" onchange="ploOnPaperChange()">${mkPaperOptions()}</select>
+                            <div id="plo-custom" class="pl-2col pl-hide">
+                                <input id="plo-cw" type="number" min="10" max="300" step="0.5" class="pl-input" oninput="ploOnCustomSize()" aria-label="Lebar (mm)" placeholder="Lebar">
+                                <span>×</span>
+                                <input id="plo-ch" type="number" min="10" max="400" step="0.5" class="pl-input" oninput="ploOnCustomSize()" aria-label="Tinggi (mm)" placeholder="Tinggi">
+                            </div>
+                            <div class="pl-note" id="plo-paper-note"></div>
+
+                            <label class="pl-lbl">Orientasi</label>
+                            <div class="pl-seg" id="plo-orient-seg">
+                                <button type="button" data-v="portrait" onclick="ploSetOrient('portrait')">${PL_ICON_PORTRAIT}Potret</button>
+                                <button type="button" data-v="landscape" onclick="ploSetOrient('landscape')">${PL_ICON_LANDSCAPE}Lanskap</button>
+                            </div>
+                            <div id="plo-orient-note" class="pl-note"></div>
+
+                            <label class="pl-lbl">Tata letak</label>
+                            <div class="pl-seg" id="plo-layout-seg">
+                                <button type="button" data-v="sheet" onclick="ploSetLayout('sheet')">Lembar (grid)</button>
+                                <button type="button" data-v="label" onclick="ploSetLayout('label')">Per label</button>
+                            </div>
+                            <div id="plo-layout-note" class="pl-note"></div>
+
+                            <div id="plo-sheetbox" class="plo-sub">
+                                <label class="pl-lbl" for="plo-sheet">Ukuran lembar</label>
+                                <select id="plo-sheet" class="pl-input" onchange="ploOnSheetPaper()">${mkSheetOptions()}</select>
+                                <div id="plo-sheet-custom" class="pl-2col pl-hide">
+                                    <input id="plo-sw" type="number" min="50" max="600" step="1" class="pl-input" oninput="ploOnSheetCustom()" aria-label="Lebar lembar (mm)" placeholder="Lebar">
+                                    <span>×</span>
+                                    <input id="plo-sh" type="number" min="50" max="900" step="1" class="pl-input" oninput="ploOnSheetCustom()" aria-label="Tinggi lembar (mm)" placeholder="Tinggi">
+                                </div>
+                                <label class="pl-lbl">Kolom × Baris</label>
+                                <div class="pl-2col" style="margin-top:0">
+                                    <input id="plo-cols" type="number" min="1" max="6" step="1" class="pl-input" oninput="ploOnGrid()" aria-label="Jumlah kolom">
+                                    <span>×</span>
+                                    <input id="plo-rows" type="number" min="1" max="20" step="1" class="pl-input" oninput="ploOnGrid()" aria-label="Jumlah baris">
+                                </div>
+                                <label class="pl-lbl" for="plo-start">Mulai dari slot</label>
+                                <input id="plo-start" type="number" min="1" step="1" inputmode="numeric" class="pl-input" oninput="ploOnStart()">
+                                <div id="plo-slot-note" class="pl-note"></div>
+                            </div>
+
+                            <label class="pl-lbl" for="plo-qty">Jumlah label</label>
+                            <div class="pl-step">
+                                <button type="button" onclick="ploQtyStep(-1)" aria-label="Kurangi">${PL_IC.minus}</button>
+                                <input id="plo-qty" type="number" min="1" max="500" step="1" inputmode="numeric" oninput="ploOnQtyInput()" onblur="ploOnQtyBlur()">
+                                <button type="button" onclick="ploQtyStep(1)" aria-label="Tambah">${PL_IC.plus}</button>
+                            </div>
+                            <div id="plo-fillrow" style="margin-top:.5rem"><button type="button" id="plo-fill" class="pl-btn pl-btn-ghost" onclick="ploFillSheet()">Penuhi lembar</button></div>
+
+                            <details class="pl-adv" id="plo-adv">
+                                <summary>Pengaturan lanjutan</summary>
+                                <div class="pl-adv-grid">
+                                    <div><label class="pl-lbl" for="plo-margin">Margin isi label (mm)</label>
+                                        <input id="plo-margin" type="number" min="0" max="10" step="0.5" class="pl-input" oninput="ploOnAdv()"></div>
+                                </div>
+                                <label class="pl-chk"><input id="plo-expprefix" type="checkbox" onchange="ploOnAdv()"><span>Tambahkan awalan “EXP:” pada tanggal kedaluwarsa</span></label>
+                                <div id="plo-adv-sheet">
+                                    <div class="pl-adv-grid">
+                                        <div><label class="pl-lbl" for="plo-gapx">Jarak antar kolom (mm)</label><input id="plo-gapx" type="number" min="0" max="30" step="0.5" class="pl-input" oninput="ploOnAdv()"></div>
+                                        <div><label class="pl-lbl" for="plo-gapy">Jarak antar baris (mm)</label><input id="plo-gapy" type="number" min="0" max="30" step="0.5" class="pl-input" oninput="ploOnAdv()"></div>
+                                        <div><label class="pl-lbl" for="plo-shiftx">Geser kanan (mm)</label><input id="plo-shiftx" type="number" min="-20" max="300" step="0.5" class="pl-input" oninput="ploOnAdv()"></div>
+                                        <div><label class="pl-lbl" for="plo-shifty">Geser bawah (mm)</label><input id="plo-shifty" type="number" min="-20" max="500" step="0.5" class="pl-input" oninput="ploOnAdv()"></div>
+                                    </div>
+                                    <div class="pl-note">Grid otomatis mepet ke pojok kiri atas lembar (ujung kertas). Isi Geser kalau printer masih sedikit meleset — angka positif menggeser ke kanan/bawah.</div>
+                                    <label class="pl-chk"><input id="plo-guides" type="checkbox" onchange="ploOnAdv()"><span>Garis bantu di sekeliling label<small>Untuk uji posisi di kertas biasa. Cetak Tes selalu memakai garis bantu.</small></span></label>
+                                </div>
+                                <div id="plo-adv-raw">
+                                    <div class="pl-adv-grid">
+                                        <div><label class="pl-lbl" for="plo-lang">Bahasa printer</label>
+                                            <select id="plo-lang" class="pl-input" onchange="ploOnAdv()"><option value="auto">Otomatis (ikut tipe)</option><option value="tspl">TSPL</option><option value="zpl">ZPL</option><option value="escpos">ESC/POS</option></select></div>
+                                        <div><label class="pl-lbl" for="plo-dpi">Resolusi</label>
+                                            <select id="plo-dpi" class="pl-input" onchange="ploOnAdv()"><option value="203">203 dpi</option><option value="300">300 dpi</option></select></div>
+                                        <div><label class="pl-lbl" for="plo-gap">Gap label (mm)</label>
+                                            <input id="plo-gap" type="number" min="0" max="10" step="0.5" class="pl-input" oninput="ploOnAdv()"></div>
+                                    </div>
+                                    <div class="pl-note">Gap: jarak antar stiker (TSPL). Isi 0 untuk kertas kontinu.</div>
+                                    <label class="pl-chk"><input id="plo-rot180" type="checkbox" onchange="ploOnAdv()"><span>Putar hasil cetak 180°<small>Jika label keluar terbalik (kertas terpasang berlawanan arah).</small></span></label>
+                                    <label class="pl-chk"><input id="plo-invert" type="checkbox" onchange="ploOnAdv()"><span>Balik polaritas bitmap<small>Aktifkan jika hasil cetak negatif (latar hitam) atau kosong.</small></span></label>
+                                </div>
+                            </details>
+                        </section>`;
+        }
+        function ploActionsCardHtml() {
+            return `
+                        <section class="pl-card pl-c-actions plo-only" aria-label="Cetak (Opsional)">
+                            <div class="pl-actions">
+                                <button type="button" id="plo-print-btn" class="pl-btn pl-btn-primary pl-btn-lg pl-btn-block" onclick="ploPrint(false)">Cetak Label</button>
+                                <button type="button" id="plo-test-btn" class="pl-btn pl-btn-ghost pl-btn-block" onclick="ploPrint(true)">Cetak Tes (contoh label)</button>
+                            </div>
+                            <div class="pl-note">Cetak Tes memakai data contoh (dan garis bantu di tiap label bila tata letak Lembar) — berguna untuk mengecek arah, ukuran, posisi, dan ketajaman cetak sebelum mencetak sungguhan.</div>
+                        </section>`;
+        }
+
+        // ---------------------------------------------------------------
+        // Sinkronisasi kontrol + indikator
+        // ---------------------------------------------------------------
+        /** Isi nilai awal kontrol (dipanggil sekali tiap halaman Label Produk dibuka). */
+        function ploInit() {
+            if (!_plO) ploLoadSettings();
+            const set = function (id, v) { const e = document.getElementById(id); if (e) e.value = v; };
+            const chk = function (id, v) { const e = document.getElementById(id); if (e) e.checked = !!v; };
+            set('plo-printer', _plO.printerId); set('plo-paper', _plO.paperId);
+            set('plo-cw', _plO.cw); set('plo-ch', _plO.ch); set('plo-qty', _plO.copies);
+            set('plo-lang', _plO.lang); set('plo-dpi', String(_plO.dpi)); set('plo-margin', _plO.margin); set('plo-gap', _plO.gap);
+            set('plo-sheet', _plO.sheetPaper); set('plo-sw', _plO.sheetW); set('plo-sh', _plO.sheetH);
+            set('plo-cols', _plO.cols); set('plo-rows', _plO.rows); set('plo-start', _plO.startSlot);
+            set('plo-gapx', _plO.gapX); set('plo-gapy', _plO.gapY); set('plo-shiftx', _plO.shiftX); set('plo-shifty', _plO.shiftY);
+            chk('plo-guides', _plO.guides); chk('plo-rot180', _plO.rot180); chk('plo-invert', _plO.invert); chk('plo-expprefix', _plS.expPrefix);
+            _ploPage = 0;
+            if (!_ploResizeBound) {
+                _ploResizeBound = true;
+                let t = null;
+                window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(function () { if (_plS && _plS.mode === 'opsional' && document.getElementById('plo-printer')) ploRenderPreview(); }, 150); });
+            }
+            if (_plS.mode === 'opsional') ploRefreshAll();
+        }
+
+        function ploRenderStatus() {
+            const box = document.getElementById('plo-status'); if (!box || !_plO) return;
+            const m = plStatusModel(_plO.conn);
+            box.className = 'pl-status ' + m.cls;
+            document.getElementById('plo-st-title').textContent = m.title;
+            document.getElementById('plo-st-sub').textContent = m.sub;
+            const b = document.getElementById('plo-btn-connect'); if (!b) return;
+            b.disabled = m.btn === 'wait';
+            b.className = 'pl-btn pl-btn-block ' + (m.btn === 'disconnect' ? 'pl-btn-ghost' : 'pl-btn-dark') + (m.btn ? '' : ' pl-hide');
+            b.textContent = m.btn === 'disconnect' ? 'Putuskan Printer' : (m.btn === 'wait' ? 'Menghubungkan…' : 'Hubungkan Printer');
+        }
+
+        /** Perbarui semua kontrol Opsional + pratinjau + indikator. */
+        function ploRefreshAll() {
+            if (!_plO || !document.getElementById('plo-printer')) return;
+            const p = ploPrinter(), isSys = p.lang === 'system';
+            const sheet = ploIsSheet();
+            if (sheet && _plO.conn !== 'system') { _plO.connRaw = _plO.conn; _plO.conn = 'system'; ploSave(); }   // lembar selalu lewat Driver
+            const sel = document.getElementById('plo-printer'); if (sel && sel.value !== _plO.printerId) sel.value = _plO.printerId;
+            const note = document.getElementById('plo-printer-note');
+            if (note) note.textContent = (isSys || sheet) ? 'Dicetak lewat driver printer yang terpasang di komputer · ' + _plO.dpi + ' dpi' : 'Bahasa perintah: ' + PL_LANG_LABEL[ploLang()] + ' · ' + _plO.dpi + ' dpi' + (p.maxDots ? ' · lebar cetak maks. ' + p.maxDots + ' dot' : '');
+            document.querySelectorAll('#plo-conn-seg button').forEach(function (b) {
+                const v = b.getAttribute('data-v');
+                b.classList.toggle('on', v === _plO.conn);
+                b.disabled = (isSys || sheet) && v !== 'system';
+            });
+            const hints = {
+                usb: 'Colokkan kabel USB — printer yang sudah pernah diizinkan tersambung otomatis. Butuh Chrome/Edge.',
+                bluetooth: 'Untuk printer yang punya Bluetooth (BLE). Klik Hubungkan Printer, lalu pilih printer dari daftar.',
+                system: sheet ? 'Tata letak Lembar dicetak lewat dialog cetak browser ke printer yang driver-nya sudah terpasang di komputer. Untuk printer thermal USB/Bluetooth langsung, pilih tata letak Per label.' : 'Cetak lewat dialog cetak browser ke printer yang driver-nya sudah terpasang di komputer (inkjet, laser, atau thermal ber-driver).'
+            };
+            const hint = document.getElementById('plo-conn-hint'); if (hint) hint.textContent = hints[_plO.conn];
+            const paper = ploPaperInfo(), dims = ploLayoutDims();
+            const ps = document.getElementById('plo-paper'); if (ps && ps.value !== _plO.paperId) ps.value = _plO.paperId;
+            const custom = document.getElementById('plo-custom'); if (custom) custom.classList.toggle('pl-hide', paper.id !== 'custom');
+            const pn = document.getElementById('plo-paper-note');
+            if (pn) pn.innerHTML = paper.id === 'custom' ? 'Lebar = sisi yang melintang head printer; tinggi = arah keluarnya kertas (mm).' :
+                (paper.auto ? 'Kertas kontinu: tinggi label mengikuti isi secara otomatis.' : '<b>' + escapeHtml(paper.label || (paper.w + ' × ' + paper.h + ' mm')) + '</b> — tata letak &amp; ukuran font otomatis menyesuaikan, tanpa perlu diatur ulang.');
+            document.querySelectorAll('#plo-orient-seg button').forEach(function (b) {
+                b.classList.toggle('on', dims.fixedShape ? false : b.getAttribute('data-v') === _plO.orientation);
+                b.disabled = dims.fixedShape;
+            });
+            const on = document.getElementById('plo-orient-note');
+            if (on) on.textContent = dims.fixedShape ? (dims.auto ? 'Kertas kontinu: orientasi tidak berpengaruh.' : 'Kertas persegi: orientasi tidak berpengaruh.') : (dims.needRotate && _plO.conn !== 'system' ? 'Desain diputar 90° otomatis agar pas dengan arah kertas di printer.' : '');
+            document.querySelectorAll('#plo-layout-seg button').forEach(function (b) {
+                const v = b.getAttribute('data-v');
+                b.classList.toggle('on', v === (sheet ? 'sheet' : 'label'));
+                b.disabled = (v === 'sheet' && paper.auto);
+            });
+            const ln = document.getElementById('plo-layout-note');
+            if (ln) ln.textContent = paper.auto ? 'Kertas kontinu memakai tata letak Per label.' : (sheet ? 'Pratinjau = satu lembar penuh siap cetak: ' + _plO.cols + ' kolom × ' + _plO.rows + ' baris (' + (_plO.cols * _plO.rows) + ' label per lembar).' : 'Satu label per halaman / per feed printer.');
+            const sb = document.getElementById('plo-sheetbox'); if (sb) sb.classList.toggle('pl-hide', !sheet);
+            const fr = document.getElementById('plo-fillrow'); if (fr) fr.classList.toggle('pl-hide', !sheet);
+            const asx = document.getElementById('plo-adv-sheet'); if (asx) asx.classList.toggle('pl-hide', !sheet);
+            const arw = document.getElementById('plo-adv-raw'); if (arw) arw.classList.toggle('pl-hide', sheet || isSys);
+            const sc = document.getElementById('plo-sheet-custom'); if (sc) sc.classList.toggle('pl-hide', _plO.sheetPaper !== 'custom');
+            if (sheet) {
+                const cfg = ploSheetCfg();
+                const sn = document.getElementById('plo-slot-note');
+                if (sn) sn.textContent = 'Slot 1 = kiri atas, urut ke kanan lalu ke bawah (1–' + cfg.slots + '). Ubah bila lembar stiker sudah terpakai sebagian.';
+                const st = document.getElementById('plo-start'); if (st) st.max = cfg.slots;
+                const fb = document.getElementById('plo-fill'); if (fb) fb.textContent = 'Penuhi lembar (' + (cfg.slots - cfg.start + 1) + ' label)';
+            }
+            ploRenderStatus();
+            ploRenderPreview();
+            plSyncButtons();
+        }
+
+        // ---------------------------------------------------------------
+        // Handler kontrol
+        // ---------------------------------------------------------------
+        function ploOnPrinterChange() {
+            const p = mkFindPrinter(document.getElementById('plo-printer').value);
+            if (!p) return;
+            const wasSys = ploPrinter().lang === 'system';
+            _plO.printerId = p.id; _plO.dpi = p.dpi || _plO.dpi;
+            if (p.lang === 'system') { _plO.conn = 'system'; if (!ploIsSheet()) { _plO.margin = Math.max(_plO.margin, 3); const m = document.getElementById('plo-margin'); if (m) m.value = _plO.margin; } }
+            else if (wasSys && _plO.conn === 'system' && !ploIsSheet()) _plO.conn = _plO.connRaw || 'usb';
+            const d = document.getElementById('plo-dpi'); if (d) d.value = String(_plO.dpi);
+            ploSave(); ploRefreshAll();
+            if (_plO.conn === 'usb') plUsbAutoConnect();
+        }
+        function ploSetConn(v) {
+            if (ploPrinter().lang === 'system' || ploIsSheet()) return;
+            _plO.conn = v; ploSave(); ploRefreshAll();
+            if (v === 'usb') plUsbAutoConnect();
+        }
+        function ploOnPaperChange() {
+            const p = mkFindPaper(document.getElementById('plo-paper').value);
+            if (!p) return;
+            _plO.paperId = p.id;
+            _plO.orientation = p.id === 'custom' ? plNaturalOrientation(_plO.cw, _plO.ch) : mkNaturalOrientation(p);
+            _ploPage = 0; ploSave(); ploRefreshAll();
+        }
+        function ploOnCustomSize() {
+            const w = parseFloat(document.getElementById('plo-cw').value), h = parseFloat(document.getElementById('plo-ch').value);
+            if (!(w >= 10) || !(h >= 10)) return;
+            _plO.cw = plClamp(w, 10, 300); _plO.ch = plClamp(h, 10, 400);
+            _plO.orientation = plNaturalOrientation(_plO.cw, _plO.ch);
+            ploSave(); ploRefreshAll();
+        }
+        function ploSetOrient(v) { _plO.orientation = v; ploSave(); ploRefreshAll(); }
+        function ploQtyStep(d) {
+            _plO.copies = Math.round(plClamp((parseInt(document.getElementById('plo-qty').value, 10) || 1) + d, 1, 500));
+            document.getElementById('plo-qty').value = _plO.copies; ploSave(); ploRefreshAll();
+        }
+        function ploOnQtyInput() { const v = parseInt(document.getElementById('plo-qty').value, 10); if (v >= 1) { _plO.copies = Math.min(500, v); ploSave(); ploRefreshAll(); } }
+        function ploOnQtyBlur() { const i = document.getElementById('plo-qty'); _plO.copies = Math.round(plClamp(parseInt(i.value, 10) || 1, 1, 500)); i.value = _plO.copies; ploSave(); ploRefreshAll(); }
+
+        function ploSetLayout(v) {
+            if (v === 'sheet' && ploPaperIsAuto()) return;
+            _plO.layout = v; _ploPage = 0;
+            if (v === 'sheet') { if (_plO.conn !== 'system') { _plO.connRaw = _plO.conn; _plO.conn = 'system'; } }
+            else if (ploPrinter().lang !== 'system' && _plO.conn === 'system') _plO.conn = _plO.connRaw || 'usb';
+            ploSave(); ploRefreshAll();
+            if (_plO.conn === 'usb') plUsbAutoConnect();
+        }
+        function ploOnSheetPaper() { _plO.sheetPaper = document.getElementById('plo-sheet').value; _ploPage = 0; ploSave(); ploRefreshAll(); }
+        function ploOnSheetCustom() {
+            const w = parseFloat(document.getElementById('plo-sw').value), h = parseFloat(document.getElementById('plo-sh').value);
+            if (!(w >= 50) || !(h >= 50)) return;
+            _plO.sheetW = plClamp(w, 50, 600); _plO.sheetH = plClamp(h, 50, 900); ploSave(); ploRefreshAll();
+        }
+        function ploOnGrid() {
+            const c = parseInt(document.getElementById('plo-cols').value, 10), r = parseInt(document.getElementById('plo-rows').value, 10);
+            if (!(c >= 1) || !(r >= 1)) return;
+            _plO.cols = Math.min(6, c); _plO.rows = Math.min(20, r);
+            _plO.startSlot = Math.min(_plO.startSlot, _plO.cols * _plO.rows);
+            const st = document.getElementById('plo-start'); if (st) st.value = _plO.startSlot;
+            _ploPage = 0; ploSave(); ploRefreshAll();
+        }
+        function ploOnStart() {
+            const v = parseInt(document.getElementById('plo-start').value, 10);
+            if (!(v >= 1)) return;
+            _plO.startSlot = Math.min(v, _plO.cols * _plO.rows); _ploPage = 0; ploSave(); ploRefreshAll();
+        }
+        /** Isi jumlah label = semua slot yang tersisa di lembar pertama (dari slot awal sampai slot terakhir). */
+        function ploFillSheet() {
+            const cfg = ploSheetCfg();
+            _plO.copies = cfg.slots - cfg.start + 1;
+            const q = document.getElementById('plo-qty'); if (q) q.value = _plO.copies;
+            _ploPage = 0; ploSave(); ploRefreshAll();
+        }
+        function ploOnAdv() {
+            _plO.lang = document.getElementById('plo-lang').value;
+            _plO.dpi = Number(document.getElementById('plo-dpi').value) === 300 ? 300 : 203;
+            const mg = parseFloat(document.getElementById('plo-margin').value); if (isFinite(mg)) _plO.margin = plClamp(mg, 0, 10);
+            const gp = parseFloat(document.getElementById('plo-gap').value); if (isFinite(gp)) _plO.gap = plClamp(gp, 0, 10);
+            const gx = parseFloat(document.getElementById('plo-gapx').value); if (isFinite(gx)) _plO.gapX = plClamp(gx, 0, 30);
+            const gy = parseFloat(document.getElementById('plo-gapy').value); if (isFinite(gy)) _plO.gapY = plClamp(gy, 0, 30);
+            const sx = parseFloat(document.getElementById('plo-shiftx').value); if (isFinite(sx)) _plO.shiftX = plClamp(sx, -20, 300);
+            const sy = parseFloat(document.getElementById('plo-shifty').value); if (isFinite(sy)) _plO.shiftY = plClamp(sy, -20, 500);
+            _plO.guides = document.getElementById('plo-guides').checked;
+            _plO.rot180 = document.getElementById('plo-rot180').checked;
+            _plO.invert = document.getElementById('plo-invert').checked;
+            _plS.expPrefix = document.getElementById('plo-expprefix').checked; plSaveSettings();   // awalan "EXP:" dipakai bersama mode Standar
+            ploSave(); ploRefreshAll();
+        }
+
+        // ---------------------------------------------------------------
+        // Koneksi printer (USB/Bluetooth dipakai bersama modul Label Produk)
+        // ---------------------------------------------------------------
+        function ploConnected() {
+            if (_plO.conn === 'usb') return _plUsb.state === 'connected';
+            if (_plO.conn === 'bluetooth') return _plBle.state === 'connected';
+            return true;
+        }
+        async function ploEnsureConnected() {
+            if (ploConnected()) return true;
+            if (_plO.conn === 'usb') {
+                _plUsb.manualOff = false;
+                await plUsbAutoConnect();                       // 1) coba printer USB yang sudah pernah diizinkan
+                if (_plUsb.state === 'connected') return true;
+                return plUsbRequest();                           // 2) belum ada -> tampilkan daftar perangkat USB
+            }
+            if (_plO.conn === 'bluetooth') return plBleConnect();
+            return true;
+        }
+        function ploSendBytes(bytes, onProgress) { return _plO.conn === 'bluetooth' ? plBleWrite(bytes, onProgress) : plUsbWrite(bytes, onProgress); }
+        async function ploConnectClick() {
+            if (_plO.conn === 'usb') {
+                if (_plUsb.state === 'connected') return plUsbDisconnect();
+                return ploEnsureConnected();
+            }
+            if (_plO.conn === 'bluetooth') {
+                if (_plBle.state === 'connected') return plBleDisconnect();
+                return plBleConnect();
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // Cetak
+        // ---------------------------------------------------------------
+        async function ploPrint(isTest) {
+            if (_plBusy) return;
+            const item = isTest ? PL_SAMPLE : _plItem;
+            if (!item || !String(item.nama || '').trim()) {
+                showAlert('warning', 'Belum ada data', 'Pilih data dari daftar (atau Import file) dulu. Kotak Nama Produk wajib terisi.');
+                return;
+            }
+            const sheet = ploIsSheet();
+            const qty = isTest ? 1 : Math.round(plClamp(_plO.copies, 1, 500));
+            const btn = document.getElementById('plo-print-btn');
+            const setBtn = function (t) { if (btn) btn.textContent = t; };
+            const oldText = btn ? btn.textContent : '';
+            _plBusy = true; plSyncButtons();
+            try {
+                if (_plO.conn !== 'system') {
+                    setBtn('Menghubungkan…');
+                    if (!(await ploEnsureConnected())) return;   // user batal / gagal (pesan sudah tampil)
+                }
+                setBtn('Menyiapkan label…');
+                await plSleep(20);
+                if (sheet) {
+                    // ---- LEMBAR: 1 halaman = 1 lembar berisi grid label ----
+                    const cfg0 = ploSheetCfg();
+                    if (!cfg0.fits) throw new Error('Grid label (' + Math.round(cfg0.gw) + ' × ' + Math.round(cfg0.gh) + ' mm) tidak muat di lembar ' + cfg0.pw + ' × ' + cfg0.ph + ' mm. Ubah ukuran lembar, jumlah kolom/baris, jarak, atau orientasi label.');
+                    const cfg = isTest ? Object.assign({}, cfg0, { start: 1, qty: cfg0.slots, pages: 1 }) : cfg0;
+                    const cache = {}, pages = [];
+                    for (let pg = 0; pg < cfg.pages; pg++) {
+                        const map = mkFilledMap(cfg, pg);
+                        const key = map.map(function (m) { return m.slot; }).join(',');
+                        if (!cache[key]) cache[key] = ploRenderSheet({ cfg: cfg, dpi: 300, map: map, item: item, guides: _plO.guides || isTest });
+                        pages.push(cache[key].canvas);
+                        if (pg % 4 === 3) await plSleep(0);
+                    }
+                    const w0 = cache[Object.keys(cache)[0]];
+                    if (w0.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(w0.warnings[0]));
+                    setBtn('Membuka dialog cetak…');
+                    await mkPrintViaSystem(pages, cfg.pw, cfg.ph, 'Label Produk');
+                    if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak label produk (Opsional, lembar): ' + item.nama + ' ×' + cfg.qty);
+                    return;
+                }
+                const dims = ploLayoutDims();
+                const lay = plRenderLabelOpsional(item, ploLabelOpts());
+                if (lay.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(lay.info.warnings[0]));
+                const mmPx = _plO.dpi / 25.4;
+                if (_plO.conn === 'system') {
+                    setBtn('Membuka dialog cetak…');
+                    const hMm = dims.lh > 0 ? dims.lh : Math.round(lay.canvas.height / mmPx * 100) / 100;
+                    const list = [];
+                    for (let i = 0; i < qty; i++) list.push(lay.canvas);
+                    await mkPrintViaSystem(list, dims.lw, hMm, 'Label Produk');
+                } else {
+                    const lang = ploLang();
+                    if (lang === 'system') throw new Error('Tipe printer ini hanya bisa dicetak lewat mode Driver.');
+                    const phys = ploToPhysical(lay.canvas, dims);
+                    const bmp = plPackBitmap(phys);
+                    const bytes = plBuildJob(lang, bmp, {
+                        wMm: dims.physW, hMm: dims.physH > 0 ? dims.physH : Math.ceil(phys.height / mmPx),
+                        gapMm: _plO.gap, qty: qty, invert: _plO.invert
+                    });
+                    await ploSendBytes(bytes, function (p) { setBtn('Mengirim… ' + Math.round(p * 100) + '%'); });
+                    showToastAlert('success', isTest ? 'Cetak tes terkirim' : 'Label terkirim ke printer', escapeHtml(item.nama) + (isTest ? '' : ' × ' + qty));
+                }
+                if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak label produk (Opsional): ' + item.nama + ' ×' + qty);
+            } catch (e) {
+                showAlert('error', 'Gagal mencetak', plErrMsg(e));
+            } finally {
+                _plBusy = false;
+                if (btn) btn.textContent = oldText || 'Cetak Label';
+                plSyncButtons();
+            }
+        }
+    </script>
+
 
     <!-- ═══ MODAL KAMERA QR — PERMANEN (tidak ikut innerHTML) ═══ -->
     <!-- Modal kamera live untuk scan Serial Number (Warranty Registration) -->
