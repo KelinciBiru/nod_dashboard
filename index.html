@@ -522,6 +522,17 @@
         .pl-fields .pl-lbl { margin-top: 0; }
         .pl-field-note { font-size: .6875rem; color: #9ca3af; margin-top: .4rem; }
 
+        /* [LABEL PRODUK > OPSIONAL] pilihan mode + kotak QTY. Mode Opsional menyembunyikan ID Produk & Kode Lokasi (tidak dicetak). */
+        .pl-mode { display: inline-flex; gap: .2rem; padding: .2rem; margin-top: .75rem; background: #f3f4f6; border-radius: .8rem; }
+        .pl-mode button { padding: .45rem 1.1rem; border: 0; border-radius: .62rem; background: transparent; font-size: .8125rem; font-weight: 700; color: #6b7280; cursor: pointer; transition: background-color .15s, color .15s; }
+        .pl-mode button.on { background: #fff; color: #b45309; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+        .pl-page:not(.pl-m-opt) .pl-f-qty, .pl-page:not(.pl-m-opt) .pl-opt-only { display: none; }
+        .pl-m-opt .pl-f-id, .pl-m-opt .pl-f-lok { display: none; }
+        @media (min-width: 640px) {
+            .pl-m-opt .pl-f-nama { grid-column: span 4; }
+            .pl-m-opt .pl-f-qty, .pl-m-opt .pl-f-exp { grid-column: span 2; }
+        }
+
         /* data */
         .pl-tabs { display: flex; gap: .25rem; padding: .2rem; background: #f3f4f6; border-radius: .8rem; margin-bottom: .75rem; }
         .pl-tabs button { flex: 1 1 0; padding: .5rem .5rem; border: 0; border-radius: .62rem; background: transparent; font-size: .8125rem; font-weight: 700; color: #6b7280; cursor: pointer; }
@@ -25703,12 +25714,13 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // Vendor ID USB yang pasti (dipakai hanya untuk memberi saran tipe printer).
         const PL_USB_VENDORS = { 0x0A5F: { brand: 'Zebra', lang: 'zpl' }, 0x1203: { brand: 'TSC', lang: 'tspl' } };
 
-        const PL_SAMPLE = { idProduk: 'PRD-0001', nama: 'CONTOH PRODUK 250G', lokasi: 'A-01-03', exp: '31 Des 2027' };
+        const PL_SAMPLE = { idProduk: 'PRD-0001', nama: 'CONTOH PRODUK 250G', lokasi: 'A-01-03', exp: '31 Des 2027', qty: '24 pcs' };
         const PL_LANG_LABEL = { tspl: 'TSPL', zpl: 'ZPL', escpos: 'ESC/POS' };
 
         const PL_DEFAULTS = {
             printerId: 'xp-365b', conn: 'usb', paperId: '50x30', cw: 50, ch: 30, orientation: 'landscape',
-            qty: 1, dpi: 203, lang: 'auto', margin: 2, gap: 2, rot180: false, invert: false, expPrefix: true
+            qty: 1, dpi: 203, lang: 'auto', margin: 2, gap: 2, rot180: false, invert: false, expPrefix: true,
+            mode: 'qr', showQty: true      // mode: 'qr' (standar) | 'opsional' (Nama Produk · QTY · Exp Date, tanpa QR)
         };
 
         let _plS = null;                              // pengaturan aktif
@@ -25750,6 +25762,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             d.cw = plClamp(d.cw, 10, 300); d.ch = plClamp(d.ch, 10, 400);
             d.margin = plClamp(d.margin, 0, 10); d.gap = plClamp(d.gap, 0, 10);
             d.rot180 = !!d.rot180; d.invert = !!d.invert; d.expPrefix = d.expPrefix !== false;
+            d.mode = d.mode === 'opsional' ? 'opsional' : 'qr'; d.showQty = d.showQty !== false;
             _plS = d;
         }
         function plSaveSettings() { try { localStorage.setItem(PL_STORAGE_KEY, JSON.stringify(_plS)); } catch (_) { } }
@@ -25954,6 +25967,109 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 ctx.fillText('Pilih data untuk pratinjau', W / 2, canvas.height / 2);
             }
             return { canvas: canvas, W: canvas.width, H: canvas.height, info: { modules: n, modDots: mod, warnings: warnings } };
+        }
+
+        /** Pilih renderer sesuai mode halaman: 'qr' = label standar (QR), 'opsional' = Nama Produk · QTY · Exp Date. */
+        function plRenderCurrent(item, o) {
+            return (_plS && _plS.mode === 'opsional') ? plRenderLabelOpsional(item, o) : plRenderLabel(item, o);
+        }
+
+        /**
+         * [LABEL PRODUK > OPSIONAL] Label sederhana TANPA QR Code — hanya Nama Produk, QTY (boleh disembunyikan
+         * lewat o.showQty) dan Exp Date. Susunan: nama (besar, bisa beberapa baris) -> QTY -> Exp, rata tengah.
+         * o = sama dengan plRenderLabel + showQty. Mengembalikan struktur yang sama { canvas, W, H, info }
+         * sehingga pratinjau, rotasi, bitmap & semua bahasa printer (TSPL/ZPL/ESC-POS/Driver) dipakai bersama.
+         */
+        function plRenderLabelOpsional(item, o) {
+            const mm = o.dpi / 25.4;
+            const W = Math.max(16, Math.round(o.lw * mm));
+            const margin = Math.max(0, Math.round(o.margin * mm));
+            const aw = Math.max(8, W - 2 * margin);
+            const auto = !(o.lh > 0);
+            const Hfixed = auto ? 0 : Math.max(16, Math.round(o.lh * mm));
+            const ah = auto ? 0 : Math.max(8, Hfixed - 2 * margin);
+            const FONT = '"Arial", "Helvetica Neue", Helvetica, sans-serif';
+            const fontOf = function (px) { return 'bold ' + Math.max(6, Math.round(px)) + 'px ' + FONT; };
+
+            const nama = String(item && item.nama || '').trim();
+            const exp = String(item && item.exp || '').trim();
+            const qty = String(item && item.qty || '').trim();
+            const expText = exp ? ((o.expPrefix ? 'EXP: ' : '') + exp) : '';
+            const qtyText = (o.showQty && qty) ? ('QTY: ' + qty) : '';
+            const warnings = [];
+            if (nama && o.showQty && !qty) warnings.push('QTY kosong — isi kotak QTY di bawah pratinjau, atau matikan “Tampilkan QTY di label”.');
+
+            const mc = document.createElement('canvas').getContext('2d');
+            const gap = Math.max(2, Math.round(0.9 * mm));
+            const LH = 1.18;
+            const uMin = Math.max(8, Math.round(1.7 * mm));
+
+            function fitOne(text, px) {          // 1 baris: kecilkan font kalau lebih lebar dari area
+                mc.font = fontOf(px);
+                const w = mc.measureText(text).width;
+                return w > aw ? Math.max(6, Math.floor(px * aw / w)) : Math.round(px);
+            }
+            function attempt(u, allowTrunc) {
+                const fName = Math.round(u * 1.3);
+                mc.font = fontOf(fName);
+                let lines = nama ? plWrapText(mc, nama, aw) : [];
+                const qtyPx = qtyText ? fitOne(qtyText, u * 1.1) : 0;
+                const expPx = expText ? fitOne(expText, u) : 0;
+                const lhName = Math.round(fName * LH), lhQty = Math.round(qtyPx * LH), lhExp = Math.round(expPx * LH);
+                const hInfo = (qtyText ? lhQty : 0) + (expText ? lhExp : 0);
+                const blocks = (lines.length ? 1 : 0) + (qtyText ? 1 : 0) + (expText ? 1 : 0);
+                const gaps = Math.max(0, blocks - 1) * gap;
+                if (!auto && lines.length * lhName + hInfo + gaps > ah) {
+                    if (!allowTrunc) return null;
+                    const maxLines = Math.max(1, Math.floor((ah - hInfo - gaps) / lhName));
+                    if (lines.length > maxLines) {
+                        lines = lines.slice(0, maxLines);
+                        mc.font = fontOf(fName);   // fitOne() di atas mengubah font — kembalikan ke font nama sebelum mengukur
+                        let last = lines[maxLines - 1];
+                        while (last.length > 1 && mc.measureText(last + '…').width > aw) last = last.slice(0, -1);
+                        lines[maxLines - 1] = last + '…';
+                        const tw = 'Nama Produk panjang — dipotong di label supaya QTY & Exp Date tetap muat.';
+                        if (warnings.indexOf(tw) < 0) warnings.push(tw);
+                    }
+                }
+                return { fName: fName, qtyPx: qtyPx, expPx: expPx, lines: lines, lhName: lhName, lhQty: lhQty, lhExp: lhExp, total: lines.length * lhName + hInfo + gaps };
+            }
+
+            let L = null;
+            if (auto) {
+                L = attempt(Math.max(uMin, Math.round(Math.min(aw * 0.1, 3.8 * mm))), true);
+            } else {
+                const uMax = Math.max(uMin, Math.round(Math.min(Math.min(aw, ah) * 0.2, 5 * mm)));
+                for (let u = uMax; u >= uMin && !L; u--) L = attempt(u, u === uMin);
+                if (!L) L = attempt(uMin, true);
+                if (L.total > ah) warnings.push('Ruang label terlalu sempit untuk isi ini — pilih kertas lebih besar.');
+            }
+
+            const H = auto ? (2 * margin + L.total) : Hfixed;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = Math.max(16, H);
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+            let y = auto ? margin : Math.round(margin + Math.max(0, (ah - L.total) / 2));
+            let drawn = 0;
+            function block(h, draw) { if (drawn) y += gap; draw(y); y += h; drawn++; }
+            if (L.lines.length) block(L.lines.length * L.lhName, function (yy) {
+                ctx.font = fontOf(L.fName);
+                L.lines.forEach(function (ln, i) { ctx.fillText(ln, W / 2, yy + i * L.lhName + L.lhName / 2); });
+            });
+            if (qtyText) block(L.lhQty, function (yy) { ctx.font = fontOf(L.qtyPx); ctx.fillText(qtyText, W / 2, yy + L.lhQty / 2); });
+            if (expText) block(L.lhExp, function (yy) { ctx.font = fontOf(L.expPx); ctx.fillText(expText, W / 2, yy + L.lhExp / 2); });
+
+            plBinarize(canvas, 170);
+
+            if (!nama && o.placeholder) {   // hanya pratinjau
+                ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = 'bold ' + Math.max(10, Math.round(Math.min(W, canvas.height) * 0.07)) + 'px ' + FONT;
+                ctx.fillText('Pilih data untuk pratinjau', W / 2, canvas.height / 2);
+            }
+            return { canvas: canvas, W: canvas.width, H: canvas.height, info: { modules: 0, modDots: 0, warnings: warnings } };
         }
 
         function plRotate(canvas, deg) {
@@ -26279,7 +26395,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
 
         function plRenderOpts() {
             const d = plLayoutDims();
-            return { dims: d, render: { lw: d.lw, lh: d.lh, dpi: _plS.dpi, margin: _plS.margin, expPrefix: _plS.expPrefix } };
+            return { dims: d, render: { lw: d.lw, lh: d.lh, dpi: _plS.dpi, margin: _plS.margin, expPrefix: _plS.expPrefix, showQty: _plS.showQty } };
         }
 
         async function plPrint(isTest) {
@@ -26302,7 +26418,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 setBtn('Menyiapkan label…');
                 await plSleep(20);   // beri kesempatan browser menggambar ulang tombol
                 const ro = plRenderOpts();
-                const lay = plRenderLabel(item, ro.render);
+                const lay = plRenderCurrent(item, ro.render);
                 if (lay.info.warnings.length && !isTest) showToastAlert('warning', 'Periksa label', escapeHtml(lay.info.warnings[0]));
                 if (_plS.conn === 'system') {
                     setBtn('Membuka dialog cetak…');
@@ -26318,7 +26434,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     await plSendBytes(bytes, function (p) { setBtn('Mengirim… ' + Math.round(p * 100) + '%'); });
                     showToastAlert('success', isTest ? 'Cetak tes terkirim' : 'Label terkirim ke printer', escapeHtml(item.nama) + (isTest ? '' : ' × ' + qty));
                 }
-                if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak label produk: ' + item.nama + ' ×' + qty);
+                if (!isTest && typeof trackActivity === 'function') trackActivity('Cetak label produk' + (_plS.mode === 'opsional' ? ' (Opsional)' : '') + ': ' + item.nama + ' ×' + qty);
             } catch (e) {
                 showAlert('error', 'Gagal mencetak', plErrMsg(e));
             } finally {
@@ -26331,10 +26447,11 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         // ---------------------------------------------------------------
         // Data: tarik dari spreadsheet & import file
         // ---------------------------------------------------------------
-        function plMakeRow(id, nama, lokasi, exp, idProduk) {
+        function plMakeRow(id, nama, lokasi, exp, idProduk, qty) {
+            qty = String(qty == null ? '' : qty).trim();
             nama = String(nama == null ? '' : nama).trim(); lokasi = String(lokasi == null ? '' : lokasi).trim(); exp = String(exp == null ? '' : exp).trim();
             idProduk = String(idProduk == null ? '' : idProduk).trim();
-            return { id: id, idProduk: idProduk, nama: nama, lokasi: lokasi, exp: exp, _q: (idProduk + ' ' + nama + ' ' + lokasi + ' ' + exp).toLowerCase() };
+            return { id: id, idProduk: idProduk, nama: nama, lokasi: lokasi, exp: exp, qty: qty, _q: (idProduk + ' ' + nama + ' ' + lokasi + ' ' + exp + ' ' + qty).toLowerCase() };
         }
 
         async function plLoadSheet() {
@@ -26347,7 +26464,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 const res = await fetchWithRetry(PO_GAS_URL + '?action=getQRLabelData', {}, 25000);
                 const result = await res.json();
                 if (result.error || result.success === false) throw new Error(result.error || result.message || 'Gagal mengambil data QRlabel.');
-                const rows = (Array.isArray(result.rows) ? result.rows : []).map(function (r) { return plMakeRow('s' + r._row, r.namaProduk, r.kodeLokasi, r.expDate, r.idProduk); });
+                const rows = (Array.isArray(result.rows) ? result.rows : []).map(function (r) { return plMakeRow('s' + r._row, r.namaProduk, r.kodeLokasi, r.expDate, r.idProduk, (r.qty != null ? r.qty : r.jumlah)); });
                 _plRows.sheet = { rows: rows, loadedAt: Date.now(), meta: result.meta || {} };
                 if (mySeq !== _plLoadSeq) return;
                 if (_plTab === 'sheet') { _plLimit = PL_PAGE; plRenderList(); }
@@ -26396,17 +26513,19 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const REG_NAMA = [/^nama\s*(produk|barang|item)$/i, /^(product\s*name|item\s*name)$/i, /nama/i, /produk|product|item|barang/i];
             const REG_LOK = [/^kode\s*lokasi$/i, /kode\s*lokasi|lokasi|location|\bloc\b|\brak\b/i];
             const REG_EXP = [/^exp(\.|ired|iry)?(\s*date)?$/i, /\bexp\b|expired|expiry|kadaluarsa|kedaluwarsa|kadaluwarsa|best\s*before/i];
+            const REG_QTY = [/^(qty|quantity|jumlah|jml|stok|stock)$/i, /\bqty\b|quantity|jumlah|\bjml\b/i];
             const hdr = rows[0];
             const iI = findIdx(hdr, REG_ID);
-            let iN = findIdx(hdr, REG_NAMA, [iI]), iL = findIdx(hdr, REG_LOK, [iI]), iE = findIdx(hdr, REG_EXP, [iI]);
+            const iQ = findIdx(hdr, REG_QTY, [iI]);   // kolom QTY (opsional) — dipakai mode Opsional
+            let iN = findIdx(hdr, REG_NAMA, [iI, iQ]), iL = findIdx(hdr, REG_LOK, [iI, iQ]), iE = findIdx(hdr, REG_EXP, [iI, iQ]);
             let start = 1;
-            if (iN < 0 && iL < 0 && iE < 0 && iI < 0) { iN = 0; iL = 1; iE = 2; start = 0; }   // tanpa judul: kolom 1-3
+            if (iN < 0 && iL < 0 && iE < 0 && iI < 0 && iQ < 0) { iN = 0; iL = 1; iE = 2; start = 0; }   // tanpa judul: kolom 1-3
             else { if (iN < 0) iN = (iI === 0 ? 1 : 0); }
             const out = [];
             for (let r = start; r < rows.length; r++) {
                 const nama = iN >= 0 ? rows[r][iN] : '';
                 if (String(nama == null ? '' : nama).trim() === '') continue;
-                out.push(plMakeRow('i' + r, nama, iL >= 0 ? rows[r][iL] : '', iE >= 0 ? rows[r][iE] : '', iI >= 0 ? rows[r][iI] : ''));
+                out.push(plMakeRow('i' + r, nama, iL >= 0 ? rows[r][iL] : '', iE >= 0 ? rows[r][iE] : '', iI >= 0 ? rows[r][iI] : '', iQ >= 0 ? rows[r][iQ] : ''));
             }
             return out;
         }
@@ -26440,7 +26559,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         }
         function plOnImportInput(inp) { const f = inp.files && inp.files[0]; inp.value = ''; plHandleImportFile(f); }
         function plDownloadTemplate() {
-            const csv = '\uFEFFID Produk,Nama Produk,Kode Lokasi,Exp Date\r\nPRD-0001,Contoh Produk 250g,A-01-03,31 Des 2027\r\n';
+            const csv = '\uFEFFID Produk,Nama Produk,Kode Lokasi,Exp Date,QTY\r\nPRD-0001,Contoh Produk 250g,A-01-03,31 Des 2027,24\r\n';
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
             a.download = 'template_label_produk.csv';
@@ -26492,12 +26611,16 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             }).join('') + '</optgroup>';
 
             document.getElementById('content-area').innerHTML = `
-            <div class="pl-page">
+            <div class="pl-page${_plS.mode === 'opsional' ? ' pl-m-opt' : ''}" id="pl-page">
                 <div class="pl-head">
                     <div>
                         <div class="pl-crumb">Print Label</div>
                         <h1 class="pl-title">Label Produk</h1>
-                        <p class="pl-sub">Atur printer thermal, pilih produk, cek pratinjau, lalu cetak label QR Code.</p>
+                        <p class="pl-sub" id="pl-sub">Atur printer thermal, pilih produk, cek pratinjau, lalu cetak label QR Code.</p>
+                        <div class="pl-mode" id="pl-mode" role="tablist" aria-label="Jenis label">
+                            <button type="button" role="tab" data-m="qr" onclick="plSetMode('qr')">Standar (QR)</button>
+                            <button type="button" role="tab" data-m="opsional" onclick="plSetMode('opsional')">Opsional</button>
+                        </div>
                     </div>
                 </div>
                 <div class="pl-grid">
@@ -26579,13 +26702,15 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                             <div class="pl-stage" id="pl-stage"><div class="pl-paper"><canvas id="pl-canvas" width="10" height="10"></canvas></div></div>
                             <div class="pl-meta" id="pl-meta"></div>
                             <div id="pl-tips" class="pl-tips pl-hide"></div>
+                            <label class="pl-chk pl-opt-only"><input id="pl-showqty" type="checkbox" onchange="plOnShowQty()"><span>Tampilkan QTY di label<small>Matikan kalau label hanya perlu Nama Produk dan Exp Date.</small></span></label>
                             <div class="pl-fields">
                                 <div class="pl-f-id"><label class="pl-lbl" for="pl-f-id">ID Produk</label><input id="pl-f-id" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
                                 <div class="pl-f-nama"><label class="pl-lbl" for="pl-f-nama">Nama Produk</label><input id="pl-f-nama" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
                                 <div class="pl-f-lok"><label class="pl-lbl" for="pl-f-lokasi">Kode Lokasi</label><input id="pl-f-lokasi" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
+                                <div class="pl-f-qty"><label class="pl-lbl" for="pl-f-qty">QTY di label</label><input id="pl-f-qty" class="pl-input" type="text" autocomplete="off" placeholder="mis. 24 pcs" oninput="plOnField()"></div>
                                 <div class="pl-f-exp"><label class="pl-lbl" for="pl-f-exp">Exp Date</label><input id="pl-f-exp" class="pl-input" type="text" autocomplete="off" oninput="plOnField()"></div>
                             </div>
-                            <div class="pl-field-note">Kotak di atas otomatis terisi saat produk diklik. ID Produk dan Nama Produk menjadi isi QR Code. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>
+                            <div class="pl-field-note" id="pl-field-note">Kotak di atas otomatis terisi saat produk diklik. ID Produk dan Nama Produk menjadi isi QR Code. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.</div>
                         </section>
 
                         <section class="pl-card pl-c-data" aria-label="Data yang dicetak" id="pl-data-card"></section>
@@ -26606,6 +26731,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             document.getElementById('pl-expprefix').checked = _plS.expPrefix;
             document.getElementById('pl-rot180').checked = _plS.rot180;
             document.getElementById('pl-invert').checked = _plS.invert;
+            plApplyMode();
             if (_plItem) plFillFields();
 
             plRenderDataCard();
@@ -26679,7 +26805,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const canvas = document.getElementById('pl-canvas'); if (!canvas) return;
             const ro = plRenderOpts();
             const o = Object.assign({}, ro.render, { placeholder: true });
-            const lay = plRenderLabel(_plItem || {}, o);
+            const lay = plRenderCurrent(_plItem || {}, o);
             canvas.width = lay.W; canvas.height = lay.H;
             canvas.getContext('2d').drawImage(lay.canvas, 0, 0);
             // tampilkan proporsional di dalam panggung
@@ -26703,7 +26829,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             }
             // saran otomatis
             let tips = lay.info.warnings.slice();
-            const idNotDetected = _plTab === 'sheet' && _plRows.sheet && _plRows.sheet.meta && _plRows.sheet.rows.length && !_plRows.sheet.meta.idColumn;
+            const idNotDetected = _plS.mode !== 'opsional' && _plTab === 'sheet' && _plRows.sheet && _plRows.sheet.meta && _plRows.sheet.rows.length && !_plRows.sheet.meta.idColumn;
             if (idNotDetected) tips = tips.filter(function (w) { return w.indexOf('ID Produk kosong') !== 0; });   // sudah dicakup saran kolom ID di bawah
             const pr = plPrinter();
             const physW = dims.physW;
@@ -26719,9 +26845,10 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
         }
 
         function plFillFields() {
-            const it = _plItem || { idProduk: '', nama: '', lokasi: '', exp: '' };
+            const it = _plItem || { idProduk: '', nama: '', lokasi: '', exp: '', qty: '' };
             const a = document.getElementById('pl-f-nama'), b = document.getElementById('pl-f-lokasi'), c = document.getElementById('pl-f-exp'), d = document.getElementById('pl-f-id');
             if (a) a.value = it.nama; if (b) b.value = it.lokasi; if (c) c.value = it.exp; if (d) d.value = it.idProduk || '';
+            const q = document.getElementById('pl-f-qty'); if (q) q.value = it.qty || '';
         }
 
         // ---- daftar data ----
@@ -26739,7 +26866,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 ${isSheet ? '' : `
                 <label class="pl-drop" id="pl-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="event.preventDefault();this.classList.remove('over');plHandleImportFile(event.dataTransfer.files[0])">
                     <b id="pl-drop-t">Klik untuk memilih file, atau tarik file ke sini</b>
-                    <small>CSV / Excel (.xlsx, .xls) dengan kolom: ID Produk · Nama Produk · Kode Lokasi · Exp Date</small>
+                    <small>CSV / Excel (.xlsx, .xls) dengan kolom: ID Produk · Nama Produk · Kode Lokasi · Exp Date · QTY (opsional)</small>
                     <input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" class="pl-hide" onchange="plOnImportInput(this)">
                 </label>
                 <div class="pl-note" style="margin:-.25rem 0 .75rem">Belum punya format? <button type="button" class="pl-link" onclick="plDownloadTemplate()">Unduh template CSV</button></div>`}
@@ -26785,7 +26912,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
             const row = plCurrentRows().find(function (r) { return r.id === id; });
             if (!row) return;
             _plSelId = id;
-            _plItem = { idProduk: row.idProduk || '', nama: row.nama, lokasi: row.lokasi, exp: row.exp };
+            _plItem = { idProduk: row.idProduk || '', nama: row.nama, lokasi: row.lokasi, exp: row.exp, qty: row.qty || '' };
             document.querySelectorAll('#pl-list .pl-item.sel').forEach(function (n) { n.classList.remove('sel'); });
             if (el) el.classList.add('sel');
             plFillFields();
@@ -26812,10 +26939,35 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                 idProduk: document.getElementById('pl-f-id').value,
                 nama: document.getElementById('pl-f-nama').value,
                 lokasi: document.getElementById('pl-f-lokasi').value,
-                exp: document.getElementById('pl-f-exp').value
+                exp: document.getElementById('pl-f-exp').value,
+                qty: (document.getElementById('pl-f-qty') || {}).value || ''
             };
             plRenderPreview();
         }
+        // ---- [LABEL PRODUK > OPSIONAL] pilih mode & tampilkan/sembunyikan QTY ----
+        const PL_SUB_QR = 'Atur printer thermal, pilih produk, cek pratinjau, lalu cetak label QR Code.';
+        const PL_SUB_OPT = 'Label sederhana tanpa QR Code: hanya Nama Produk, QTY (boleh disembunyikan), dan Exp Date.';
+        const PL_NOTE_QR = 'Kotak di atas otomatis terisi saat produk diklik. ID Produk dan Nama Produk menjadi isi QR Code. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.';
+        const PL_NOTE_OPT = 'Kotak di atas otomatis terisi saat produk diklik, atau isi manual. QTY ikut terisi bila ada kolom QTY di file import. Perubahan hanya berlaku untuk cetakan ini — data di spreadsheet tidak berubah.';
+        function plApplyMode() {
+            const opt = _plS.mode === 'opsional';
+            const pg = document.getElementById('pl-page'); if (pg) pg.classList.toggle('pl-m-opt', opt);
+            document.querySelectorAll('#pl-mode button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === _plS.mode); });
+            const sub = document.getElementById('pl-sub'); if (sub) sub.textContent = opt ? PL_SUB_OPT : PL_SUB_QR;
+            const fn = document.getElementById('pl-field-note'); if (fn) fn.textContent = opt ? PL_NOTE_OPT : PL_NOTE_QR;
+            const sq = document.getElementById('pl-showqty'); if (sq) sq.checked = !!_plS.showQty;
+            const qi = document.getElementById('pl-f-qty'); if (qi) qi.disabled = !_plS.showQty;
+        }
+        function plSetMode(m) {
+            m = m === 'opsional' ? 'opsional' : 'qr';
+            if (_plS.mode === m) return;
+            _plS.mode = m; plSaveSettings(); plApplyMode(); plRenderPreview();
+        }
+        function plOnShowQty() {
+            _plS.showQty = document.getElementById('pl-showqty').checked;
+            plSaveSettings(); plApplyMode(); plRenderPreview();
+        }
+
         function plOnPrinterChange() {
             const p = plFindPrinter(document.getElementById('pl-printer').value);
             if (!p) return;
