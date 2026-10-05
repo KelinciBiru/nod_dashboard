@@ -30793,7 +30793,7 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
         const SN_OCR_API_URL = '';      // mis. 'https://ocr.domain-anda.com/scan'  (kosong = OCR di browser)
         const SN_OCR_API_KEY = '';      // harus sama dengan SN_API_KEY di sn_ocr_server.py
         const SN_YOLO_MODEL_URL = '';   // mis. './sn_label.onnx' (hasil: yolo export model=best.pt format=onnx imgsz=640)
-        const SN_MODEL_SUGGEST = ['Black', 'White', 'Silver', 'Grey', 'Red'];
+        const SN_MODEL_SUGGEST = ['Ultimate Black', 'Polished Titanium', 'Lavish Copper', 'Cosmic Blue', 'Hian Tjen Chrome Brew', 'Hian Tjen Rosie Roast', 'Hian Tjen Lux Blend'];
         const SN_DRAFT_KEY = 'nodScanSnDraftV1';
         const SN_TESS_SRC = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
         const SN_ORT_SRC = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js';
@@ -31118,9 +31118,9 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
                 </div>
                 <datalist id="sn-model-list">${SN_MODEL_SUGGEST.map(m => `<option value="${m}">`).join('')}</datalist>
                 <div class="flex flex-wrap gap-2">
-                  <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl px-4 py-3">📷 Ambil Foto
+                  <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl px-4 py-3">Ambil Foto
                     <input type="file" accept="image/*" capture="environment" class="hidden" onchange="snFiles(this)"></label>
-                  <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-gray-800 hover:bg-gray-900 text-white font-semibold rounded-xl px-4 py-3">🖼️ Pilih dari Galeri
+                  <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-gray-800 hover:bg-gray-900 text-white font-semibold rounded-xl px-4 py-3">Pilih dari Galeri
                     <input type="file" accept="image/*" multiple class="hidden" onchange="snFiles(this)"></label>
                 </div>
                 <div class="flex gap-2"><input id="sn-manual" class="sn-in sn-mono" placeholder="Ketik / scan manual (mis. MXM25120307033)" autocapitalize="characters" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();snManualAdd()}">
