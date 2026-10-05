@@ -2608,6 +2608,16 @@
                         Process PO
                     </button>
 
+                    <!-- Scan Serial Number (ADMIN & WAREHOUSE) — tepat di bawah Process PO -->
+                    <button id="menu-scan-sn" onclick="navTo('Scan Serial Number')"
+                        class="hidden nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2m8-16h2a2 2 0 012 2v2m-4 12h2a2 2 0 002-2v-2M7 12h10M7 9v6m3-6v6m3-6v6m3-6v6" />
+                        </svg>
+                        Scan Serial Number
+                    </button>
+
                     <!-- Catalogue Baru -->
                     <button id="menu-catalogue" onclick="navTo('Catalogue')"
                         class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
@@ -3959,7 +3969,7 @@
             // X, menu X ikut "kebawa" tetap kelihatan/ke-klik oleh role B walau
             // seharusnya tidak boleh. Pola deny-by-default ini menutup celah itu.
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
-                'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
+                'menu-po', 'menu-process-po', 'menu-scan-sn', 'menu-process-inbound', 'menu-team-delivery',
                 'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c', 'menu-print-label'
             ].forEach(id => {
                 const el = document.getElementById(id);
@@ -3993,6 +4003,7 @@
                 // Team Warehouse: hanya tampilkan menu Process PO & Process Inbound
                 document.getElementById('menu-dashboard').classList.remove('hidden');
                 document.getElementById('menu-process-po').classList.remove('hidden');
+                document.getElementById('menu-scan-sn').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
                 // Catalogue untuk ADMIN, PO_User, dan Warehouse
                 document.getElementById('menu-catalogue').classList.remove('hidden');
@@ -4069,6 +4080,7 @@
                 document.getElementById('menu-maintenance').classList.remove('hidden');
                 document.getElementById('menu-po').classList.remove('hidden');
                 document.getElementById('menu-process-po').classList.remove('hidden');
+                document.getElementById('menu-scan-sn').classList.remove('hidden');
                 document.getElementById('menu-process-inbound').classList.remove('hidden');
                 document.getElementById('menu-catalogue').classList.remove('hidden');
                 // Tampilkan Receive PO di bawah submenu Purchase Order
@@ -4151,6 +4163,9 @@
             // Validasi: halaman tersimpan harus sesuai hak akses role saat ini,
             // supaya tidak nyasar ke menu yang sebenarnya terkunci untuk role ini.
             if ((saved === 'Process PO' || saved === 'Process Inbound') && currentUserRole === 'PO_User') {
+                return defaultPage;
+            }
+            if (saved === 'Scan Serial Number' && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
                 return defaultPage;
             }
             if (saved === 'Receive PO' && !(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
@@ -4239,7 +4254,7 @@
             // TIDAK ADA menu yang nyangkut kelihatan di antara logout dan login
             // berikutnya (mis. sekilas ke-flash sebelum startApp() menata ulang).
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
-                'menu-po', 'menu-process-po', 'menu-process-inbound', 'menu-team-delivery',
+                'menu-po', 'menu-process-po', 'menu-scan-sn', 'menu-process-inbound', 'menu-team-delivery',
                 'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c', 'menu-print-label'
             ].forEach(id => {
                 const el = document.getElementById(id);
@@ -5214,6 +5229,11 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "Process PO" hanya dapat diakses oleh Team Warehouse dan Admin.');
                 return;
             }
+            // ── AKSES KONTROL: Scan Serial Number hanya untuk ADMIN dan WAREHOUSE ──
+            if (pageName === 'Scan Serial Number' && !(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) {
+                showAlert('error', 'Akses Ditolak', 'Menu "Scan Serial Number" hanya dapat diakses oleh Team Warehouse dan Admin.');
+                return;
+            }
             if (pageName === 'Receive PO' && !(currentUserRole === 'ADMIN' || currentUserRole === 'PO_User')) {
                 showAlert('error', 'Akses Ditolak', 'Menu "Receive PO" hanya dapat diakses oleh Admin dan PO User.');
                 return;
@@ -5324,7 +5344,8 @@
                 'Request B2B': 'Request B2B/B2C - B2B',
                 'Request B2C': 'Request B2B/B2C - B2C',
                 'Label Produk': 'Print Label - Label Produk',
-                'Marking Pengiriman': 'Print Label - Marking Pengiriman'
+                'Marking Pengiriman': 'Print Label - Marking Pengiriman',
+                'Scan Serial Number': 'Scan Serial Number'
             };
             document.getElementById('page-title').textContent = titles[pageName] || pageName;
             setActiveNav(pageName);
@@ -5401,6 +5422,7 @@
                 case 'Request B2C': await showRequestB2BB2C('B2C'); break;
                 case 'Label Produk': await showPrintLabel(); break;
                 case 'Marking Pengiriman': await showMarkingPengiriman(); break;
+                case 'Scan Serial Number': await showScanSerialNumber(); break;
                 default:
                     document.getElementById('content-area').innerHTML = `
                     <h1 class="text-3xl font-semibold text-gray-700">${pageName}</h1>
@@ -30758,6 +30780,376 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
                 setTimeout(assignSources, 300);
             }
         })();
+    </script>
+    <script id="scan-sn-module">
+        // =====================================================================
+        // [MENU BARU — SCAN SERIAL NUMBER] (ADMIN & WAREHOUSE) — diletakkan di bawah Process PO
+        // Pipeline: DETEKSI sticker (YOLOv8 .onnx bila SN_YOLO_MODEL_URL diisi; kalau kosong
+        // pakai detektor klasik berbasis kecerahan) → OCR per-crop + OCR seluruh gambar →
+        // ekstraksi regex + koreksi karakter → dedupe → simpan ke GAS (Serial_Number_Log).
+        // Bila SN_OCR_API_URL diisi (server Python sn_ocr_server.py = YOLOv8 + EasyOCR),
+        // server itu dipakai lebih dulu dan OCR browser jadi cadangan.
+        // =====================================================================
+        const SN_OCR_API_URL = '';      // mis. 'https://ocr.domain-anda.com/scan'  (kosong = OCR di browser)
+        const SN_OCR_API_KEY = '';      // harus sama dengan SN_API_KEY di sn_ocr_server.py
+        const SN_YOLO_MODEL_URL = '';   // mis. './sn_label.onnx' (hasil: yolo export model=best.pt format=onnx imgsz=640)
+        const SN_MODEL_SUGGEST = ['Black', 'White', 'Silver', 'Grey', 'Red'];
+        const SN_DRAFT_KEY = 'nodScanSnDraftV1';
+        const SN_TESS_SRC = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+        const SN_ORT_SRC = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js';
+
+        const SN_DFIX = { O: '0', Q: '0', D: '0', I: '1', L: '1', Z: '2', S: '5', G: '6', B: '8' };
+        const snDfix = s => s.replace(/[OQDILZSGB]/g, c => SN_DFIX[c]);
+        function snNorm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+        function snClassify(sn) { if (/^MXM\d{11}$/.test(sn)) return 'Maximo'; if (/^20\d{9}$/.test(sn)) return 'Izzio New (Logo NOD)'; return ''; }
+        /** Ambil semua SN valid dari teks OCR mentah (toleran salah-baca O/0, I/1, S/5, B/8, MXN→MXM). */
+        function snExtract(text) {
+            const ok = new Set(), maybe = new Set(), cands = [];
+            String(text || '').toUpperCase().split(/\r?\n/).forEach(l => {
+                const w = l.replace(/[^A-Z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+                cands.push(...w); if (w.length > 1) cands.push(w.join(''));
+            });
+            cands.forEach(t => {
+                let hasMx = false, m; const re = /M[XK][MNH]?/g;
+                while ((m = re.exec(t))) {
+                    hasMx = true;
+                    const tail = snDfix(t.slice(m.index + m[0].length)).slice(0, 11);
+                    if (/^\d{11}$/.test(tail)) ok.add('MXM' + tail); else if (/^\d{8,}/.test(tail)) maybe.add('MXM' + tail);
+                }
+                if (hasMx) return;
+                if ((t.match(/\d/g) || []).length < 8) return;
+                const u = snDfix(t);
+                if (/^\d+$/.test(u) && u.length % 11 === 0) {
+                    for (let i = 0; i < u.length; i += 11) { const s = u.slice(i, i + 11); if (/^20\d{9}$/.test(s)) ok.add(s); else maybe.add(s); }
+                } else if (/^\d{9,}$/.test(u)) maybe.add(u);
+            });
+            ok.forEach(s => maybe.delete(s));
+            return { ok: [...ok].sort(), maybe: [...maybe].slice(0, 5) };
+        }
+
+        // ---------- loader lib + OCR worker ----------
+        const _snLibs = {};
+        function snLoadLib(src) {
+            return _snLibs[src] || (_snLibs[src] = new Promise((ok, no) => {
+                const s = document.createElement('script'); s.src = src; s.onload = ok;
+                s.onerror = () => { delete _snLibs[src]; no(new Error('Gagal memuat pustaka OCR (cek koneksi internet): ' + src.split('/')[4])); };
+                document.head.appendChild(s);
+            }));
+        }
+        let _snWorker = null, _snWorkerP = null, _snIdle = null, _snYolo = null;
+        async function snGetWorker() {
+            clearTimeout(_snIdle);
+            if (!_snWorkerP) _snWorkerP = (async () => {
+                await snLoadLib(SN_TESS_SRC);
+                snStatus('Memuat mesin OCR (pertama kali ±10 MB, mohon tunggu)…');
+                const w = await Tesseract.createWorker('eng', 1, {});
+                await w.setParameters({ tessedit_char_whitelist: 'MX0123456789', tessedit_pageseg_mode: '6', user_defined_dpi: '300' });
+                return w;
+            })().catch(e => { _snWorkerP = null; throw e; });
+            _snWorker = await _snWorkerP; return _snWorker;
+        }
+        function snReleaseSoon() { clearTimeout(_snIdle); _snIdle = setTimeout(() => { if (_snWorker) _snWorker.terminate(); _snWorker = null; _snWorkerP = null; }, 120000); }
+        async function snOcr(canvas, psm) {
+            const w = await snGetWorker(); await w.setParameters({ tessedit_pageseg_mode: String(psm) });
+            const r = await w.recognize(canvas); return (r && r.data && r.data.text) || '';
+        }
+
+        // ---------- gambar & pra-proses ----------
+        async function snLoadBitmap(file) {
+            try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+            catch (e) { return await new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => no(new Error('Gambar tidak bisa dibaca')); im.src = URL.createObjectURL(file); }); }
+        }
+        const _w = o => o.naturalWidth || o.width, _h = o => o.naturalHeight || o.height;
+        function snCanvas(src, sx, sy, sw, sh, maxSide) {
+            const k = Math.min(maxSide / Math.max(sw, sh), 1), c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+            c.getContext('2d', { willReadFrequently: true }).drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height); return c;
+        }
+        /** Perbesar crop (OCR butuh teks ≥ ~30px), jadikan abu-abu & regangkan kontras (persentil 1–99). mode: 'gray'|'sharp'|'otsu' */
+        function snPrep(src, b, pad, mode) {
+            const px = Math.round(b.h * pad), x = Math.max(0, b.x - px), y = Math.max(0, b.y - px);
+            const w = Math.min(_w(src) - x, b.w + 2 * px), h = Math.min(_h(src) - y, b.h + 2 * px);
+            const f = Math.min(5, Math.max(1, 1100 / w)), c = document.createElement('canvas');
+            c.width = Math.round(w * f) + 40; c.height = Math.round(h * f) + 40;
+            const g = c.getContext('2d', { willReadFrequently: true }); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+            g.imageSmoothingQuality = 'high'; g.drawImage(src, x, y, w, h, 20, 20, c.width - 40, c.height - 40);
+            const d = g.getImageData(0, 0, c.width, c.height), p = d.data, n = c.width * c.height, gr = new Uint8Array(n), hist = new Uint32Array(256);
+            for (let i = 0; i < n; i++) { const v = (p[i * 4] * 299 + p[i * 4 + 1] * 587 + p[i * 4 + 2] * 114) / 1000 | 0; gr[i] = v; hist[v]++; }
+            let acc = 0, lo = 0, hi = 255; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.01) { lo = v; break; } }
+            acc = 0; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= n * 0.01) { hi = v; break; } }
+            const sc = 255 / Math.max(1, hi - lo); let th = 128;
+            if (mode === 'otsu') { const h2 = new Uint32Array(256); for (let i = 0; i < n; i++) h2[Math.min(255, Math.max(0, (gr[i] - lo) * sc | 0))]++; let sum = 0; for (let t = 0; t < 256; t++) sum += t * h2[t]; let sB = 0, wB = 0, best = 0; for (let t = 0; t < 256; t++) { wB += h2[t]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += t * h2[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; th = t; } } }
+            for (let i = 0; i < n; i++) { let v = Math.min(255, Math.max(0, (gr[i] - lo) * sc)); if (mode === 'otsu') v = v > th ? 255 : 0; else if (mode === 'sharp') v = Math.min(255, Math.max(0, (v - 128) * 1.6 + 128)); p[i * 4] = p[i * 4 + 1] = p[i * 4 + 2] = v; p[i * 4 + 3] = 255; }
+            g.putImageData(d, 0, 0); return c;
+        }
+
+        // ---------- detektor sticker klasik (tanpa model) ----------
+        function snDetectClassic(bmp) {
+            const k = Math.min(1, 800 / Math.max(_w(bmp), _h(bmp))), c = snCanvas(bmp, 0, 0, _w(bmp), _h(bmp), 800), W = c.width, H = c.height;
+            const px = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data, N = W * H, g = new Float32Array(N), sat = new Uint8Array(N);
+            for (let i = 0; i < N; i++) { const r = px[i * 4], gg = px[i * 4 + 1], b = px[i * 4 + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b); g[i] = (r * 299 + gg * 587 + b * 114) / 1000; sat[i] = mx ? (mx - mn) * 255 / mx : 0; }
+            const ii = new Float64Array((W + 1) * (H + 1));
+            for (let y = 0; y < H; y++) { let row = 0; for (let x = 0; x < W; x++) { row += g[y * W + x]; ii[(y + 1) * (W + 1) + x + 1] = ii[y * (W + 1) + x + 1] + row; } }
+            const box = (x0, y0, x1, y1, I) => I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0];
+            const hist = new Uint32Array(256); for (let i = 0; i < N; i++) hist[g[i] | 0]++;
+            let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t]; let sB = 0, wB = 0, best = 0, otsu = 128;
+            for (let t = 0; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = N - wB; if (!wF) break; sB += t * hist[t]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; otsu = t; } }
+            const R = 40, m1 = new Uint8Array(N), m2 = new Uint8Array(N);
+            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+                const x0 = Math.max(0, x - R), x1 = Math.min(W, x + R + 1), y0 = Math.max(0, y - R), y1 = Math.min(H, y + R + 1), loc = box(x0, y0, x1, y1, ii) / ((x1 - x0) * (y1 - y0)), i = y * W + x;
+                m1[i] = (g[i] > loc + 18 && sat[i] < 70 && g[i] > 110) ? 1 : 0; m2[i] = (g[i] > otsu && sat[i] < 90) ? 1 : 0;
+            }
+            const morph = (m, kw, kh, erode) => { const I = new Int32Array((W + 1) * (H + 1)); for (let y = 0; y < H; y++) { let r = 0; for (let x = 0; x < W; x++) { r += m[y * W + x]; I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + r; } } const o = new Uint8Array(N), hx = kw >> 1, hy = kh >> 1; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const x0 = Math.max(0, x - hx), x1 = Math.min(W, x + hx + 1), y0 = Math.max(0, y - hy), y1 = Math.min(H, y + hy + 1), s = I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0]; o[y * W + x] = erode ? (s === (x1 - x0) * (y1 - y0) ? 1 : 0) : (s > 0 ? 1 : 0); } return o; };
+            const open = (m, a, b) => morph(morph(m, a, b, true), a, b, false), close = (m, a, b) => morph(morph(m, a, b, false), a, b, true);
+            const boxes = [];
+            [close(open(m1, 5, 3), 9, 5), close(open(m2, 3, 3), 9, 5)].forEach(mask => {
+                const seen = new Uint8Array(N), st = [];
+                for (let s0 = 0; s0 < N; s0++) {
+                    if (!mask[s0] || seen[s0]) continue;
+                    let minx = W, miny = H, maxx = 0, maxy = 0, area = 0; st.push(s0); seen[s0] = 1;
+                    while (st.length) { const i = st.pop(), x = i % W, y = (i / W) | 0; area++; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+                        if (x > 0 && mask[i - 1] && !seen[i - 1]) { seen[i - 1] = 1; st.push(i - 1); } if (x < W - 1 && mask[i + 1] && !seen[i + 1]) { seen[i + 1] = 1; st.push(i + 1); }
+                        if (y > 0 && mask[i - W] && !seen[i - W]) { seen[i - W] = 1; st.push(i - W); } if (y < H - 1 && mask[i + W] && !seen[i + W]) { seen[i + W] = 1; st.push(i + W); } }
+                    const w = maxx - minx + 1, h = maxy - miny + 1, ar = w / h;
+                    if (area < 0.0015 * N || area > 0.3 * N || ar < 1.5 || ar > 9 || area / (w * h) < 0.5) continue;
+                    const b = { x: minx / k, y: miny / k, w: w / k, h: h / k };
+                    if (boxes.every(o => snIou(b, o) < 0.6)) boxes.push(b);
+                }
+            });
+            return boxes.sort((a, b) => a.y - b.y).slice(0, 12);
+        }
+        function snIou(a, b) { const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)), iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)), i = ix * iy; return i / (a.w * a.h + b.w * b.h - i + 1e-9); }
+
+        // ---------- detektor YOLOv8 (ONNX, opsional) ----------
+        async function snDetectYolo(bmp) {
+            await snLoadLib(SN_ORT_SRC);
+            if (!_snYolo) _snYolo = await ort.InferenceSession.create(SN_YOLO_MODEL_URL, { executionProviders: ['wasm'] });
+            const S = 640, sc = Math.min(S / _w(bmp), S / _h(bmp)), nw = Math.round(_w(bmp) * sc), nh = Math.round(_h(bmp) * sc), dx = (S - nw) >> 1, dy = (S - nh) >> 1;
+            const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d', { willReadFrequently: true }); g.fillStyle = 'rgb(114,114,114)'; g.fillRect(0, 0, S, S); g.drawImage(bmp, dx, dy, nw, nh);
+            const p = g.getImageData(0, 0, S, S).data, t = new Float32Array(3 * S * S), SS = S * S;
+            for (let i = 0; i < SS; i++) { t[i] = p[i * 4] / 255; t[SS + i] = p[i * 4 + 1] / 255; t[2 * SS + i] = p[i * 4 + 2] / 255; }
+            const out = await _snYolo.run({ [_snYolo.inputNames[0]]: new ort.Tensor('float32', t, [1, 3, S, S]) }), o = out[_snYolo.outputNames[0]], N = o.dims[2], nc = o.dims[1] - 4, d = o.data, bx = [];
+            for (let i = 0; i < N; i++) { let s = 0; for (let k = 0; k < nc; k++) s = Math.max(s, d[(4 + k) * N + i]); if (s < 0.35) continue; const cx = d[i], cy = d[N + i], w = d[2 * N + i], h = d[3 * N + i]; bx.push({ x: (cx - w / 2 - dx) / sc, y: (cy - h / 2 - dy) / sc, w: w / sc, h: h / sc, s }); }
+            bx.sort((a, b) => b.s - a.s); const keep = []; bx.forEach(b => { if (keep.every(k => snIou(b, k) < 0.45)) keep.push(b); });
+            return keep.slice(0, 12).map(b => ({ x: Math.max(0, b.x), y: Math.max(0, b.y), w: b.w, h: b.h }));
+        }
+
+        // ---------- server Python (YOLOv8 + EasyOCR), opsional ----------
+        async function snScanServer(file) {
+            const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(file); });
+            const res = await fetchWithTimeout(SN_OCR_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': SN_OCR_API_KEY }, body: JSON.stringify({ image: b64 }) }, 60000);
+            const j = await res.json(); if (!j.success) throw new Error(j.message || 'OCR server gagal');
+            return snExtract((j.serials || []).map(s => s.sn || s.text || '').join('\n'));
+        }
+
+        /** Satu gambar → { ok:[SN valid], maybe:[kandidat mirip], boxes:n, engine } */
+        async function snScanImage(file) {
+            if (SN_OCR_API_URL) { try { snStatus('Mengirim ke server YOLOv8 + EasyOCR…'); const r = await snScanServer(file); if (r.ok.length) return { ...r, boxes: r.ok.length, engine: 'YOLOv8+EasyOCR' }; } catch (e) { console.warn('[SN] server OCR gagal, pakai OCR browser:', e); } }
+            const bmp = await snLoadBitmap(file), found = new Set(), maybe = new Set(); let boxes = [], engine = 'OCR browser';
+            const eat = t => { const r = snExtract(t); r.ok.forEach(s => found.add(s)); r.maybe.forEach(s => maybe.add(s)); return r.ok.length; };
+            snStatus('Mendeteksi sticker serial number…');
+            try { if (SN_YOLO_MODEL_URL) { boxes = await snDetectYolo(bmp); engine = 'YOLOv8 + OCR browser'; } } catch (e) { console.warn('[SN] YOLO gagal, pakai detektor klasik:', e); boxes = []; }
+            if (!boxes.length) boxes = snDetectClassic(bmp);
+            for (let i = 0; i < boxes.length; i++) {
+                snStatus(`Membaca sticker ${i + 1}/${boxes.length}…`, (i / (boxes.length + 1)) * 100);
+                let n = eat(await snOcr(snPrep(bmp, boxes[i], 0.2, 'gray'), 6));
+                if (!n) n = eat(await snOcr(snPrep(bmp, boxes[i], 0.2, 'sharp'), 6));
+                if (!n) n = eat(await snOcr(snPrep(bmp, boxes[i], 0.35, 'otsu'), 7));
+            }
+            snStatus('Membaca seluruh gambar…', (boxes.length / (boxes.length + 1)) * 100);
+            eat(await snOcr(snCanvas(bmp, 0, 0, _w(bmp), _h(bmp), 1800), 11));
+            if (!found.size && !boxes.length) { // tidak ada sticker terdeteksi → baca per-kuadran
+                const W = _w(bmp), H = _h(bmp);
+                for (const [qx, qy] of [[0, 0], [.5, 0], [0, .5], [.5, .5]]) eat(await snOcr(snCanvas(bmp, Math.max(0, W * qx - W * .08), Math.max(0, H * qy - H * .08), W * .6, H * .6, 1600), 11));
+            }
+            snReleaseSoon(); return { ok: [...found].sort(), maybe: [...maybe].filter(m => !found.has(m)).slice(0, 4), boxes: boxes.length, engine };
+        }
+
+        // =====================================================================
+        // STATE, UI, SIMPAN, CSV
+        // =====================================================================
+        let snRows = [], snBusy = false, snBatchId = null;   // row: {sn,tipe,model,status,src,ts}
+        const SN_ST = { new: 'Baru', saved: 'Tersimpan', dup: 'Sudah ada di database', fail: 'Gagal' };
+        function snStatus(msg, pct) {
+            const s = document.getElementById('sn-status'), b = document.getElementById('sn-bar'), w = document.getElementById('sn-bar-wrap');
+            if (s) s.textContent = msg || ''; if (w) w.style.display = (pct == null) ? 'none' : 'block'; if (b && pct != null) b.style.width = Math.max(3, Math.min(100, pct)) + '%';
+        }
+        function snDraftSave() { try { localStorage.setItem(SN_DRAFT_KEY, JSON.stringify(snRows.filter(r => r.status !== SN_ST.saved).slice(0, 500))); } catch (e) { } }
+        function snDraftLoad() { try { const d = JSON.parse(localStorage.getItem(SN_DRAFT_KEY) || '[]'); return Array.isArray(d) ? d.filter(r => snClassify(r.sn)) : []; } catch (e) { return []; } }
+        function snCurModel() { const i = document.getElementById('sn-model'); return i ? i.value.trim() : ''; }
+
+        function snRender() {
+            const tb = document.getElementById('sn-tbody'); if (!tb) return;
+            const cnt = { iz: 0, mx: 0, ready: 0, dup: 0 };
+            snRows.forEach(r => { if (r.tipe === 'Maximo') cnt.mx++; else cnt.iz++; if (r.status === SN_ST.new || r.status === SN_ST.fail) cnt.ready++; if (r.status === SN_ST.dup) cnt.dup++; });
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+            set('sn-c-total', snRows.length); set('sn-c-iz', cnt.iz); set('sn-c-mx', cnt.mx); set('sn-c-ready', cnt.ready); set('sn-c-dup', cnt.dup);
+            const sv = document.getElementById('sn-btn-save'); if (sv) sv.disabled = snBusy || !cnt.ready;
+            const cv = document.getElementById('sn-btn-csv'); if (cv) cv.disabled = !snRows.length;
+            if (!snRows.length) { tb.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-400 italic">Belum ada serial number. Ambil foto / pilih gambar, atau ketik manual.</td></tr>'; return; }
+            const badge = s => s === SN_ST.saved ? 'bg-green-100 text-green-700' : s === SN_ST.new ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+            tb.innerHTML = snRows.map((r, i) => {
+                const lock = r.status === SN_ST.saved ? 'readonly' : '';
+                const model = r.tipe === 'Maximo'
+                    ? `<input class="sn-in" list="sn-model-list" value="${escapeHtml(r.model)}" placeholder="Model" ${lock} onchange="snEditModel(${i},this.value)">`
+                    : `<span class="text-gray-500 text-xs">New</span>`;
+                return `<tr class="border-t"><td class="p-2 text-gray-400 text-xs">${i + 1}</td>
+                    <td class="p-2"><input class="sn-in sn-mono" value="${escapeHtml(r.sn)}" ${lock} onchange="snEditSN(${i},this.value)"></td>
+                    <td class="p-2 font-semibold text-sm ${r.tipe === 'Maximo' ? 'text-indigo-700' : 'text-amber-700'}">${escapeHtml(r.tipe)}</td>
+                    <td class="p-2">${model}</td>
+                    <td class="p-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badge(r.status)}">${escapeHtml(r.status)}</span></td>
+                    <td class="p-2 text-right">${r.status === SN_ST.saved ? '' : `<button class="text-red-500 hover:text-red-700 text-lg leading-none px-2" title="Hapus" onclick="snDel(${i})">×</button>`}</td></tr>`;
+            }).join('');
+        }
+
+        /** Tambahkan beberapa SN sekaligus (sudah dinormalisasi) → {added, dup, invalid}. Tidak ada double di daftar. */
+        function snAddMany(list, src) {
+            const have = new Set(snRows.map(r => r.sn)), batch = [], res = { added: 0, dup: 0, invalid: 0 };
+            list.map(snNorm).forEach(sn => {
+                const tipe = snClassify(sn); if (!tipe) { res.invalid++; return; }
+                if (have.has(sn)) { res.dup++; return; }
+                have.add(sn); res.added++;
+                batch.push({ sn, tipe, model: tipe === 'Maximo' ? snCurModel() : 'New', status: SN_ST.new, src, ts: new Date().toISOString() });
+            });
+            snRows.unshift(...batch.sort((a, b) => a.sn.localeCompare(b.sn)));
+            snRender(); snDraftSave(); if (batch.length) snCheckDb(batch.map(b => b.sn)); return res;
+        }
+        /** Cek ke server apakah SN sudah ada di Serial_Number_Log → tandai (tidak ikut disimpan). Server tetap menolak duplikat. */
+        async function snCheckDb(sns) {
+            try {
+                const res = await fetchWithRetry(PO_GAS_URL + '?action=checkSerialNumbers&serials=' + encodeURIComponent(sns.join(',')), {}, 20000), j = await res.json();
+                if (!j.success) return; const ex = new Set((j.existing || []).map(e => e.sn)); let n = 0;
+                snRows.forEach(r => { if (ex.has(r.sn) && r.status === SN_ST.new) { r.status = SN_ST.dup; n++; } });
+                if (n) { snRender(); snDraftSave(); showToastAlert('warning', 'Sudah ada di database', n + ' serial number sudah pernah tersimpan — tidak akan disimpan ulang.'); }
+            } catch (e) { console.warn('[SN] cek duplikat database dilewati:', e.message); }
+        }
+
+        async function snFiles(inp) {
+            const files = [...(inp.files || [])]; inp.value = ''; if (!files.length) return;
+            if (snBusy) { showToastAlert('warning', 'Sedang memproses', 'Tunggu proses gambar sebelumnya selesai.'); return; }
+            snBusy = true; snRender(); document.querySelectorAll('.sn-pick').forEach(b => b.disabled = true);
+            const tot = { found: 0, added: 0, dup: 0, maybe: [], empty: 0 }; let engine = '';
+            for (let k = 0; k < files.length; k++) {
+                try {
+                    snStatus(`Gambar ${k + 1}/${files.length}: menyiapkan…`, 2);
+                    const r = await snScanImage(files[k]); engine = r.engine;
+                    tot.found += r.ok.length; if (!r.ok.length) tot.empty++; tot.maybe.push(...r.maybe);
+                    const a = snAddMany(r.ok, files.length && files[k].name ? 'foto' : 'foto'); tot.added += a.added; tot.dup += a.dup;
+                } catch (e) { console.error(e); showToastAlert('error', 'Gagal memproses gambar', escapeHtml(e.message || String(e))); }
+            }
+            snBusy = false; document.querySelectorAll('.sn-pick').forEach(b => b.disabled = false); snRender(); snStatus('Selesai (' + engine + ').', null);
+            if (tot.added) showToastAlert('success', 'Scan selesai', `${tot.found} terbaca • ${tot.added} ditambahkan` + (tot.dup ? ` • ${tot.dup} duplikat diabaikan` : ''));
+            else if (tot.dup) showToastAlert('warning', 'Duplikat', 'Semua serial number pada gambar sudah ada di daftar.');
+            if (tot.maybe.length) { const m = document.getElementById('sn-manual'); if (m && !m.value) m.value = tot.maybe[0]; showToastAlert('warning', 'Ada yang kurang jelas', 'Terbaca mirip: ' + escapeHtml(tot.maybe.slice(0, 3).join(', ')) + '. Periksa lalu koreksi manual di kolom ketik, atau foto ulang lebih dekat.', 9000); }
+            else if (!tot.added && !tot.dup) showToastAlert('warning', 'Tidak terbaca', 'Tidak ada serial number valid. Foto lebih dekat & terang (tanpa pantulan), atau ketik manual.', 8000);
+        }
+        function snManualAdd() {
+            const i = document.getElementById('sn-manual'), sn = snNorm(i.value); if (!sn) return;
+            if (!snClassify(sn)) { showToastAlert('error', 'Format tidak valid', 'Izzio: 11 digit diawali 20 (mis. 20241102758). Maximo: MXM + 11 digit (mis. MXM25120307033).'); return; }
+            const r = snAddMany([sn], 'manual'); if (r.dup) showToastAlert('warning', 'Duplikat', sn + ' sudah ada di daftar.'); i.value = ''; i.focus();
+        }
+        function snEditSN(i, v) {
+            const r = snRows[i], sn = snNorm(v), tipe = snClassify(sn);
+            if (!tipe) { showToastAlert('error', 'Format tidak valid', 'Serial number dikembalikan ke nilai sebelumnya.'); snRender(); return; }
+            if (snRows.some((x, j) => j !== i && x.sn === sn)) { showToastAlert('warning', 'Duplikat', sn + ' sudah ada di daftar.'); snRender(); return; }
+            r.sn = sn; r.tipe = tipe; r.model = tipe === 'Maximo' ? (r.model && r.model !== 'New' ? r.model : snCurModel()) : 'New'; r.status = SN_ST.new; snRender(); snDraftSave(); snCheckDb([sn]);
+        }
+        function snEditModel(i, v) { snRows[i].model = v.trim(); snDraftSave(); }
+        function snDel(i) { snRows.splice(i, 1); snRender(); snDraftSave(); }
+        async function snClear() {
+            if (!snRows.length) return;
+            if (!(await showConfirm('Kosongkan daftar?', 'Semua baris di layar dihapus (data yang sudah tersimpan di database tidak terpengaruh).'))) return;
+            snRows = []; snBatchId = null; snRender(); snDraftSave();
+        }
+
+        async function snSave() {
+            const todo = snRows.filter(r => r.status === SN_ST.new || r.status === SN_ST.fail);
+            if (!todo.length || snBusy) return;
+            const noModel = todo.filter(r => r.tipe === 'Maximo' && !r.model);
+            if (noModel.length) { showAlert('warning', 'Model Maximo belum diisi', noModel.length + ' serial number Maximo belum punya model. Isi kolom Model terlebih dulu.'); return; }
+            if (!(await showConfirm('Simpan ke database?', todo.length + ' serial number akan disimpan ke sheet Serial_Number_Log (yang sudah ada otomatis dilewati).'))) return;
+            snBusy = true; snRender(); showProgressOverlay('Menyimpan serial number…');
+            if (!snBatchId) snBatchId = 'sn_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+            const body = JSON.stringify({ action: 'simpanSerialNumber', token: sessionToken, batchId: snBatchId, items: todo.map(r => ({ sn: r.sn, model: r.model, source: r.src })) });
+            const send = () => fetchWriteWithRetry(PO_GAS_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body }, 30000);
+            try {
+                let j; try { j = await send(); } catch (e) { if (e.isGasTimeout) { showProgressOverlay('Koneksi lambat, mencoba ulang (aman, tanpa data ganda)…'); j = await send(); } else throw e; }
+                if (!j.success) throw new Error(j.message || 'Server menolak permintaan');
+                const S = new Set(j.saved || []), D = new Set(j.duplicates || []), I = new Set(j.invalid || []);
+                snRows.forEach(r => { if (S.has(r.sn)) r.status = SN_ST.saved; else if (D.has(r.sn)) r.status = SN_ST.dup; else if (I.has(r.sn)) r.status = SN_ST.fail; });
+                if (!snRows.some(r => r.status === SN_ST.new || r.status === SN_ST.fail)) snBatchId = null;
+                showToastAlert('success', 'Tersimpan', `${S.size} disimpan` + (D.size ? ` • ${D.size} sudah ada (dilewati)` : '') + (I.size ? ` • ${I.size} ditolak` : ''));
+            } catch (e) { todo.forEach(r => r.status = SN_ST.fail); showAlert('error', 'Gagal Menyimpan', escapeHtml(e.message || String(e))); }
+            finally { snBusy = false; hideProgressOverlay && hideProgressOverlay(); snRender(); snDraftSave(); }
+        }
+        async function snHistory() {
+            try {
+                snStatus('Memuat riwayat dari database…', 30);
+                const res = await fetchWithRetry(PO_GAS_URL + '?action=getSerialNumberList&limit=300', {}, 25000), j = await res.json();
+                if (!j.success) throw new Error(j.message || j.error || 'Gagal memuat'); const have = new Set(snRows.map(r => r.sn)); let n = 0;
+                (j.rows || []).forEach(x => { if (have.has(x.sn)) { const r = snRows.find(q => q.sn === x.sn); if (r && r.status !== SN_ST.saved) r.status = SN_ST.saved; return; } snRows.push({ sn: x.sn, tipe: x.tipe, model: x.model, status: SN_ST.saved, src: x.source, ts: x.timestamp }); n++; });
+                snRender(); snStatus('Riwayat dimuat (' + n + ' baris ditambahkan dari ' + (j.total || 0) + ' total).', null);
+            } catch (e) { snStatus('', null); showToastAlert('error', 'Gagal memuat riwayat', escapeHtml(e.message || String(e))); }
+        }
+        function snCsv() {
+            if (!snRows.length) return;
+            const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"', pad = n => String(n).padStart(2, '0'), d = new Date();
+            const lines = [['No', 'Serial Number', 'Tipe Mesin', 'Model', 'Status', 'Waktu Scan', 'Sumber'].map(q).join(',')]
+                .concat(snRows.map((r, i) => [i + 1, r.sn, r.tipe, r.model, r.status, r.ts, r.src].map(q).join(',')));
+            const url = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })), a = document.createElement('a');
+            a.href = url; a.download = `Serial_Number_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.csv`;
+            document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+
+        async function showScanSerialNumber() {
+            if (!(currentUserRole === 'ADMIN' || currentUserRole === 'WAREHOUSE')) { showAlert('error', 'Akses Ditolak', 'Menu "Scan Serial Number" hanya dapat diakses oleh Team Warehouse dan Admin.'); return; }
+            if (!document.getElementById('sn-style')) { const st = document.createElement('style'); st.id = 'sn-style'; st.textContent = '.sn-in{width:100%;min-width:120px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .5rem;font-size:16px;background:#fff}.sn-in:read-only{background:#f9fafb;color:#6b7280}.sn-mono{font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.02em}.sn-chip{flex:1;min-width:84px;background:#fff;border:1px solid #f3f4f6;border-radius:.75rem;padding:.5rem .75rem}.sn-chip b{display:block;font-size:1.25rem}#sn-bar{height:100%;background:#f59e0b;transition:width .3s}'; document.head.appendChild(st); }
+            if (!snRows.length) snRows = snDraftLoad();
+            const eng = SN_OCR_API_URL ? 'Server YOLOv8 + EasyOCR (cadangan: OCR browser)' : (SN_YOLO_MODEL_URL ? 'YOLOv8 (ONNX) + OCR browser' : 'Detektor sticker + OCR browser');
+            document.getElementById('content-area').innerHTML = `
+            <div class="max-w-5xl mx-auto space-y-4">
+              <div><h1 class="text-2xl font-bold text-gray-800">Scan Serial Number</h1>
+                <p class="text-sm text-gray-500">Foto sticker pada dus/mesin — satu foto boleh berisi banyak serial number. Hasil otomatis masuk daftar lengkap dengan tipe mesin, tanpa duplikat.</p></div>
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label class="text-sm font-semibold text-gray-600">Model Maximo (untuk SN berawalan MXM)
+                    <input id="sn-model" class="sn-in mt-1" list="sn-model-list" value="Black" placeholder="mis. Black"></label>
+                  <div class="text-xs text-gray-400 self-end">Mesin: ${escapeHtml(eng)}<br>Izzio = 11 digit (20…) • Maximo = MXM + 11 digit</div>
+                </div>
+                <datalist id="sn-model-list">${SN_MODEL_SUGGEST.map(m => `<option value="${m}">`).join('')}</datalist>
+                <div class="flex flex-wrap gap-2">
+                  <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl px-4 py-3">📷 Ambil Foto
+                    <input type="file" accept="image/*" capture="environment" class="hidden" onchange="snFiles(this)"></label>
+                  <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-gray-800 hover:bg-gray-900 text-white font-semibold rounded-xl px-4 py-3">🖼️ Pilih dari Galeri
+                    <input type="file" accept="image/*" multiple class="hidden" onchange="snFiles(this)"></label>
+                </div>
+                <div class="flex gap-2"><input id="sn-manual" class="sn-in sn-mono" placeholder="Ketik / scan manual (mis. MXM25120307033)" autocapitalize="characters" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();snManualAdd()}">
+                  <button class="px-4 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold text-sm" onclick="snManualAdd()">Tambah</button></div>
+                <div id="sn-bar-wrap" class="h-2 bg-gray-100 rounded-full overflow-hidden" style="display:none"><div id="sn-bar" style="width:3%"></div></div>
+                <div id="sn-status" class="text-xs text-gray-500 min-h-[1rem]"></div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <div class="sn-chip"><span class="text-xs text-gray-400">Total</span><b id="sn-c-total">0</b></div>
+                <div class="sn-chip"><span class="text-xs text-gray-400">Izzio New</span><b id="sn-c-iz" class="text-amber-600">0</b></div>
+                <div class="sn-chip"><span class="text-xs text-gray-400">Maximo</span><b id="sn-c-mx" class="text-indigo-600">0</b></div>
+                <div class="sn-chip"><span class="text-xs text-gray-400">Siap simpan</span><b id="sn-c-ready" class="text-green-600">0</b></div>
+                <div class="sn-chip"><span class="text-xs text-gray-400">Sudah ada</span><b id="sn-c-dup" class="text-red-500">0</b></div>
+              </div>
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="overflow-x-auto"><table class="w-full text-left">
+                  <thead class="bg-amber-500 text-white text-xs uppercase"><tr><th class="p-2 w-10">#</th><th class="p-2">Serial Number</th><th class="p-2">Tipe Mesin</th><th class="p-2">Model</th><th class="p-2">Status</th><th class="p-2 w-12"></th></tr></thead>
+                  <tbody id="sn-tbody"></tbody></table></div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button id="sn-btn-save" class="flex-1 min-w-[150px] bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white font-semibold rounded-xl px-4 py-3" onclick="snSave()">💾 Simpan ke Database</button>
+                <button id="sn-btn-csv" class="flex-1 min-w-[150px] bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-40 font-semibold rounded-xl px-4 py-3" onclick="snCsv()">⬇️ Download CSV</button>
+                <button class="bg-white border border-gray-200 hover:bg-gray-50 font-semibold rounded-xl px-4 py-3 text-sm" onclick="snHistory()">Muat Riwayat</button>
+                <button class="bg-white border border-gray-200 hover:bg-red-50 text-red-600 font-semibold rounded-xl px-4 py-3 text-sm" onclick="snClear()">Kosongkan</button>
+              </div>
+            </div>`;
+            snRender();
+        }
+        Object.assign(window, { showScanSerialNumber, snFiles, snManualAdd, snEditSN, snEditModel, snDel, snClear, snSave, snHistory, snCsv });
     </script>
 </body>
 
