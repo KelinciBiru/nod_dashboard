@@ -5379,6 +5379,7 @@
             if (typeof stopQRCamera === 'function') stopQRCamera();
             // Hentikan kamera scan Serial Number (Warranty Registration) jika sedang aktif
             if (typeof closeWrScanner === 'function') closeWrScanner();
+            if (typeof snLiveClose === 'function') snLiveClose(true);
 
             // Hentikan polling auto-update halaman sebelumnya sebelum pindah halaman
             LiveSync.stop();
@@ -31109,7 +31110,7 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
             document.getElementById('content-area').innerHTML = `
             <div class="max-w-5xl mx-auto space-y-4">
               <div><h1 class="text-2xl font-bold text-gray-800">Scan Serial Number</h1>
-                <p class="text-sm text-gray-500">Foto sticker pada dus/mesin — satu foto boleh berisi banyak serial number. Hasil otomatis masuk daftar lengkap dengan tipe mesin, tanpa duplikat.</p></div>
+                <p class="text-sm text-gray-500">Klik Ambil Foto, arahkan kamera ke sticker — serial number terbaca otomatis &amp; langsung masuk daftar (tanpa simpan foto, tanpa duplikat). Banyak sticker bisa di-scan berurutan.</p></div>
               <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label class="text-sm font-semibold text-gray-600">Model Maximo (untuk SN berawalan MXM)
@@ -31118,8 +31119,8 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
                 </div>
                 <datalist id="sn-model-list">${SN_MODEL_SUGGEST.map(m => `<option value="${m}">`).join('')}</datalist>
                 <div class="flex flex-wrap gap-2">
-                  <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl px-4 py-3">Ambil Foto
-                    <input type="file" accept="image/*" capture="environment" class="hidden" onchange="snFiles(this)"></label>
+                  <button type="button" class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl px-4 py-3" onclick="snLiveOpen()">Ambil Foto</button>
+                  <input id="sn-cam-fallback" type="file" accept="image/*" capture="environment" class="hidden" onchange="snFiles(this)">
                   <label class="sn-pick flex-1 min-w-[150px] text-center cursor-pointer bg-gray-800 hover:bg-gray-900 text-white font-semibold rounded-xl px-4 py-3">Pilih dari Galeri
                     <input type="file" accept="image/*" multiple class="hidden" onchange="snFiles(this)"></label>
                 </div>
@@ -31149,7 +31150,137 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
             </div>`;
             snRender();
         }
-        Object.assign(window, { showScanSerialNumber, snFiles, snManualAdd, snEditSN, snEditModel, snDel, snClear, snSave, snHistory, snCsv });
+
+        // =====================================================================
+        // LIVE SCAN (kamera langsung) — tanpa simpan foto, tanpa double scan
+        // Alur: kamera aktif → frame dibaca terus-menerus (satu per satu, tidak pernah
+        // tumpang tindih) → SN valid harus terbaca 2x berturut-turut (anti salah-baca)
+        // → langsung masuk daftar. SN yang sudah ada di daftar / sudah di-scan pada sesi
+        // kamera ini diabaikan, jadi satu sticker tidak mungkin masuk dua kali.
+        // =====================================================================
+        const SN_LIVE_CONFIRM = 2;        // jumlah pembacaan identik yang dibutuhkan sebelum SN dimasukkan
+        const SN_LIVE_WINDOW_MS = 5000;   // pembacaan dianggap "berturut-turut" jika masih dalam jeda ini
+        const SN_LIVE_GAP_MS = 150;       // jeda antar siklus baca
+        const _snLive = { on: false, stream: null, timeout: null, votes: new Map(), seen: new Set(), added: 0, tick: 0, audio: null };
+
+        function snLiveEnsureModal() {
+            if (document.getElementById('sn-live-modal')) return;
+            const d = document.createElement('div');
+            d.id = 'sn-live-modal';
+            d.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:#000;flex-direction:column';
+            d.innerHTML = `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(0,0,0,.75);color:#fff">
+                <div><div style="font-weight:700;font-size:15px">Scan Serial Number</div>
+                  <div style="font-size:12px;opacity:.8">Terdeteksi: <b id="sn-live-count">0</b></div></div>
+                <button type="button" onclick="snLiveClose()" style="background:#16a34a;color:#fff;font-weight:700;border-radius:10px;padding:8px 18px;font-size:14px">Selesai</button>
+              </div>
+              <div style="position:relative;flex:1;min-height:0;overflow:hidden">
+                <video id="sn-live-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:block"></video>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+                  <div id="sn-live-guide" style="width:90%;height:46%;border:2px dashed #fbbf24;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)"></div>
+                </div>
+                <div id="sn-live-flash" style="position:absolute;inset:0;background:#22c55e;opacity:0;pointer-events:none;transition:opacity .35s"></div>
+                <div style="position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;padding:0 16px;pointer-events:none">
+                  <span id="sn-live-status" style="background:rgba(0,0,0,.65);color:#fff;font-size:13px;padding:6px 14px;border-radius:999px;text-align:center">Menyiapkan kamera…</span>
+                </div>
+              </div>
+              <div id="sn-live-list" style="background:rgba(0,0,0,.85);padding:10px 12px;display:flex;gap:8px;overflow-x:auto;min-height:48px;align-items:center"></div>`;
+            document.body.appendChild(d);
+        }
+        function snLiveStatus(t) { const e = document.getElementById('sn-live-status'); if (e) e.textContent = t; }
+
+        function snLiveBeep() {
+            try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) { }
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+                const a = _snLive.audio || (_snLive.audio = new AC()), o = a.createOscillator(), g = a.createGain();
+                o.type = 'sine'; o.frequency.value = 1040; g.gain.value = 0.08; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + 0.12);
+            } catch (e) { }
+        }
+
+        async function snLiveOpen() {
+            if (_snLive.on) return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { snLiveFallback('Browser/koneksi ini tidak mendukung kamera langsung (butuh HTTPS).'); return; }
+            snLiveEnsureModal();
+            const modal = document.getElementById('sn-live-modal'), video = document.getElementById('sn-live-video');
+            modal.style.display = 'flex'; document.getElementById('sn-live-list').innerHTML = ''; document.getElementById('sn-live-count').textContent = '0';
+            snLiveStatus('Menyiapkan kamera…');
+            _snLive.on = true; _snLive.votes.clear(); _snLive.seen = new Set(snRows.map(r => r.sn)); _snLive.added = 0; _snLive.tick = 0;
+            try {
+                _snLive.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+                video.srcObject = _snLive.stream; await video.play();
+                try { const tr = _snLive.stream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {}; if (cap.focusMode && cap.focusMode.includes('continuous')) await tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (e) { }
+            } catch (err) { snLiveClose(true); snLiveFallback('Tidak dapat mengakses kamera (' + (err && err.message || err) + ').'); return; }
+            if (!_snLive.on) return;
+            try { snLiveStatus('Menyiapkan mesin OCR (pertama kali agak lama)…'); await snGetWorker(); }
+            catch (err) { snLiveClose(true); showAlert('error', 'OCR Gagal Dimuat', escapeHtml(err.message || String(err))); return; }
+            if (!_snLive.on) return;
+            snLiveStatus('Arahkan sticker serial number ke dalam kotak');
+            snLiveLoop();
+        }
+        function snLiveFallback(msg) {
+            showAlert('warning', 'Kamera Tidak Tersedia', escapeHtml(msg) + ' Silakan ambil foto biasa.');
+            const f = document.getElementById('sn-cam-fallback'); if (f) f.click();
+        }
+
+        /** Loop berurutan (bukan setInterval) → satu siklus baca selesai dulu baru mulai siklus berikutnya = tidak mungkin tumpang tindih. */
+        async function snLiveLoop() {
+            if (!_snLive.on) return;
+            try { await snLiveTick(); } catch (e) { console.warn('[SN-live] tick gagal:', e); }
+            if (_snLive.on) _snLive.timeout = setTimeout(snLiveLoop, SN_LIVE_GAP_MS);
+        }
+
+        async function snLiveTick() {
+            const video = document.getElementById('sn-live-video'), guide = document.getElementById('sn-live-guide');
+            if (!video || !guide || video.readyState < 2 || !video.videoWidth) return;
+            // petakan kotak panduan (CSS px, object-fit:cover) → piksel asli video
+            const vr = video.getBoundingClientRect(), gr = guide.getBoundingClientRect(), vw = video.videoWidth, vh = video.videoHeight;
+            if (!vr.width || !vr.height || !gr.width) return;
+            const cs = Math.max(vr.width / vw, vr.height / vh), ox = (vw * cs - vr.width) / 2, oy = (vh * cs - vr.height) / 2;
+            const sx = Math.max(0, (gr.left - vr.left + ox) / cs), sy = Math.max(0, (gr.top - vr.top + oy) / cs);
+            const sw = Math.min(vw - sx, gr.width / cs), sh = Math.min(vh - sy, gr.height / cs);
+            if (sw <= 0 || sh <= 0) return;
+            const frame = snCanvas(video, sx, sy, sw, sh, 1800);     // salinan frame saat ini (bukan file, tidak disimpan)
+            _snLive.tick++;
+            const box = { x: 0, y: 0, w: frame.width, h: frame.height };
+            let r = snExtract(await snOcr(snPrep(frame, box, 0, 'gray'), 6));
+            if (!_snLive.on) return;
+            if (!r.ok.length && _snLive.tick % 2 === 0) { r = snExtract(await snOcr(snPrep(frame, box, 0, 'otsu'), 11)); if (!_snLive.on) return; }
+            const now = Date.now();
+            // buang suara lama yang sudah kedaluwarsa
+            for (const [k, v] of _snLive.votes) if (now - v.t > SN_LIVE_WINDOW_MS) _snLive.votes.delete(k);
+            if (!r.ok.length) { snLiveStatus(r.maybe.length ? 'Kurang jelas — dekatkan & tahan stabil' : 'Mendeteksi…'); return; }
+            for (const sn of r.ok) {
+                if (_snLive.seen.has(sn)) { snLiveStatus('✔ ' + sn + ' sudah ada di daftar'); continue; }
+                const v = _snLive.votes.get(sn) || { n: 0, t: now }; v.n++; v.t = now; _snLive.votes.set(sn, v);
+                if (v.n < SN_LIVE_CONFIRM) { snLiveStatus('Membaca ' + sn + '…'); continue; }
+                // TERKONFIRMASI → masukkan ke daftar (sekali saja)
+                _snLive.votes.delete(sn); _snLive.seen.add(sn);
+                const res = snAddMany([sn], 'scan-live');
+                if (res.added) {
+                    _snLive.added++; document.getElementById('sn-live-count').textContent = _snLive.added;
+                    const chip = document.createElement('span'); chip.textContent = sn;
+                    chip.style.cssText = 'flex:none;background:#fff;color:#111;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px';
+                    document.getElementById('sn-live-list').prepend(chip);
+                    const fl = document.getElementById('sn-live-flash'); if (fl) { fl.style.opacity = '.45'; setTimeout(() => fl.style.opacity = '0', 180); }
+                    snLiveBeep(); snLiveStatus('✅ ' + sn + ' masuk daftar');
+                }
+            }
+        }
+
+        function snLiveClose(silent) {
+            const was = _snLive.on; _snLive.on = false;
+            clearTimeout(_snLive.timeout); _snLive.timeout = null; _snLive.votes.clear();
+            if (_snLive.stream) { _snLive.stream.getTracks().forEach(t => { try { t.stop(); } catch (e) { } }); _snLive.stream = null; }
+            const v = document.getElementById('sn-live-video'); if (v) v.srcObject = null;
+            const m = document.getElementById('sn-live-modal'); if (m) m.style.display = 'none';
+            if (!was) return;
+            snReleaseSoon(); snStatus('', null); snRender();
+            if (!silent && _snLive.added) showToastAlert('success', 'Scan selesai', _snLive.added + ' serial number ditambahkan ke daftar.');
+        }
+        document.addEventListener('visibilitychange', () => { if (document.hidden && _snLive.on) snLiveClose(); });
+
+        Object.assign(window, { showScanSerialNumber, snLiveOpen, snLiveClose, snFiles, snManualAdd, snEditSN, snEditModel, snDel, snClear, snSave, snHistory, snCsv });
     </script>
 </body>
 
