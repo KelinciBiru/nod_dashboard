@@ -16136,6 +16136,12 @@
                             ${categoryOptions}
                         </select>
                     </div>
+                    <div id="po-faktur-wrapper" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">No. Faktur</label>
+                        <input type="text" id="po-no-faktur" autocomplete="off"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            placeholder="Masukkan No. Faktur (khusus B2B / B2C)">
+                    </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Ship To</label>
                         <div id="allocated-to-wrapper">
@@ -16299,6 +16305,7 @@
             return {
                 nama: document.getElementById('nama')?.value || '',
                 category: document.getElementById('category')?.value || '',
+                noFaktur: document.getElementById('po-no-faktur')?.value || '',
                 allocatedTo: document.getElementById('allocated-to')?.value || '',
                 alamat: document.getElementById('po-alamat')?.value || '',
                 phone: document.getElementById('po-phone')?.value || '',
@@ -16325,6 +16332,11 @@
                 // supaya untuk kategori Outlet, dropdown-nya sudah siap ditempati draft.allocatedTo.
                 await renderShipToField(draft.category === 'Outlet', draft.allocatedTo || '');
                 _syncFasImportBlockVisibility(draft.category); // FIX: tombol Import FAS tidak muncul saat restore draft
+                _syncNoFakturVisibility(draft.category);
+                if (_isFakturCategory(draft.category) && draft.noFaktur) {
+                    const nfEl = document.getElementById('po-no-faktur');
+                    if (nfEl) nfEl.value = draft.noFaktur;
+                }
                 updatePOPreview();
             }
             const allocatedToEl = document.getElementById('allocated-to');
@@ -16485,6 +16497,24 @@
             if (fasImportBlock) fasImportBlock.classList.toggle('hidden', category !== 'FAS');
         }
 
+        /** Kategori yang memakai field "No. Faktur" di Form PO: hanya B2B dan B2C. */
+        function _isFakturCategory(category) {
+            return category === 'B2B' || category === 'B2C';
+        }
+
+        /** Tampilkan field "No. Faktur" hanya untuk kategori B2B/B2C. Kalau disembunyikan, isinya dikosongkan
+         *  supaya nilai lama tidak ikut terkirim saat user pindah ke kategori lain. */
+        function _syncNoFakturVisibility(category) {
+            const wrapper = document.getElementById('po-faktur-wrapper');
+            if (!wrapper) return;
+            const show = _isFakturCategory(category);
+            wrapper.classList.toggle('hidden', !show);
+            if (!show) {
+                const el = document.getElementById('po-no-faktur');
+                if (el) el.value = '';
+            }
+        }
+
         /** Dipanggil setiap kali kategori di Form PO berubah */
         async function handleFormPOCategoryChange() {
             updatePOPreview();
@@ -16495,6 +16525,8 @@
             await renderShipToField(isOutlet, existingVal);
 
             _syncFasImportBlockVisibility(category);
+            _syncNoFakturVisibility(category);
+            if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
 
             if (isFAS) {
                 const shipToEl = document.getElementById('allocated-to');
@@ -16699,6 +16731,11 @@
                     await renderShipToField(false, shipTo);
                 }
                 _syncFasImportBlockVisibility(category); // FIX: tombol Import FAS tidak muncul saat load PO utk Revisi
+                _syncNoFakturVisibility(category);
+                if (_isFakturCategory(category)) {
+                    const nfEl = document.getElementById('po-no-faktur');
+                    if (nfEl) nfEl.value = row ? String(row[14] || '').trim() : '';
+                }
                 const allocatedToEl = document.getElementById('allocated-to');
                 if (allocatedToEl) allocatedToEl.value = shipTo;
                 if (alamatEl) alamatEl.value = alamat;
@@ -16801,6 +16838,7 @@
                     shippingDate: shippingDateVal,
                     noteKhusus: document.getElementById('po-note-khusus')?.value?.trim() || '',
                     category: categoryEl.value,
+                    noFaktur: _isFakturCategory(categoryEl.value) ? (document.getElementById('po-no-faktur')?.value?.trim() || '') : '',
                     fileData, fileName, fileType: 'application/pdf',
                 };
                 const result = await fetchWriteWithRetry(API_URLS.purchaseOrder, {
@@ -16929,6 +16967,7 @@
                     shippingDate: document.getElementById('po-shipping-date')?.value || '',
                     noteKhusus: document.getElementById('po-note-khusus')?.value?.trim() || '',
                     category: categoryEl.value,
+                    noFaktur: _isFakturCategory(categoryEl.value) ? (document.getElementById('po-no-faktur')?.value?.trim() || '') : '',
                     categoryCode: CATEGORY_CODE[categoryEl.value],
                     tanggal: formatDateForPO(new Date()),
                     isPreOrder: isPreOrder,
@@ -16990,6 +17029,7 @@
             if (preOrderToggleEl) preOrderToggleEl.checked = false;
             renderShipToField(false, ''); // kembalikan Ship To ke input teks biasa (kategori direset)
             _syncFasImportBlockVisibility(''); // FIX: pastikan tombol Import FAS ikut disembunyikan saat reset
+            _syncNoFakturVisibility(''); // sembunyikan & kosongkan No. Faktur saat reset
             if (alamatEl) alamatEl.value = '';
             if (phoneEl) phoneEl.value = '';
             if (shippingDateEl) shippingDateEl.value = '';
@@ -18334,6 +18374,9 @@
             const shippingDate = shippingDateRaw ? formatTanggalIndo(shippingDateRaw) : '-';
             const noPO = poPreview ? poPreview.textContent.trim() : '';
             const noteKhusus = document.getElementById('po-note-khusus')?.value?.trim() || '';
+            // No. Faktur hanya relevan untuk kategori B2B / B2C
+            const showNoFaktur = _isFakturCategory(categoryEl ? categoryEl.value : '');
+            const noFaktur = showNoFaktur ? (document.getElementById('po-no-faktur')?.value?.trim() || '') : '';
 
             // Ambil item dari tabel
             const rows = document.querySelectorAll('#po-item-table-body tr:not([data-placeholder])');
@@ -18455,6 +18498,7 @@
             const infoLeft = [
                 ['Tanggal', formatTanggalIndo(today)],
                 ['No. PO', poLabel],
+                ...(showNoFaktur ? [['No. Faktur', noFaktur || '-']] : []),
                 ['Ordered By', orderedBy || '-'],
                 ['Phone', phone || '-'],
             ];
@@ -18597,6 +18641,7 @@
                 if (data && data.success) {
                     if (phoneEl) phoneEl.value = data.phone || '';
                     if (alamatEl) alamatEl.value = data.alamat || '';
+                    window._procPOMeta = { noPO: String(noPO).trim(), noFaktur: data.noFaktur || '', kategori: data.kategori || '' };
                 } else {
                     console.warn('[Process PO] No. Telepon/Alamat tidak ditemukan:', data?.message);
                 }
@@ -20120,6 +20165,26 @@
                 }
             }
 
+            // ── No. Faktur (khusus PO berkategori B2B/B2C): selalu ambil data terbaru dari PO_Data
+            // (supaya revisi No. Faktur di Form PO ikut terbaca); fallback ke hasil auto-fill terakhir. ──
+            let noFakturDO = '';
+            let showNoFakturDO = false;
+            try {
+                const fkRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                const fkData = await fkRes.json();
+                if (fkData && fkData.success) {
+                    showNoFakturDO = _isFakturCategory(String(fkData.kategori || '').trim());
+                    noFakturDO = String(fkData.noFaktur || '').trim();
+                }
+            } catch (err) {
+                const meta = window._procPOMeta;
+                if (meta && meta.noPO === String(noPO).trim()) {
+                    showNoFakturDO = _isFakturCategory(String(meta.kategori || '').trim());
+                    noFakturDO = String(meta.noFaktur || '').trim();
+                }
+                console.warn('[DO No. Faktur] Gagal mengambil No. Faktur:', err);
+            }
+
             // Alamat: utamakan isian field form/server, lalu dataset proc-ordered-by
             // (diisi saat scan/import PDF), baru fallback ke Ship To.
             const alamatDatasetDO = document.getElementById('proc-ordered-by')?.dataset?.alamat || '';
@@ -20182,6 +20247,7 @@
             const infoLeft = [
                 ['Tanggal Proses PO', formatTanggalIndo(tglProses)],
                 ['No. PO', noPO],
+                ...(showNoFakturDO ? [['No. Faktur', noFakturDO || '-']] : []),
                 ['Crew Packing', crewPacking],
             ];
             const infoRight = [
