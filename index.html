@@ -22019,6 +22019,11 @@
                     return tglA - tglB;
                 });
 
+                // [BARU] Index baris PO (No. PO → baris PO_Data) untuk popup detail PO yang
+                // dibuka dari klik kolom "Ship To" — lihat showPOItemsDetail().
+                window._rsPORowIndex = {};
+                allRows.forEach(r => { window._rsPORowIndex[String(r[1] || '').trim()] = r; });
+
                 let rows_html = '';
                 regularPORows.forEach(row => {
                     const noPO = row[1] || '-';
@@ -22144,7 +22149,11 @@
                         ${selectCell}
                         <td class="p-3 border-b font-mono text-left">${noPOCell}</td>
                         <td class="p-3 border-b">${escapeHtml(orderedBy)}</td>
-                        <td class="p-3 border-b">${escapeHtml(shipTo)}</td>
+                        <td class="p-3 border-b">
+                            <button type="button" onclick="showPOItemsDetail('${noPO}')"
+                                title="Lihat detail PO & item yang dipesan"
+                                class="underline decoration-dotted hover:decoration-solid transition font-semibold text-amber-700 hover:text-amber-900">${escapeHtml(shipTo)}</button>
+                        </td>
                         <td class="p-3 border-b" id="status-${noPO}">${statusBadge}</td>
                         ${isAdmin ? `<td class="p-3 border-b">${linkCell}</td>` : ''}
                         ${aksiCell}
@@ -23081,6 +23090,213 @@
                 bodyEl.innerHTML = `<p class="text-center text-sm text-red-500 py-10">Gagal memuat detail: ${escapeHtml(err.message)}</p>`;
             }
         }
+
+        // =========================================================================
+        // [BARU] REPORT STATUS PO — POPUP DETAIL PO (klik kolom "Ship To")
+        // Menampilkan: No. PO, Shipping Date, Ordered By, Ship To, Kategori, dan
+        // daftar item yang dipesan (Qty + UOM + Remark).
+        //   - Info header diambil dari baris PO_Data yang sudah ada di tabel
+        //     (kolom C Ordered By, D Ship To, G Kategori, J Shipping Date).
+        //   - Item TIDAK ada di sheet manapun, jadi ditarik dari PDF Request Order
+        //     di Google Drive (GAS action getPORequestItemsPDF) lalu diekstrak
+        //     dengan extractTextFromPDF + parsePOData — parser yang SAMA dengan
+        //     "Revisi PO", jadi hasil & perbaikan nama item panjang ikut konsisten.
+        //   - Hasil ekstrak di-cache per sesi (_poItemsCache) → klik ulang instan.
+        // =========================================================================
+        const _poItemsCache = new Map();
+        let _poItemsReqToken = 0;
+
+        function _poItemsEnsureStyle() {
+            if (document.getElementById('po-items-style')) return;
+            const st = document.createElement('style');
+            st.id = 'po-items-style';
+            st.textContent = `
+            .poi-panel{background:#fff;width:100%;max-width:42rem;max-height:85vh;display:flex;flex-direction:column;border-radius:.75rem;overflow:hidden;border:1px solid #e5e7eb;box-shadow:0 20px 25px -5px rgba(0,0,0,.2),0 8px 10px -6px rgba(0,0,0,.15)}
+            .poi-head{background:#14141e;border-top:3px solid #f59e0b;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem;flex-shrink:0}
+            .poi-eyebrow{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#a1804f;font-weight:600}
+            .poi-no{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:1rem;font-weight:600;color:#fff;overflow-wrap:anywhere}
+            .poi-x{color:rgba(255,255,255,.6);background:none;border:0;padding:.125rem;line-height:0;min-height:0!important}
+            .poi-x:hover{color:#fff}
+            .poi-body{overflow-y:auto;flex:1 1 auto}
+            .poi-meta{display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.5rem;padding:1rem}
+            .poi-lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;font-weight:600;margin-bottom:2px}
+            .poi-val{font-size:.875rem;font-weight:600;color:#1f2937;overflow-wrap:anywhere}
+            .poi-chip{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:700;background:#fef3c7;color:#b45309}
+            .poi-sec{padding:0 1rem 1rem}
+            .poi-sec-h{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;margin-bottom:.5rem}
+            .poi-sec-h b{font-size:.875rem;color:#1f2937}
+            .poi-sec-h span{font-size:.75rem;color:#6b7280;font-variant-numeric:tabular-nums}
+            .poi-wrap{border:1px solid #e5e7eb;border-radius:.5rem;overflow:hidden}
+            .poi-tbl{width:100%;border-collapse:collapse;font-size:.875rem;color:#1f2937}
+            .poi-tbl thead tr{background:#1f2937;color:#fff;font-size:.75rem}
+            .poi-tbl th{padding:.5rem .6rem;text-align:left;font-weight:600}
+            .poi-tbl td{padding:.6rem;vertical-align:top;border-top:1px solid #e5e7eb}
+            .poi-tbl .c-no{width:2rem;color:#6b7280;font-size:.75rem;font-variant-numeric:tabular-nums}
+            .poi-tbl .c-qty{text-align:right;white-space:nowrap;font-weight:600;font-variant-numeric:tabular-nums}
+            .poi-tbl .c-qty small{font-weight:400;color:#6b7280;font-size:.75rem}
+            .poi-tbl .c-name{font-weight:500;line-height:1.35}
+            .poi-tbl .c-rem{font-size:.75rem}
+            .poi-tbl .c-rem.empty{color:#9ca3af}
+            .poi-rem-inline{display:block;margin-top:2px;font-size:.75rem;font-weight:400;color:#6b7280}
+            .poi-remark-col{display:none}
+            @media (min-width:640px){.poi-remark-col{display:table-cell}.poi-rem-inline{display:none}}
+            .poi-load{border:1px solid #e5e7eb;border-radius:.5rem;padding:1.25rem 1rem}
+            .poi-load-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;font-size:.875rem;font-weight:600;color:#1f2937}
+            .poi-load-h span{font-size:.75rem;color:#b45309;font-variant-numeric:tabular-nums}
+            .poi-bar{height:6px;border-radius:9999px;background:#e5e7eb;overflow:hidden}
+            .poi-bar i{display:block;height:100%;background:#f59e0b;border-radius:9999px;transition:width .2s}
+            .poi-load p{margin:.5rem 0 0;font-size:.75rem;color:#6b7280}
+            .poi-err{border:1px solid #fecaca;background:#fef2f2;border-radius:.5rem;padding:1rem}
+            .poi-err b{display:block;font-size:.875rem;color:#dc2626}
+            .poi-err p{margin:.25rem 0 .75rem;font-size:.75rem;color:#6b7280}
+            .poi-btn{background:#14141e;color:#fff;border:0;border-radius:.5rem;padding:.4rem .9rem;font-size:.8rem;font-weight:600}
+            .poi-btn:hover{opacity:.9}
+            .poi-foot{display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.75rem 1rem;border-top:1px solid #e5e7eb;flex-shrink:0}
+            .poi-foot small{font-size:11px;color:#6b7280}
+            .poi-foot a{color:#b45309;text-decoration:underline}`;
+            document.head.appendChild(st);
+        }
+
+        function closePOItemsDetail() {
+            _poItemsReqToken++; // batalkan pembaruan UI dari request yang masih berjalan
+            const m = document.getElementById('po-items-detail-modal');
+            if (m) m.remove();
+        }
+
+        function _poItemsSetBody(html) {
+            const el = document.getElementById('po-items-detail-body');
+            if (el) el.innerHTML = html;
+        }
+        function _poItemsLoadingHtml(pct, msg) {
+            const p = Math.max(0, Math.min(100, Math.round(pct)));
+            return `<div class="poi-load">
+                <div class="poi-load-h">Memuat item dari PDF<span>${p}%</span></div>
+                <div class="poi-bar"><i style="width:${p}%"></i></div>
+                <p>${escapeHtml(msg)}</p></div>`;
+        }
+        function _poItemsErrorHtml(noPO, msg) {
+            return `<div class="poi-err">
+                <b>Item tidak dapat dimuat</b>
+                <p>${escapeHtml(msg || 'Terjadi kesalahan.')} Info PO di atas tetap valid.</p>
+                <button type="button" class="poi-btn" onclick="showPOItemsDetail('${escapeHtml(noPO)}')">Coba Lagi</button></div>`;
+        }
+        function _poItemsTableHtml(items) {
+            const clean = v => { const s = String(v == null ? '' : v).trim(); return (s === '-' || s === '—') ? '' : s; };
+            const total = items.reduce((a, it) => a + (Number(it.qty_po) || 0), 0);
+            const rows = items.map((it, i) => {
+                const rem = clean(it.note);
+                const uom = clean(it.uom);
+                return `<tr>
+                    <td class="c-no">${i + 1}</td>
+                    <td class="c-name">${escapeHtml(it.nama_barang || '-')}${rem ? `<span class="poi-rem-inline">${escapeHtml(rem)}</span>` : ''}</td>
+                    <td class="c-qty">${escapeHtml(it.qty_po != null ? it.qty_po : '-')}${uom ? ` <small>${escapeHtml(uom)}</small>` : ''}</td>
+                    <td class="c-rem poi-remark-col ${rem ? '' : 'empty'}">${rem ? escapeHtml(rem) : '—'}</td>
+                </tr>`;
+            }).join('');
+            return `<div class="poi-sec-h"><b>Item yang Dipesan</b><span>${items.length} item · ${total.toLocaleString('id-ID')} unit</span></div>
+                <div class="poi-wrap"><table class="poi-tbl">
+                    <thead><tr><th style="width:2rem">No</th><th>Item</th><th style="text-align:right">Jumlah</th><th class="poi-remark-col">Remark</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table></div>`;
+        }
+
+        async function showPOItemsDetail(noPO) {
+            closePOItemsDetail();
+            _poItemsEnsureStyle();
+            const token = ++_poItemsReqToken;
+            const alive = () => token === _poItemsReqToken && !!document.getElementById('po-items-detail-modal');
+
+            // Info header dari baris PO_Data yang sudah dimuat di tabel Report Status
+            const row = (window._rsPORowIndex || {})[noPO] || [];
+            const dash = v => { const s = String(v == null ? '' : v).trim(); return s || '-'; };
+
+            const modal = document.createElement('div');
+            modal.id = 'po-items-detail-modal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4';
+            modal.onclick = closePOItemsDetail;
+            modal.innerHTML = `
+            <div class="poi-panel" onclick="event.stopPropagation()">
+                <div class="poi-head">
+                    <div style="min-width:0">
+                        <div class="poi-eyebrow">Detail Purchase Order</div>
+                        <div class="poi-no">${escapeHtml(noPO)}</div>
+                    </div>
+                    <button type="button" class="poi-x" onclick="closePOItemsDetail()" aria-label="Tutup">
+                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div class="poi-body">
+                    <div class="poi-meta">
+                        <div><div class="poi-lbl">Shipping Date</div><div class="poi-val">${escapeHtml(dash(row[9]))}</div></div>
+                        <div><div class="poi-lbl">Ordered By</div><div class="poi-val">${escapeHtml(dash(row[2]))}</div></div>
+                        <div><div class="poi-lbl">Ship To</div><div class="poi-val">${escapeHtml(dash(row[3]))}</div></div>
+                        <div><div class="poi-lbl">Kategori</div><div><span class="poi-chip">${escapeHtml(dash(row[6]))}</span></div></div>
+                    </div>
+                    <div class="poi-sec" id="po-items-detail-body"></div>
+                </div>
+                <div class="poi-foot">
+                    <small id="po-items-detail-src">Sumber: PDF Request Order</small>
+                    <button type="button" class="poi-btn" onclick="closePOItemsDetail()">Tutup</button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+
+            // Sudah pernah dimuat di sesi ini → langsung tampil
+            const cached = _poItemsCache.get(noPO);
+            if (cached) {
+                _poItemsSetBody(_poItemsTableHtml(cached.items));
+                _poItemsSetSrc(cached.url);
+                return;
+            }
+
+            let shown = 0;
+            const paint = (pct, msg) => { if (alive()) { shown = Math.max(shown, pct); _poItemsSetBody(_poItemsLoadingHtml(shown, msg)); } };
+            paint(2, 'Mencari PDF di Google Drive...');
+            // Ramp halus saat ukuran download tidak diketahui (respons GAS sering tanpa Content-Length)
+            const ramp = setInterval(() => { if (shown < 45) paint(shown + 3, 'Menarik PDF dari Google Drive...'); }, 250);
+
+            try {
+                const url = API_URLS.reportStatus + '?action=getPORequestItemsPDF&noPO=' + encodeURIComponent(noPO);
+                const res = await fetchPDFWithProgress(url, 60000, (pct) => {
+                    if (pct != null) paint(Math.min(50, pct * 0.5), 'Menarik PDF dari Google Drive...');
+                });
+                clearInterval(ramp);
+                if (!alive()) return;
+                if (!res || res.success !== true || !res.base64) {
+                    throw new Error((res && res.message) || 'PDF Request Order tidak ditemukan di Google Drive.');
+                }
+
+                paint(55, 'Membaca daftar item...');
+                const byteChars = atob(res.base64);
+                const bytes = new Uint8Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+                const file = new File([new Blob([bytes], { type: 'application/pdf' })], res.fileName || 'Request_Order.pdf', { type: 'application/pdf' });
+                const { text: rawText, pageData } = await extractTextFromPDF(file, (p, total) => {
+                    paint(55 + (p / Math.max(1, total)) * 40, 'Membaca daftar item...');
+                });
+                if (!alive()) return;
+
+                const parsed = parsePOData(pageData, rawText);
+                const items = (parsed && Array.isArray(parsed.items) ? parsed.items : []).filter(it => it && String(it.nama_barang || '').trim());
+                if (items.length === 0) throw new Error('Tabel item tidak terbaca dari PDF.');
+
+                _poItemsCache.set(noPO, { items, url: res.url || '' });
+                _poItemsSetBody(_poItemsTableHtml(items));
+                _poItemsSetSrc(res.url || '');
+            } catch (err) {
+                clearInterval(ramp);
+                if (!alive()) return;
+                _poItemsSetBody(_poItemsErrorHtml(noPO, err && err.message));
+            }
+        }
+        function _poItemsSetSrc(url) {
+            const el = document.getElementById('po-items-detail-src');
+            if (!el) return;
+            el.innerHTML = url
+                ? `Sumber: PDF Request Order · <a href="${escapeHtml(url)}" target="_blank" rel="noopener">Buka PDF</a>`
+                : 'Sumber: PDF Request Order';
+        }
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePOItemsDetail(); });
 
         async function closePO(poNumber) {
             liveSyncNoteMutation();
