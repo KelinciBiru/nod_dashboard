@@ -3705,6 +3705,20 @@
         // login terlihat "nyangkut"/gagal padahal sebenarnya tabrakan request.
         let _isLoggingIn = false;
 
+        // [PERBAIKAN V2 — LOGIN] ID acak per perangkat/browser (disimpan di localStorage). Dipakai server
+        // untuk membatasi percobaan password salah PER PERANGKAT — bukan identitas pribadi.
+        function _getNodDeviceId() {
+            try {
+                let id = localStorage.getItem('nod_device_id');
+                if (!id) {
+                    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+                        : 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+                    localStorage.setItem('nod_device_id', id);
+                }
+                return id;
+            } catch (_) { return ''; }
+        }
+
         async function checkLogin() {
             if (_isLoggingIn) return;
 
@@ -3732,7 +3746,7 @@
                 method: 'POST',
                 redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({ action: 'login', password: pass })
+                body: JSON.stringify({ action: 'login', password: pass, deviceId: _getNodDeviceId() })
             }, timeoutMs);
 
             try {
@@ -3752,17 +3766,22 @@
                 // Kalau browser sudah pasti offline, langsung gagal tanpa buang waktu
                 // menunggu percobaan kedua yang pasti sia-sia juga.
                 let data;
-                try {
-                    data = await doLoginRequest(28000);
-                } catch (firstErr) {
-                    const worthRetry = firstErr && (firstErr.isGasTimeout || firstErr.isGasParseError || firstErr.name === 'TypeError');
-                    if (worthRetry && navigator.onLine !== false) {
-                        console.warn('[checkLogin] percobaan pertama gagal (' + (firstErr && firstErr.message) + '), mencoba ulang sekali');
-                        if (loginBtn) loginBtn.textContent = 'Mencoba lagi...';
-                        await new Promise(r => setTimeout(r, 1200));
-                        data = await doLoginRequest(20000);
-                    } else {
-                        throw firstErr;
+                // [PERBAIKAN V2 — LOGIN] Login tidak mengubah data (aman di-retry). Percobaan pertama
+                // dulu menunggu 28 detik penuh sebelum menyerah — kalau request "nyangkut" di gerbang
+                // Google, user menunggu setengah menit. Sekarang bertahap 9s → 14s → 20s: request
+                // pertama yang membangunkan GAS tetap jalan di server, percobaan berikutnya biasanya
+                // sudah mendarat di instance yang hangat dan selesai dalam hitungan detik.
+                const _loginAttempts = [9000, 14000, 20000];
+                for (let _i = 0; _i < _loginAttempts.length; _i++) {
+                    try {
+                        data = await doLoginRequest(_loginAttempts[_i]);
+                        break;
+                    } catch (attemptErr) {
+                        const worthRetry = attemptErr && (attemptErr.isGasTimeout || attemptErr.isGasParseError || attemptErr.name === 'TypeError');
+                        if (!worthRetry || navigator.onLine === false || _i === _loginAttempts.length - 1) throw attemptErr;
+                        console.warn('[checkLogin] percobaan ' + (_i + 1) + ' gagal (' + (attemptErr && attemptErr.message) + '), mencoba ulang');
+                        if (loginBtn) loginBtn.textContent = (_i === 0) ? 'Menyiapkan server...' : 'Mencoba lagi (' + (_i + 2) + '/' + _loginAttempts.length + ')...';
+                        await new Promise(r => setTimeout(r, 700));
                     }
                 }
 
@@ -4115,39 +4134,43 @@
         }
 
         // Silent background prefetch — tidak blocking, tidak error jika gagal
+        // [PERBAIKAN V2 — LOGIN] Sebelumnya ADMIN menembakkan sampai 7 request GAS SEKALIGUS tepat
+        // setelah login (ditambah render halaman + log login) → menghabiskan kuota eksekusi
+        // bersamaan GAS (±30/akun), sehingga request penting lain (validasi, buka menu) ikut
+        // antre/gagal "server sibuk" walau internet bagus. Sekarang: mulai setelah 1,5 detik dan
+        // maksimal 2 request berjalan bersamaan, urut dari yang paling ringan.
         function _prefetchCommonData() {
-            // Prefetch untuk role yang akses Form PO / RO / Report Status
+            const tasks = [];
+            const add = (fn) => tasks.push(fn);
+            const heavy = [];
             if (currentUserRole === 'ADMIN' || currentUserRole === 'PO_User') {
-                // getNames dipakai Form PO & Form RO
-                cachedFetch(API_URLS.purchaseOrder + '?action=getNames', 'getNames').catch(() => { });
-                // getPOData & getReturData dipakai Report Status (parallel)
-                cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData').catch(() => { });
-                cachedFetch(API_URLS.purchaseOrder + '?action=getReturData', 'getReturData').catch(() => { });
+                add(() => cachedFetch(API_URLS.purchaseOrder + '?action=getNames', 'getNames'));
+                add(() => cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData'));
+                add(() => cachedFetch(API_URLS.purchaseOrder + '?action=getReturData', 'getReturData'));
             }
-            // Prefetch daftar PIC untuk dropdown "Ordered By" di Form Service
-            if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User') {
-                cachedFetch(API_URLS.serviceCenter + '?action=getPICList', 'getPICList').catch(() => { });
-            }
-            // Prefetch untuk role yang akses Report Status Repair & Task Technician
-            // (Teknisi cuma bisa akses 2 menu ini, jadi selalu prefetch untuknya).
-            // Ini yang paling penting: kedua endpoint ini baca banyak sheet sekaligus
-            // di GAS sehingga lambat (>10 detik) kalau ditunggu saat menu baru dibuka;
-            // dengan prefetch di background sesaat setelah login, begitu user membuka
-            // menunya data biasanya sudah siap dari cache (instan).
-            if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') {
-                cachedFetch(API_URLS.serviceCenter + '?action=getReportStatusRepair', 'getReportStatusRepair', 25000).catch(() => { });
-                cachedFetch(API_URLS.serviceCenter + '?action=getTaskTechnicianInit', 'getTaskTechnicianInit', 25000).catch(() => { });
-            }
-            // [BOOST — Team Delivery > Route] getPlanDriver relatif berat di backend
-            // (baca sheet "Plan Driver" + Retur_Data + PO_Data + Driver_Location +
-            // geocode beberapa alamat sekaligus), jadi kalau ditunggu baru saat menu
-            // Route dibuka, terasa lambat. Prefetch di background sesaat setelah
-            // login (role ADMIN & DRIVER, keduanya yang akses menu Team Delivery)
-            // supaya begitu menu Route dibuka, data biasanya sudah siap dari cache
-            // — pola sama dengan getReportStatusRepair/getTaskTechnicianInit di atas.
             if (currentUserRole === 'ADMIN' || currentUserRole === 'DRIVER') {
-                cachedFetch(DELIVERY_GAS_URL + '?action=getPlanDriver', 'getPlanDriver', 20000).catch(() => { });
+                add(() => cachedFetch(DELIVERY_GAS_URL + '?action=getPlanDriver', 'getPlanDriver', 20000));
             }
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User') {
+                add(() => cachedFetch(API_URLS.serviceCenter + '?action=getPICList', 'getPICList'));
+            }
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') {
+                heavy.push(() => cachedFetch(API_URLS.serviceCenter + '?action=getReportStatusRepair', 'getReportStatusRepair', 25000));
+                heavy.push(() => cachedFetch(API_URLS.serviceCenter + '?action=getTaskTechnicianInit', 'getTaskTechnicianInit', 25000));
+            }
+            // Teknisi/CS_User: menu utamanya justru endpoint berat → duluan. Role lain: paling akhir.
+            if (currentUserRole === 'Teknisi' || currentUserRole === 'CS_User') tasks.unshift(...heavy); else tasks.push(...heavy);
+
+            let idx = 0, active = 0;
+            const MAX_PARALLEL = 2;
+            const pump = () => {
+                while (active < MAX_PARALLEL && idx < tasks.length) {
+                    const t = tasks[idx++];
+                    active++;
+                    Promise.resolve().then(t).catch(() => { }).finally(() => { active--; if (sessionToken) pump(); });
+                }
+            };
+            setTimeout(() => { if (sessionToken) pump(); }, 1500);
         }
 
         /**
@@ -4218,6 +4241,13 @@
 
             // Hentikan polling auto-update (LiveSync) sebelum sesi dihapus
             if (typeof LiveSync !== 'undefined') LiveSync.stop();
+
+            // [PERBAIKAN V2 — LOGIN] Hapus sesi di server juga (fire-and-forget) supaya Script
+            // Properties tidak menumpuk sesi yatim (penyebab login makin lambat/gagal seiring waktu).
+            try {
+                const _tk = sessionToken;
+                if (_tk) fetch(PO_GAS_URL, { method: 'POST', redirect: 'follow', mode: 'no-cors', keepalive: true, headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'logout', token: _tk }) }).catch(() => { });
+            } catch (_) { }
 
             // Reset role & token
             currentUserRole = '';
@@ -18641,7 +18671,7 @@
                 if (data && data.success) {
                     if (phoneEl) phoneEl.value = data.phone || '';
                     if (alamatEl) alamatEl.value = data.alamat || '';
-                    window._procPOMeta = { noPO: String(noPO).trim(), noFaktur: data.noFaktur || '', kategori: data.kategori || '' };
+                    window._procPOMeta = { noPO: String(noPO).trim(), noFaktur: data.noFaktur || '', kategori: data.kategori || '', hasKategori: (data.kategori !== undefined), fetchedAt: Date.now() };
                 } else {
                     console.warn('[Process PO] No. Telepon/Alamat tidak ditemukan:', data?.message);
                 }
@@ -18653,7 +18683,7 @@
         // =========================================================================
         // LOAD DAFTAR PO STATUS "OPEN" UNTUK DROPDOWN DI PROCESS PO
         // =========================================================================
-        async function loadOpenPOList() {
+        async function loadOpenPOList(force) {
             const sel = document.getElementById('proc-no-po-select');
             const statusEl = document.getElementById('po-list-status');
             if (!sel) return;
@@ -18682,32 +18712,48 @@
             };
 
             try {
-                let data = [];
+                let openPOs = [];
+                let staleNote = '';
+                const _LS_OPENPO = 'nod_openpo_list_v1';
+                // [PERBAIKAN V2] force=true (tombol refresh / buka halaman) → buang cache klien
+                if (force) { clearCache('getOpenPOList'); clearCache('getPOData'); }
                 try {
-                    data = await cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData');
-                    data = Array.isArray(data) ? data : [];
-                } catch (_) { }
-
-                if (data.length === 0) {
-                    try {
-                        data = await cachedFetch(API_URLS.reportStatus, 'reportStatusFallback');
-                        data = Array.isArray(data) ? data : [];
-                    } catch (_) { }
+                    // Endpoint ringan: hanya PO Open (No. PO + Ship To), bukan seluruh sheet PO_Data
+                    const d = await cachedFetch(API_URLS.reportStatus + '?action=getOpenPOList', 'getOpenPOList', 25000);
+                    if (d && d.success && Array.isArray(d.list)) {
+                        openPOs = d.list.map(r => ({ noPO: String(r[0] || '').trim(), shipTo: String(r[1] || '').trim() }));
+                    } else {
+                        clearCache('getOpenPOList'); // jangan simpan respons error di cache
+                        const msg = (d && d.message) ? String(d.message) : '';
+                        if (/sesi/i.test(msg)) throw new Error(msg + ' — silakan login ulang.');
+                        // Backend lama (belum di-deploy ulang) → fallback ke getPOData
+                        const all = await cachedFetch(API_URLS.reportStatus + '?action=getPOData', 'getPOData', 25000);
+                        if (!Array.isArray(all)) {
+                            clearCache('getPOData');
+                            throw new Error((all && (all.message || all.error)) || 'Respons server tidak valid.');
+                        }
+                        openPOs = all.slice(1).filter(row => {
+                            const noPO = String(row[1] || '').trim();
+                            const status = String(row[4] || '').trim().toLowerCase();
+                            return noPO !== '' && (status === '' || status === 'open');
+                        }).map(row => ({ noPO: String(row[1] || '').trim(), shipTo: String(row[3] || '').trim() }));
+                    }
+                    try { localStorage.setItem(_LS_OPENPO, JSON.stringify({ t: Date.now(), list: openPOs })); } catch (_) { }
+                } catch (fetchErr) {
+                    clearCache('getOpenPOList');
+                    let saved = null;
+                    try { saved = JSON.parse(localStorage.getItem(_LS_OPENPO) || 'null'); } catch (_) { }
+                    if (saved && Array.isArray(saved.list) && saved.list.length) {
+                        openPOs = saved.list;
+                        staleNote = ' ⚠️ Gagal memuat terbaru (' + (fetchErr.name === 'AbortError' ? 'server lambat/timeout' : fetchErr.message) + ') — memakai daftar tersimpan. Tekan refresh untuk coba lagi.';
+                    } else {
+                        throw new Error(fetchErr.name === 'AbortError' ? 'Server lambat/timeout. Tekan refresh untuk mencoba lagi.' : fetchErr.message);
+                    }
                 }
-
-                // Filter hanya yang status "Open" — kolom status KOSONG juga dianggap "Open"
-                // (Ready To Ship, On-Delivery, Done, Closed, dll TIDAK ditampilkan)
-                const openPOs = data.slice(1).filter(row => {
-                    const noPO = String(row[1] || '').trim();
-                    const status = String(row[4] || '').trim().toLowerCase();
-                    return noPO !== '' && (status === '' || status === 'open');
-                });
 
                 const currentVal = sel.value;
                 sel.innerHTML = '<option value="">— Pilih No. PO (opsional) —</option>';
-                openPOs.forEach(row => {
-                    const noPO = String(row[1] || '').trim();
-                    const shipTo = String(row[3] || '').trim();
+                openPOs.forEach(({ noPO, shipTo }) => {
                     const opt = document.createElement('option');
                     opt.value = noPO;
                     opt.dataset.shipTo = shipTo;
@@ -18737,8 +18783,8 @@
 
                 if (statusEl) {
                     if (openPOs.length > 0) {
-                        statusEl.textContent = `✅ ${openPOs.length} PO Open tersedia.`;
-                        statusEl.className = 'text-xs text-green-600 mt-1';
+                        statusEl.textContent = `✅ ${openPOs.length} PO Open tersedia.` + staleNote;
+                        statusEl.className = staleNote ? 'text-xs text-amber-600 mt-1' : 'text-xs text-green-600 mt-1';
                     } else {
                         statusEl.textContent = 'Tidak ada PO Open saat ini.';
                         statusEl.className = 'text-xs text-gray-400 mt-1';
@@ -18843,7 +18889,7 @@
                     <select id="proc-no-po-select" class="flex-1 min-w-0 w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white">
                         <option value="">— Pilih No. PO (opsional) —</option>
                     </select>
-                    <button id="btn-refresh-po" onclick="loadOpenPOList()" title="Refresh daftar PO"
+                    <button id="btn-refresh-po" onclick="loadOpenPOList(true)" title="Refresh daftar PO"
                         class="flex-shrink-0 p-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition text-gray-500">
                         <svg id="btn-refresh-po-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -18951,8 +18997,10 @@
             </div>
         </div>
     `;
-            // Auto-load daftar PO Open setelah halaman ter-render
-            loadOpenPOList();
+            // Auto-load daftar PO Open setelah halaman ter-render (force: selalu data terbaru)
+            loadOpenPOList(true);
+            // [PERBAIKAN V2] Pemanasan: muat jsPDF & logo SEKARANG supaya submit tidak menunggu CDN/logo
+            try { _ensureJsPDF().catch(() => { }); loadImageAsDataURL(NOD_LOGO_URL); } catch (_) { }
             preloadSourceItems();
             // Muat daftar file Request Order PDF dari folder Google Drive
             loadRequestOrderDriveList();
@@ -19887,9 +19935,27 @@
             // Kalau user sudah keburu ganti pilihan No. PO selagi menunggu, batalkan.
             if (String(noPoSel.value || '').trim() !== noPO) return;
 
-            const matchOpt = [...driveSel.options].find(
+            let matchOpt = [...driveSel.options].find(
                 o => o.value && String(o.dataset.noPo || '').trim().toLowerCase() === noPO.toLowerCase()
             );
+
+            // [PERBAIKAN V2] Daftar file kini dibatasi jendela waktu (cepat). Kalau PO ini di luar daftar,
+            // cari langsung 1 file berdasarkan No. PO (tanpa scan folder).
+            if (!matchOpt) {
+                try {
+                    const _r = await fetchWithTimeout(WEB_APP_URL + '?action=getRequestOrderPDFByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' }, 20000);
+                    const _j = await _r.json();
+                    if (_j && _j.success && _j.file) {
+                        const _o = document.createElement('option');
+                        _o.value = _j.file.fileId;
+                        _o.dataset.noPo = noPO;
+                        _o.textContent = _j.file.fileName + ' (PO: ' + noPO + ')';
+                        driveSel.appendChild(_o);
+                        matchOpt = _o;
+                    }
+                } catch (_) { /* lanjut ke pesan "tidak ditemukan" */ }
+                if (String(noPoSel.value || '').trim() !== noPO) return;
+            }
 
             if (!matchOpt) {
                 if (statusEl) {
@@ -20169,6 +20235,13 @@
             // (supaya revisi No. Faktur di Form PO ikut terbaca); fallback ke hasil auto-fill terakhir. ──
             let noFakturDO = '';
             let showNoFakturDO = false;
+            // [PERBAIKAN V2] Pakai data yang SUDAH diambil saat No. PO dipilih (_procPOMeta, maks 2 menit)
+            // — tidak perlu round-trip GAS lagi saat submit. Fetch ulang hanya sebagai fallback.
+            const _mDO = window._procPOMeta;
+            if (_mDO && _mDO.noPO === String(noPO).trim() && _mDO.hasKategori && _mDO.fetchedAt && (Date.now() - _mDO.fetchedAt) < 120000) {
+                showNoFakturDO = _isFakturCategory(String(_mDO.kategori || '').trim());
+                noFakturDO = String(_mDO.noFaktur || '').trim();
+            } else {
             try {
                 const fkRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
                 const fkData = await fkRes.json();
@@ -20183,6 +20256,7 @@
                     noFakturDO = String(meta.noFaktur || '').trim();
                 }
                 console.warn('[DO No. Faktur] Gagal mengambil No. Faktur:', err);
+            }
             }
 
             // Alamat: utamakan isian field form/server, lalu dataset proc-ordered-by
@@ -20419,12 +20493,14 @@
          * agar bisa dipakai jsPDF addImage(). Return null jika gagal (CORS/network).
          */
         let _nodLogoCache = null;
+        let _nodLogoFailedAt = 0;
         function loadImageAsDataURL(url) {
             if (_nodLogoCache) return Promise.resolve(_nodLogoCache);
+            if (_nodLogoFailedAt && (Date.now() - _nodLogoFailedAt) < 300000) return Promise.resolve(null);
             return new Promise((resolve) => {
                 const img = new Image();
                 img.crossOrigin = 'anonymous';
-                const timeout = setTimeout(() => resolve(null), 6000);
+                const timeout = setTimeout(() => { _nodLogoFailedAt = Date.now(); resolve(null); }, 3000);
                 img.onload = () => {
                     clearTimeout(timeout);
                     try {
@@ -20441,7 +20517,7 @@
                         resolve(null);
                     }
                 };
-                img.onerror = () => { clearTimeout(timeout); resolve(null); };
+                img.onerror = () => { clearTimeout(timeout); _nodLogoFailedAt = Date.now(); resolve(null); };
                 img.src = url;
             });
         }
@@ -23739,6 +23815,8 @@
             const payload = {
                 action: 'simpanOutbound',
                 token: sessionToken,
+                // [PERBAIKAN V2] key sama selama belum sukses → retry/klik ulang aman dari data ganda
+                idempotencyKey: (() => { const _sig = noPO + '|' + JSON.stringify(items); if (!window._procSubmitKey || window._procSubmitKey.sig !== _sig) window._procSubmitKey = { sig: _sig, key: 'outb_' + Date.now() + '_' + Math.random().toString(36).slice(2) }; return window._procSubmitKey.key; })(),
                 noPO: noPO,
                 orderedBy: orderedBy,
                 shipTo: shipTo,
@@ -23769,6 +23847,17 @@
                 }
                 setProgressOverlay(40, 'Menyimpan data & mengunggah PDF...');
 
+                // [PERBAIKAN V2] TAMPILKAN PDF SEKARANG (tanpa menunggu server). Blob dibuat SEKALI,
+                // preview langsung terbuka berstatus "menyimpan"; judul diperbarui setelah server selesai.
+                {
+                    const _blob = pdfBuild.doc.output('blob');
+                    const _url = URL.createObjectURL(_blob);
+                    pdfBuild._blob = _blob; pdfBuild._url = _url;
+                    showPdfPreviewModal(_url, '⏳ Menyimpan ke server...',
+                        'PDF sudah siap dilihat/di-share. Data sedang disimpan — mohon tunggu konfirmasi di sini.',
+                        { blob: _blob, fileName: pdfBuild.fileName });
+                }
+
                 // ── 2) & 3) Simpan data ke Outbound_Log (KRITIS — status PO ikut
                 //      berubah) dan simpan salinan PDF ke Drive (PENDUKUNG saja,
                 //      dipakai nanti di Receive PO) dijalankan PARALEL, bukan
@@ -23781,8 +23870,11 @@
                 //      karena kegagalannya tidak boleh menggagalkan proses utama —
                 //      PDF tetap bisa langsung di-share dari sini walau salinan
                 //      cadangan di Drive belum/gagal tersimpan.
-                uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc })
-                    .catch(() => { /* sudah ditangani & ditampilkan di dalam fungsinya sendiri */ });
+                // [PERBAIKAN V2] Ditunda 1 tick: request simpanOutbound terkirim DULU, baru encode base64 PDF.
+                setTimeout(() => {
+                    uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc })
+                        .catch(() => { /* sudah ditangani di dalam fungsinya */ });
+                }, 0);
 
                 // [FIX TIMEOUT PROCESS PO] Timeout dinaikkan dari 30 → 45 detik.
                 // Payload simpanOutbound bisa berisi banyak item + trigger update
@@ -23849,14 +23941,15 @@
                             ? `No. PO: ${noPO} · Status → Ready To Ship`
                             : `No. PO: ${noPO} · ⚠️ status tidak ditemukan di PO_Data`)
                         : `${items.length} item tersimpan ke Outbound_Log`;
-                    showPdfPreviewModal(
-                        pdfBuild.doc.output('bloburl'),
-                        '✅ Berhasil Diproses!',
-                        statusMsg,
-                        { blob: pdfBuild.doc.output('blob'), fileName: pdfBuild.fileName }
-                    );
+                    // [PERBAIKAN V2] Preview sudah terbuka sejak PDF jadi — cukup perbarui judul/status.
+                    window._procSubmitKey = null; // sukses → batch berikutnya dapat key baru
+                    const _tEl = document.getElementById('pdf-preview-title');
+                    const _sEl = document.getElementById('pdf-preview-subtitle');
+                    if (_tEl) _tEl.textContent = '✅ Berhasil Diproses!';
+                    if (_sEl) _sEl.textContent = statusMsg;
 
                 } else {
+                    try { closePdfPreviewModal(); } catch (_) { }
                     showAlert('error', 'Gagal Menyimpan', result.message || 'Terjadi kesalahan pada server. Periksa GAS log.');
                 }
             } catch (err) {
@@ -23882,7 +23975,8 @@
                         { blob: pdfBuild.doc.output('blob'), fileName: pdfBuild.fileName }
                     );
                 } else {
-                    showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + (err?.message || err));
+                    try { if (pdfBuild && pdfBuild._url) closePdfPreviewModal(); } catch (_) { }
+                    showAlert('error', 'Terjadi Kesalahan', 'Tidak dapat terhubung ke server: ' + (err?.message || err) + '\n\nKlik "Proses" lagi untuk mencoba ulang — aman dari data ganda.');
                 }
             } finally {
                 _isSubmittingProcessPO = false;
@@ -25938,6 +26032,22 @@
                 });
         }
         restoreSessionOnLoad();
+
+        // [PERBAIKAN V2 — LOGIN] Bangunkan GAS selagi user mengetik password. Cold-start GAS (beberapa
+        // detik) jadi terjadi di BACKGROUND, bukan setelah tombol "Masuk" ditekan. Ping kedua saat
+        // kolom password difokuskan (dibatasi 1x per 2 menit). Aman: request ringan tanpa token/sheet.
+        (function _warmGasOnLoginPage() {
+            try {
+                if (sessionStorage.getItem('sessionToken')) return; // sudah login: app yang memanggil GAS
+                const ping = () => fetch(PO_GAS_URL + '?action=ping&_=' + Date.now(), { mode: 'no-cors', redirect: 'follow', cache: 'no-store' }).catch(() => { });
+                ping();
+                window._gasWarmAt = Date.now();
+                const pw = document.getElementById('passwordInput');
+                if (pw) pw.addEventListener('focus', () => {
+                    if (Date.now() - (window._gasWarmAt || 0) > 120000) { window._gasWarmAt = Date.now(); ping(); }
+                });
+            } catch (_) { }
+        })();
     </script>
 
     <!-- [MENU BARU — Print Label > Label Produk] Library pembuat QR Code (qrcode-generator 1.4.4, MIT, Kazuhiko Arase) — di-inline supaya tanpa CDN -->
