@@ -21824,6 +21824,29 @@
         // supaya batch item yang benar-benar berbeda tetap dianggap submit
         // baru, bukan ikut dianggap "retry" dari yang lama.
         let _inboundIdempotencyKey = null;
+        // [FIX 37 — Process Inbound] Verifikasi ke server (action 'cekInbound') apakah
+        // batch dgn idempotencyKey ini SUDAH tersimpan, dipanggil setelah timeout.
+        // Polling singkat (maks ~5x, tiap request timeout 8 dtk) — hasil 'found'
+        // berarti data AMAN tercatat tanpa perlu mengirim ulang sama sekali.
+        async function _confirmInboundSaved(key) {
+            if (!key) return null;
+            for (let attempt = 0; attempt < 5; attempt++) {
+                await new Promise(r => setTimeout(r, attempt === 0 ? 1500 : 3000));
+                try {
+                    const res = await fetchWithTimeout(INBOUND_GAS_URL, {
+                        method: 'POST',
+                        redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'cekInbound', token: sessionToken, idempotencyKey: key })
+                    }, 8000);
+                    const data = await res.json();
+                    if (data && data.success && data.found) {
+                        return (data.result && data.result.success) ? data.result : { success: true, message: 'Data inbound tersimpan.' };
+                    }
+                } catch (e) { /* jaringan/GAS sibuk sesaat — coba lagi */ }
+            }
+            return null;
+        }
         async function prosesInbound() {
             if (_inboundSubmitting) return; // sudah ada proses simpan yang berjalan, abaikan klik tambahan
 
@@ -21920,19 +21943,28 @@
                 try {
                     result = await doInboundRequest();
                 } catch (err) {
-                    if (err.isGasTimeout) {
-                        // [FIX — cegah data dobel] Backend sekarang idempotent
-                        // (idempotencyKey — lihat FIX 32 di Code.gs), jadi
-                        // retry otomatis di sini AMAN: kalau percobaan
-                        // pertama tadi sebenarnya sudah sukses di server,
-                        // server akan mengembalikan hasil yang SAMA tanpa
-                        // menulis baris baru lagi — bukan menggandakan data.
-                        console.warn('[prosesInbound] Timeout, mencoba ulang otomatis (aman berkat idempotencyKey):', err.message);
-                        showProgressOverlay('Koneksi lambat, mencoba ulang secara otomatis...');
-                        result = await doInboundRequest();
+                    if (!err.isGasTimeout) throw err;
+                    // [FIX 37 — Process Inbound] Timeout di browser TIDAK berarti
+                    // gagal: server bisa saja sudah selesai menulis. Jangan retry
+                    // buta — TANYA server dulu (cekInbound, murni baca) apakah
+                    // batch ber-idempotencyKey ini sudah masuk. Kalau sudah,
+                    // langsung dianggap sukses. Retry penuh hanya sbg cadangan.
+                    console.warn('[prosesInbound] Timeout, memverifikasi ke server:', err.message);
+                    showProgressOverlay('Koneksi lambat, memastikan data sudah tersimpan...');
+                    const confirmed = await _confirmInboundSaved(_inboundIdempotencyKey);
+                    if (confirmed) {
+                        result = confirmed;
                     } else {
-                        throw err;
+                        showProgressOverlay('Belum terkonfirmasi, mencoba ulang otomatis...');
+                        result = await doInboundRequest(); // aman: idempotencyKey sama
                     }
+                }
+
+                // Server sibuk (lock antre) -> balasan retryable; coba lagi 1x, aman dari dobel.
+                if (result && result.success === false && result.retryable) {
+                    showProgressOverlay('Server sibuk, mencoba ulang...');
+                    await new Promise(r => setTimeout(r, 2000));
+                    result = await doInboundRequest();
                 }
 
                 if (result.success) {
@@ -21959,8 +21991,8 @@
                 // dobel walau percobaan-percobaan sebelumnya sempat gagal
                 // sampai ke browser tapi sebenarnya sudah tersimpan di server.
                 showAlert('error', 'Terjadi Kesalahan',
-                    'Tidak dapat terhubung ke server setelah dicoba ulang: ' + err.message +
-                    '\n\nData sudah dilindungi dari duplikat — silakan klik "Proses Inbound" lagi kapan saja untuk mencoba ulang dengan aman.');
+                    'Tidak dapat memastikan data tersimpan: ' + err.message +
+                    '\n\nData dilindungi dari duplikat — silakan klik "Proses Inbound" lagi untuk mencoba ulang dengan aman (tidak akan tercatat dobel).');
             } finally {
                 _inboundSubmitting = false;
                 if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
