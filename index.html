@@ -24302,6 +24302,8 @@
                             str: item.str.trim(),
                             x: Math.round(item.transform[4]),
                             y: Math.round(vp.height - item.transform[5]),
+                            // [FIX v2] lebar teks (dipakai untuk mencari PUSAT teks kolom yang rata-tengah)
+                            w: Math.round((item.width || 0) * 10) / 10,
                             page: p
                         });
                     }
@@ -25030,7 +25032,176 @@
                 return rows.filter((_, idx) => !consumed.has(idx));
             }
 
-            if (Object.keys(colPositions).length >= 3) {
+            /**
+             * [FIX v2 — METODE UTAMA] Ekstraksi item berbasis "BLOK BARIS" (anchor No. urut).
+             *
+             * KENAPA metode lama (buildRows bucket-Y 6px + mergeWrappedNameRows) masih gagal:
+             * jsPDF-AutoTable memakai valign:middle → kalau Nama Barang membungkus jadi 2+ baris,
+             * sel lain (No/ID/Qty/UOM/Description/Remark) ikut berada di TENGAH. Description
+             * (mis. "Capsule Selling") & Remark juga bisa membungkus, sehingga baris-baris "nama
+             * sisa" ikut membawa token Description di X yang jauh dari kolom Nama → baris itu TIDAK
+             * dianggap lanjutan nama → tidak digabung. Selain itu bucket 6px menyatukan baris yang
+             * berbeda (mis. "Tiger" jatuh satu bucket dengan baris data → hasil cuma "Tiger").
+             *
+             * CARA KERJA metode ini (tidak bergantung pada tinggi/jumlah baris pembungkus):
+             *  1. Anchor tiap item = angka urut kolom "No" (1,2,3…) → posisinya = TENGAH sel baris.
+             *  2. Batas antar-item = JEDA VERTIKAL TERBESAR di antara dua anchor berurutan
+             *     (jeda dalam 1 sel ≈ 1 baris teks ±10pt, jeda antar-baris tabel ≥ ±22pt).
+             *  3. Semua token di dalam satu blok = milik item tsb → dipetakan ke kolom:
+             *       • No/ID/Qty/UOM (rata-tengah) → cocokkan PUSAT teks dgn PUSAT header kolom,
+             *       • Nama Barang (rata-kiri, kiri Qty) → semua baris digabung URUT Y,
+             *       • Description/Remark (rata-kiri, kanan UOM) → dipisah per klaster X.
+             * Return [] bila struktur tidak dikenali → pemanggil jatuh ke metode lama (legacy).
+             */
+            function extractItemsByAnchorBlocks() {
+                const out = [];
+                const TOL = 10;          // toleransi pusat kolom rata-tengah (pt)
+                const MAX_LINE_GAP = 14; // jeda maksimum antar-baris teks dalam 1 sel (pt)
+                const tokW = (t) => (typeof t.w === 'number' && t.w > 0) ? t.w : t.str.length * 4.4;
+                const tokC = (t) => t.x + tokW(t) / 2;
+                const isInt = (s) => /^\d+$/.test(s);
+                const isNum = (s) => /^\d+(?:[.,]\d+)?$/.test(s);
+                const byYX = (a, b) => (Math.abs(a.y - b.y) > 3 ? a.y - b.y : a.x - b.x);
+
+                const p1 = pages.get(pageNums[0]);
+                const nameHdr = p1.find(t => /^NAMA\s*BARANG$/i.test(t.str)) || p1.find(t => /^NAMA$/i.test(t.str));
+                if (!nameHdr) return out;
+                const hdrToks = p1.filter(t => Math.abs(t.y - nameHdr.y) <= 8);
+                const pick = (re) => hdrToks.find(t => re.test(t.str.trim()));
+                const hNo = pick(/^(NO|NO\.)$/i);
+                const hId = pick(/^ID$/i);
+                const hQty = pick(/^(QTY|QUANTITY|JUMLAH)$/i);
+                const hUom = pick(/^(UOM|UNIT|SATUAN)$/i);
+                const hDesc = pick(/^(DESCRIPTION|DESC|DESKRIPSI|KETERANGAN)$/i);
+                const hRem = pick(/^(REMARK|CATATAN|KET\.?)$/i);
+                if (!hNo || !hId || !hQty || !hUom) return out;
+                const cNo = tokC(hNo), cId = tokC(hId), cQty = tokC(hQty), cUom = tokC(hUom);
+                const cDesc = hDesc ? tokC(hDesc) : null;
+                const cRem = hRem ? tokC(hRem) : null;
+
+                for (const pageNum of pageNums) {
+                    let toks = pages.get(pageNum).slice();
+                    // buang header tabel (halaman 1 & header yang diulang di halaman 2+)
+                    const hdrHere = toks.find(t => /^NAMA\s*BARANG$/i.test(t.str));
+                    const minY = hdrHere ? hdrHere.y + 4 : (pageNum === 1 ? nameHdr.y + 4 : -Infinity);
+                    toks = toks.filter(t => t.y > minY).sort((a, b) => a.y - b.y || a.x - b.x);
+                    if (!toks.length) continue;
+
+                    // 1) anchor = angka urut di kolom No (harus naik)
+                    const anchors = [];
+                    let lastNo = 0;
+                    for (const t of toks) {
+                        if (!isInt(t.str) || Math.abs(tokC(t) - cNo) > TOL) continue;
+                        const v = parseInt(t.str, 10);
+                        if (v <= lastNo) continue;
+                        anchors.push(t); lastNo = v;
+                    }
+                    if (!anchors.length) continue;
+
+                    // 2) batas blok: jeda vertikal terbesar di antara dua anchor
+                    const bounds = new Array(anchors.length + 1);
+                    for (let i = 0; i < anchors.length - 1; i++) {
+                        const lo = anchors[i].y, hi = anchors[i + 1].y;
+                        const ys = toks.filter(t => t.y >= lo && t.y <= hi).map(t => t.y).sort((a, b) => a - b);
+                        let bestGap = -1, cut = (lo + hi) / 2;
+                        for (let k = 0; k < ys.length - 1; k++) {
+                            const g = ys[k + 1] - ys[k];
+                            if (g > bestGap) { bestGap = g; cut = (ys[k] + ys[k + 1]) / 2; }
+                        }
+                        bounds[i + 1] = cut;
+                    }
+                    // ujung atas (baris pembungkus di atas anchor pertama) & ujung bawah
+                    let cur = anchors[0].y;
+                    toks.filter(t => t.y < anchors[0].y).map(t => t.y).sort((a, b) => b - a).every(y => {
+                        if (cur - y <= MAX_LINE_GAP) { cur = y; return true; } return false;
+                    });
+                    bounds[0] = cur - 0.5;
+                    cur = anchors[anchors.length - 1].y;
+                    toks.filter(t => t.y > anchors[anchors.length - 1].y).map(t => t.y).sort((a, b) => a - b).every(y => {
+                        if (y - cur <= MAX_LINE_GAP) { cur = y; return true; } return false;
+                    });
+                    bounds[anchors.length] = cur + 0.5;
+
+                    // 3) kelompokkan token ke blok, lalu petakan ke kolom
+                    const blocks = anchors.map(() => []);
+                    for (const t of toks) {
+                        for (let i = 0; i < anchors.length; i++) {
+                            if (t.y > bounds[i] && t.y <= bounds[i + 1]) { blocks[i].push(t); break; }
+                        }
+                    }
+                    // Klasifikasi kolom untuk satu kumpulan token (blok item ATAU potongan baris)
+                    const classify = (bt, anchorTok) => {
+                        const idT = [], qtyT = [], uomT = [], leftT = [], rightT = [];
+                        for (const t of bt) {
+                            if (t === anchorTok) continue;
+                            const c = tokC(t);
+                            if (Math.abs(c - cId) <= TOL) idT.push(t);
+                            else if (Math.abs(c - cQty) <= TOL && isNum(t.str)) qtyT.push(t);
+                            else if (Math.abs(c - cUom) <= TOL) uomT.push(t);
+                            else if (t.x < cQty - 20) leftT.push(t);
+                            else rightT.push(t);
+                        }
+                        const joinT = (arr) => arr.slice().sort(byYX).map(t => t.str).join(' ').replace(/\s+/g, ' ').trim();
+
+                        // Description vs Remark: klaster berdasarkan X awal teks (rata-kiri)
+                        let description = '', remark = '';
+                        if (rightT.length) {
+                            const sx = rightT.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+                            const clusters = [];
+                            for (const t of sx) {
+                                const last = clusters[clusters.length - 1];
+                                if (last && Math.abs(t.x - last.x) <= 4) last.toks.push(t);
+                                else clusters.push({ x: t.x, toks: [t] });
+                            }
+                            if (clusters.length >= 2) {
+                                description = joinT(clusters[0].toks);
+                                remark = joinT([].concat(...clusters.slice(1).map(c => c.toks)));
+                            } else {
+                                const txt = joinT(clusters[0].toks);
+                                const isDescByText = VALID_DESC_SET.has(txt.toUpperCase());
+                                const nearRemark = (cDesc !== null && cRem !== null) ? (clusters[0].x >= (cDesc + (cRem - 34)) / 2) : false;
+                                if (isDescByText || !nearRemark) description = txt; else remark = txt;
+                            }
+                        }
+                        return { id: joinT(idT), nama: joinT(leftT), qty: joinT(qtyT), uom: joinT(uomT), description, remark };
+                    };
+
+                    const prevIdx = out.length - 1; // item terakhir dari halaman sebelumnya
+                    blocks.forEach((bt, i) => {
+                        const f = classify(bt, anchors[i]);
+                        if (!f.qty && !f.nama) return; // blok sampah
+                        out.push({ id: f.id, nama: f.nama || '-', qty: f.qty || '0', uom: f.uom, description: f.description, remark: f.remark });
+                    });
+
+                    // Potongan baris di PUNCAK halaman 2+ (jsPDF-AutoTable bisa memotong satu baris tabel
+                    // di pergantian halaman: sisa baris nama/deskripsi/remark muncul di atas halaman
+                    // berikutnya TANPA nomor urut) → sambungkan ke item terakhir halaman sebelumnya.
+                    if (pageNum !== pageNums[0] && out.length) {
+                        const orphans = toks.filter(t => t.y <= bounds[0]);
+                        if (orphans.length) {
+                            const f = classify(orphans, null);
+                            const prev = prevIdx >= 0 ? out[prevIdx] : null;
+                            if (prev) {
+                                const cat = (a, b) => (b ? ((a && a !== '-') ? a + ' ' + b : b) : a);
+                                prev.nama = cat(prev.nama, f.nama);
+                                prev.description = cat(prev.description, f.description);
+                                prev.remark = cat(prev.remark, f.remark);
+                            }
+                        }
+                    }
+                }
+                return out;
+            }
+
+            const _blockItems = (function () {
+                try { return extractItemsByAnchorBlocks(); }
+                catch (e) { console.warn('[DO Parser] extractItemsByAnchorBlocks gagal, pakai metode legacy:', e); return []; }
+            })();
+
+            if (_blockItems.length > 0) {
+                _blockItems.forEach(it => result.items.push(it));
+                console.log('[DO Parser] Total items extracted (anchor-block):', result.items.length);
+            } else if (Object.keys(colPositions).length >= 3) {
                 for (const pageNum of pageNums) {
                     const pageRows = mergeWrappedNameRows(buildRows(pages.get(pageNum)));
                     let pastHeader = (pageNum === 1) ? false : true;
