@@ -21824,6 +21824,67 @@
         // supaya batch item yang benar-benar berbeda tetap dianggap submit
         // baru, bukan ikut dianggap "retry" dari yang lama.
         let _inboundIdempotencyKey = null;
+        // [FIX 37 — Process Inbound] Kirim dengan strategi "cek dulu sebelum kirim ulang":
+        //  • Timeout / jaringan putus / server balas retryable → TIDAK langsung kirim
+        //    ulang secara membabi-buta, tapi tanya server dulu (cekInboundStatus —
+        //    baca cache, tanpa kunci) apakah submit sebelumnya SUDAH tersimpan.
+        //  • Kalau belum → tunggu sebentar (backoff) lalu kirim ulang dgn
+        //    idempotencyKey yang SAMA (aman, tidak dobel).
+        //  • Maksimal 3 percobaan (timeout 25/30/30 dtk) + 2x cek akhir sebelum
+        //    benar-benar menampilkan error.
+        async function _cekInboundStatus(idempotencyKey) {
+            try {
+                const res = await fetchWithTimeout(INBOUND_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'cekInboundStatus', token: sessionToken, idempotencyKey: idempotencyKey })
+                }, 12000);
+                const data = await res.json();
+                return (data && data.success && data.found && data.result) ? data.result : null;
+            } catch (e) {
+                return null; // gagal cek ≠ belum tersimpan; lanjut ke strategi retry
+            }
+        }
+        async function _kirimInboundAman(payload) {
+            const opts = {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(payload)
+            };
+            const TIMEOUTS = [25000, 30000, 30000];
+            const BACKOFF = [0, 2000, 4000];
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            let lastErr = null;
+            for (let i = 0; i < TIMEOUTS.length; i++) {
+                if (i > 0) {
+                    showProgressOverlay('Koneksi lambat, memastikan data tersimpan (percobaan ' + (i + 1) + '/' + TIMEOUTS.length + ')...');
+                    const done = await _cekInboundStatus(payload.idempotencyKey);
+                    if (done) return done; // percobaan sebelumnya ternyata sudah sukses
+                    await sleep(BACKOFF[i]);
+                }
+                try {
+                    const result = await fetchWriteWithRetry(INBOUND_GAS_URL, opts, TIMEOUTS[i]);
+                    if (result && result.retryable && i < TIMEOUTS.length - 1) {
+                        lastErr = new Error(result.message || 'Server sibuk');
+                        continue; // server bilang data BELUM ditulis → aman diulang
+                    }
+                    if (result && result.serverMs) console.info('[Inbound] waktu proses server: ' + result.serverMs + ' ms' + (result.replayed ? ' (replay idempotent)' : ''));
+                    return result;
+                } catch (err) {
+                    lastErr = err;
+                    console.warn('[prosesInbound] percobaan ' + (i + 1) + ' gagal:', err.message);
+                }
+            }
+            // Cek akhir: mungkin percobaan terakhir sebenarnya sudah masuk.
+            for (let k = 0; k < 2; k++) {
+                await sleep(3000);
+                const done = await _cekInboundStatus(payload.idempotencyKey);
+                if (done) return done;
+            }
+            throw lastErr || new Error('Server tidak merespons.');
+        }
         async function prosesInbound() {
             if (_inboundSubmitting) return; // sudah ada proses simpan yang berjalan, abaikan klik tambahan
 
@@ -21908,32 +21969,9 @@
                 items: items
             };
 
-            const doInboundRequest = () => fetchWriteWithRetry(INBOUND_GAS_URL, {
-                method: 'POST',
-                redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify(payload)
-            }, 25000);
-
             try {
-                let result;
-                try {
-                    result = await doInboundRequest();
-                } catch (err) {
-                    if (err.isGasTimeout) {
-                        // [FIX — cegah data dobel] Backend sekarang idempotent
-                        // (idempotencyKey — lihat FIX 32 di Code.gs), jadi
-                        // retry otomatis di sini AMAN: kalau percobaan
-                        // pertama tadi sebenarnya sudah sukses di server,
-                        // server akan mengembalikan hasil yang SAMA tanpa
-                        // menulis baris baru lagi — bukan menggandakan data.
-                        console.warn('[prosesInbound] Timeout, mencoba ulang otomatis (aman berkat idempotencyKey):', err.message);
-                        showProgressOverlay('Koneksi lambat, mencoba ulang secara otomatis...');
-                        result = await doInboundRequest();
-                    } else {
-                        throw err;
-                    }
-                }
+                // [FIX 37] retry bertahap + cek status (lihat _kirimInboundAman di atas).
+                const result = await _kirimInboundAman(payload);
 
                 if (result.success) {
                     setProgressOverlay(100, 'Selesai!');
@@ -21959,8 +21997,8 @@
                 // dobel walau percobaan-percobaan sebelumnya sempat gagal
                 // sampai ke browser tapi sebenarnya sudah tersimpan di server.
                 showAlert('error', 'Terjadi Kesalahan',
-                    'Tidak dapat terhubung ke server setelah dicoba ulang: ' + err.message +
-                    '\n\nData sudah dilindungi dari duplikat — silakan klik "Proses Inbound" lagi kapan saja untuk mencoba ulang dengan aman.');
+                    'Server belum merespons setelah 3 kali percobaan & pengecekan status: ' + err.message +
+                    '\n\nData BELUM terkonfirmasi tersimpan. Isi form dipertahankan & dilindungi dari duplikat — silakan klik "Proses Inbound" lagi untuk mencoba ulang dengan aman.');
             } finally {
                 _inboundSubmitting = false;
                 if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
