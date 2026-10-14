@@ -385,6 +385,10 @@
         .it-btn-primary:disabled { opacity: .6; cursor: not-allowed; }
         .it-btn-ghost { padding: 6px 10px; background: #f3f4f6; color: #374151; font-size: 12px; white-space: nowrap; }
         .it-btn-ghost:hover { background: #e5e7eb; }
+        .it-btn-warn { padding: 6px 10px; background: #fef3c7; color: #92400e; font-size: 12px; white-space: nowrap; border: 1px solid #fcd34d; display: inline-flex; align-items: center; gap: 6px; }
+        .it-btn-warn:hover { background: #fde68a; }
+        .it-btn-warn:disabled { opacity: .6; cursor: not-allowed; }
+        .it-cal-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
         .it-spin { width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, .45); border-top-color: #fff; border-radius: 50%; animation: it-rot .7s linear infinite; }
         @keyframes it-rot { to { transform: rotate(360deg); } }
         .it-msg { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin-bottom: 12px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
@@ -16135,7 +16139,10 @@
                         <div class="it-days" id="it-days"></div>
                         <div class="it-cal-status">
                             <span id="it-cal-status">Memuat data kalender…</span>
-                            <button type="button" class="it-btn it-btn-ghost" onclick="_itLoadCalendar()">↻ Muat ulang</button>
+                            <div class="it-cal-actions">
+                                <button type="button" id="it-archive-btn" class="it-btn it-btn-warn" onclick="itArchiveReset()" title="Pindahkan semua List Task ke sheet Task lalu kosongkan daftar">🗂 Arsip dan Reset</button>
+                                <button type="button" class="it-btn it-btn-ghost" onclick="_itLoadCalendar()">↻ Muat ulang</button>
+                            </div>
                         </div>
                         <div class="it-detail" id="it-detail"></div>
                     </section>
@@ -16541,6 +16548,52 @@
             _it.hour = IT_DEFAULT_HOUR; _it.min = IT_DEFAULT_MIN;
             _it.sessionKey = _itRand(); // submit berikutnya = permintaan baru (bukan duplikat)
             itTaskCount(); _itRenderPic(); _itRenderTime();
+        }
+
+        // ── Arsip dan Reset: pindahkan seluruh List Task (sheet "To Do List") ke sheet "Task", lalu reset ──
+        async function itArchiveReset() {
+            if (!_it || _it.busy) return;
+            const ok = await showConfirm('Arsip dan Reset?',
+                'Semua task di sheet "To Do List" akan disimpan ke sheet "Task", lalu daftar task dikosongkan. Lanjutkan?');
+            if (!ok) return;
+
+            const requestId = 'ita_' + _itRand();
+            const body = JSON.stringify({ action: 'archiveResetInputTask', token: sessionToken, requestId });
+            const send = () => fetchWriteWithRetry(PO_GAS_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body }, 60000);
+
+            const btn = document.getElementById('it-archive-btn');
+            const btnHtml = btn ? btn.innerHTML : '';
+            _it.busy = true;
+            if (btn) { btn.disabled = true; btn.textContent = 'Memproses…'; }
+            showProgressOverlay('Mengarsipkan task ke sheet Task');
+            try {
+                let j;
+                try { j = await send(); }
+                catch (e) {
+                    // requestId sama -> aman diulang (server tidak mengarsipkan dua kali)
+                    if (e.isGasTimeout) { showProgressOverlay('Koneksi lambat, mencoba ulang (aman, tanpa data ganda)…'); j = await send(); }
+                    else throw e;
+                }
+                if (!j.success) { const er = new Error(j.message || 'Server menolak permintaan'); er.empty = !!j.empty; throw er; }
+
+                hideProgressOverlay(false);
+                if (!_itExists() || !_it) return;
+                _it.tasks = [];
+                _itIndexByDate();
+                _itRenderCalendar();
+                _itRenderTaskList();
+                _itRenderDetail();
+                showToastAlert('success', 'Arsip dan Reset Berhasil', escapeHtml((j.duplicate ? 'Permintaan ini sudah diproses sebelumnya. ' : '') + (j.message || '')));
+                _itLoadCalendar();
+            } catch (err) {
+                hideProgressOverlay(false);
+                if (err.empty) showToastAlert('info', 'Tidak Ada Task', escapeHtml(err.message || ''));
+                else showAlert('error', 'Gagal Arsip dan Reset', escapeHtml(err.message || String(err)));
+            } finally {
+                _it.busy = false;
+                const b2 = document.getElementById('it-archive-btn');
+                if (b2) { b2.disabled = false; b2.innerHTML = btnHtml; }
+            }
         }
 
         async function itSubmit() {
