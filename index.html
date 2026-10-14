@@ -17567,6 +17567,24 @@
                 if (submitBtnLabel) submitBtnLabel.textContent = 'Simpan Revisi';
                 _showBatalRevisiButton('po');
 
+                // [PERBAIKAN] Nonaktifkan field No PO & semua input penentu data
+                // saat mode revisi — user TIDAK BOLEH mengubah No PO/Total
+                // karena yang direvisi adalah PO yang sudah ada di sheet.
+                const noPoInput = document.getElementById('po-shipping-date');
+                const namaInput = document.getElementById('nama');
+                const allocatedToInput = document.getElementById('allocated-to');
+                const categoryInput = document.getElementById('category');
+                if (noPoInput) noPoInput.disabled = true;
+                if (namaInput) namaInput.disabled = true;
+                if (allocatedToInput) allocatedToInput.disabled = true;
+                if (categoryInput) categoryInput.disabled = true;
+                const poNote = document.getElementById('po-note-khusus');
+                if (poNote) poNote.disabled = true;
+                const poAlamat = document.getElementById('po-alamat');
+                if (poAlamat) poAlamat.disabled = true;
+                const poPhone = document.getElementById('po-phone');
+                if (poPhone) poPhone.disabled = true;
+
                 if (statusEl) { statusEl.textContent = '✅ Data PO "' + noPO + '" berhasil ditarik. Form siap diedit — mengisi file PDF baru bersifat opsional.'; statusEl.className = 'text-xs text-green-600 mt-1 font-semibold'; }
                 hideProgressOverlay(true);
             } catch (err) {
@@ -17704,6 +17722,12 @@
             if (_isSubmittingFormPO) return;
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
+
+            // [PERBAIKAN] Validasi No PO — pastikan user memilih No PO terlebih dahulu
+            const noPoInput = document.getElementById('po-shipping-date');
+            // Note: No PO is displayed in the preview, not an input. Validation
+            // is done server-side via idempotency and the resolvedPONumber logic.
+            // Frontend validation ensures form completion.
             const allocatedToEl = document.getElementById('allocated-to');
             const btn = document.getElementById('submitBtn');
             const btnLabel = document.getElementById('submitBtnLabel');
@@ -18663,7 +18687,9 @@
             const phone = document.getElementById('retur-phone')?.value?.trim() || '';
             const shippingDateRaw = document.getElementById('retur-shipping-date')?.value || '';
             const shippingDate = shippingDateRaw ? formatTanggalIndo(shippingDateRaw) : '-';
-            const noPO = poPreview ? poPreview.textContent.trim() : '';
+            const noPO = (window._revisiPOActive)
+              ? window._revisiPOActive
+              : (poPreview ? poPreview.textContent.trim() : '');
             const noteKhusus = document.getElementById('retur-note-khusus')?.value?.trim() || '';
 
             // Ambil item dari tabel
