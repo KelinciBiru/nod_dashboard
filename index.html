@@ -3249,7 +3249,7 @@
             return url + sep + 'token=' + encodeURIComponent(sessionToken);
         }
 
-        async function fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
+        async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeoutMs);
             try {
@@ -3384,7 +3384,7 @@
         // Timeout default dinaikkan ke 25 detik (dari 15 detik) karena payload
         // submit biasanya menyertakan PDF base64 + upload ke Drive di sisi GAS,
         // yang butuh waktu lebih lama terutama saat GAS baru cold-start.
-        async function fetchWriteWithRetry(url, options = {}, timeoutMs = 25000) {
+        async function fetchWriteWithRetry(url, options = {}, timeoutMs = 30000) {
             let res;
             try {
                 res = await fetchWithTimeout(url, options, timeoutMs);
