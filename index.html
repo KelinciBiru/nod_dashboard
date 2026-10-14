@@ -322,7 +322,8 @@
         @media (min-width: 1024px) {
             .it-grid { grid-template-columns: minmax(0, 1fr) 390px; }
             .it-form-card { grid-column: 1; grid-row: 1; }
-            .it-cal-card { grid-column: 2; grid-row: 1; }
+            .it-list-card { grid-column: 1; grid-row: 2; }
+            .it-cal-card { grid-column: 2; grid-row: 1 / span 2; }
         }
         .it-card { background: #fff; border: 1px solid #d1d5db; border-radius: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .05); padding: 18px; }
         .it-card-title { font-size: 16px; font-weight: 700; color: #374151; margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
@@ -428,6 +429,32 @@
         .it-item-main { font-weight: 600; color: #1f2937; word-break: break-word; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
         .it-item-sub { color: #6b7280; margin-top: 2px; word-break: break-word; }
         .it-empty { font-size: 13px; color: #9ca3af; padding: 6px 0; }
+
+        /* Status task (Done / On Progress) */
+        .it-item-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .it-item-row .it-item-main { flex: 1 1 auto; min-width: 0; }
+        .it-status { flex: 0 0 auto; display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.5; white-space: nowrap; border: 1px solid transparent; }
+        .it-status-done { background: #d1fae5; color: #047857; border-color: #a7f3d0; }
+        .it-status-prog { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+
+        /* List Task + checkbox (di bawah card Input Task) */
+        .it-tl-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .it-tl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .it-tl-chip { border: 1px solid #e5e7eb; background: #fff; color: #374151; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .it-tl-chip:hover { background: #fffbeb; border-color: #fcd34d; }
+        .it-tl-chip[aria-pressed="true"] { background: #f59e0b; border-color: #d97706; color: #fff; }
+        .it-tl-bar .it-btn-ghost { margin-left: auto; }
+        .it-tl { max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+        .it-tl-item { display: flex; align-items: flex-start; gap: 10px; border: 1px solid #e5e7eb; border-left: 3px solid #d97706; border-radius: 8px; padding: 9px 10px; background: #fff; cursor: pointer; }
+        .it-tl-item:hover { background: #fffbeb; }
+        .it-tl-item.it-tl-done { border-left-color: #10b981; background: #f9fafb; }
+        .it-tl-item.it-tl-busy { opacity: .6; cursor: progress; }
+        .it-tl-cb { width: 20px; height: 20px; margin-top: 1px; accent-color: #f59e0b; flex-shrink: 0; cursor: inherit; }
+        .it-tl-body { flex: 1 1 auto; min-width: 0; }
+        .it-tl-text { display: -webkit-box; font-size: 13.5px; font-weight: 600; color: #1f2937; word-break: break-word; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .it-tl-done .it-tl-text { color: #6b7280; text-decoration: line-through; }
+        .it-tl-meta { display: block; font-size: 12px; color: #6b7280; margin-top: 3px; word-break: break-word; }
+        .it-tl-overdue { color: #b91c1c; font-weight: 700; }
     </style>
 
 
@@ -16079,7 +16106,8 @@
                 tasks: [], pos: [], byDate: {},
                 viewY: tp[0], viewM: tp[1] - 1, selected: today, today: today,
                 hour: IT_DEFAULT_HOUR, min: IT_DEFAULT_MIN,
-                sessionKey: _itRand(), busy: false
+                sessionKey: _itRand(), busy: false,
+                tlFilter: 'all'
             };
 
             contentArea.innerHTML = `
@@ -16170,6 +16198,19 @@
 
                         <button type="button" id="it-submit" class="it-btn it-btn-primary" onclick="itSubmit()">Submit</button>
                     </section>
+
+                    <!-- LIST TASK + CHECKBOX (di bawah card Input Task) -->
+                    <section class="it-card it-list-card" aria-label="List Task">
+                        <h2 class="it-card-title">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                            List Task
+                        </h2>
+                        <div class="it-tl-bar">
+                            <div class="it-tl-chips" id="it-tl-chips" role="group" aria-label="Filter status task"></div>
+                            <button type="button" class="it-btn it-btn-ghost" onclick="_itLoadCalendar()">↻ Muat ulang</button>
+                        </div>
+                        <div class="it-tl" id="it-tl"><div class="it-empty">Memuat task…</div></div>
+                    </section>
                 </div>
             </div>`;
 
@@ -16187,6 +16228,7 @@
             _itRenderTime();
             _itRenderPic();
             _itRenderCalendar();
+            _itRenderTaskList();
             _itLoadOptions();
             _itLoadCalendar();
         }
@@ -16226,15 +16268,18 @@
                 const j = await res.json();
                 if (j.error || j.success === false) throw new Error(j.error || j.message || 'Gagal memuat kalender');
                 if (!_itExists() || !_it) return;
-                _it.tasks = j.tasks || [];
+                _it.tasks = (j.tasks || []).map(t => Object.assign({}, t, { done: t.done === true, busy: false }));
                 _it.pos = j.pos || [];
                 _itIndexByDate();
                 _itRenderCalendar();
+                _itRenderTaskList();
                 const s2 = document.getElementById('it-cal-status');
                 if (s2) s2.textContent = `${_it.pos.length} PO • ${_it.tasks.length} task (dari 45 hari lalu ke depan)`;
             } catch (err) {
                 const s2 = document.getElementById('it-cal-status');
                 if (s2) s2.textContent = 'Kalender gagal dimuat: ' + (err.message || err);
+                const tl = document.getElementById('it-tl');
+                if (tl && _it && !_it.tasks.length) tl.innerHTML = '<div class="it-empty">Task gagal dimuat. Klik "Muat ulang".</div>';
             }
         }
 
@@ -16294,9 +16339,95 @@
             }
             if (tasks.length) {
                 html += `<div class="it-sec-title">Task (${tasks.length})</div><div class="it-list">` +
-                    tasks.map(t => `<div class="it-item it-item-task"><div class="it-item-main">${escapeHtml(t.task)}</div><div class="it-item-sub">${escapeHtml([t.time, t.type, t.pic].filter(Boolean).join(' • ') || '-')}</div></div>`).join('') + '</div>';
+                    tasks.map(t => `<div class="it-item it-item-task"><div class="it-item-row"><div class="it-item-main">${escapeHtml(t.task)}</div>${_itStatusBadge(t)}</div><div class="it-item-sub">${escapeHtml([t.time, t.type, t.pic].filter(Boolean).join(' • ') || '-')}</div></div>`).join('') + '</div>';
             }
             box.innerHTML = html;
+        }
+
+        // ── List Task + checkbox ────────────────────────────────────────────────
+        // Status task: tercentang = "Done", belum = "On Progress" (sama dengan kolom K sheet "To Do List").
+        function _itStatusOf(t) { return t.done ? 'Done' : 'On Progress'; }
+        function _itStatusBadge(t) {
+            return `<span class="it-status ${t.done ? 'it-status-done' : 'it-status-prog'}">${_itStatusOf(t)}</span>`;
+        }
+        function _itFmtShort(iso) {
+            const p = String(iso || '').split('-').map(Number);
+            return p.length === 3 ? p[2] + ' ' + IT_MONTHS_SHORT[p[1] - 1] + ' ' + p[0] : '-';
+        }
+        function itSetTaskFilter(f) {
+            if (!_it) return;
+            _it.tlFilter = f;
+            _itRenderTaskList();
+        }
+        function _itRenderTaskList() {
+            const box = document.getElementById('it-tl');
+            const chips = document.getElementById('it-tl-chips');
+            if (!box || !chips || !_it) return;
+            const all = _it.tasks || [];
+            const nDone = all.filter(t => t.done).length;
+            const nProg = all.length - nDone;
+            const f = _it.tlFilter || 'all';
+            const defs = [['all', 'Semua', all.length], ['prog', 'On Progress', nProg], ['done', 'Done', nDone]];
+            chips.innerHTML = defs.map(d => `<button type="button" class="it-tl-chip" aria-pressed="${f === d[0]}" onclick="itSetTaskFilter('${d[0]}')">${d[1]} (${d[2]})</button>`).join('');
+
+            let list = all.filter(t => f === 'all' || (f === 'done' ? t.done : !t.done));
+            // On Progress dulu (deadline terdekat di atas), lalu Done (terbaru di atas).
+            list = list.slice().sort((a, b) => {
+                if (a.done !== b.done) return a.done ? 1 : -1;
+                const byDate = a.done ? String(b.deadline).localeCompare(String(a.deadline)) : String(a.deadline).localeCompare(String(b.deadline));
+                return byDate || String(a.time).localeCompare(String(b.time)) || (a.row - b.row);
+            });
+            if (!list.length) {
+                box.innerHTML = '<div class="it-empty">' + (all.length ? 'Tidak ada task pada filter ini.' : 'Belum ada task.') + '</div>';
+                return;
+            }
+            box.innerHTML = list.map(t => {
+                const overdue = !t.done && t.deadline && t.deadline < _it.today;
+                const meta = [
+                    `<span class="${overdue ? 'it-tl-overdue' : ''}">${escapeHtml(_itFmtShort(t.deadline))}${overdue ? ' (lewat)' : ''}</span>`,
+                    t.time ? escapeHtml(t.time) : '',
+                    t.type ? escapeHtml(t.type) : '',
+                    t.pic ? escapeHtml(t.pic) : ''
+                ].filter(Boolean).join(' • ');
+                return `<label class="it-tl-item ${t.done ? 'it-tl-done' : ''} ${t.busy ? 'it-tl-busy' : ''}" title="${escapeHtml(t.task)}">
+                    <input type="checkbox" class="it-tl-cb" ${t.done ? 'checked' : ''} ${t.busy ? 'disabled' : ''} onchange="itToggleDone(${Number(t.row)}, this)" aria-label="Tandai task selesai">
+                    <span class="it-tl-body">
+                        <span class="it-tl-text">${escapeHtml(t.task)}</span>
+                        <span class="it-tl-meta">${meta}</span>
+                    </span>
+                    ${_itStatusBadge(t)}
+                </label>`;
+            }).join('');
+        }
+
+        async function itToggleDone(row, cb) {
+            if (!_it) return;
+            const t = (_it.tasks || []).find(x => x.row === row);
+            if (!t || t.busy) { if (cb) cb.checked = !!(t && t.done); return; }
+            const want = !!cb.checked;
+            const prev = !!t.done;
+            if (want === prev) return;
+
+            // Tampilkan langsung (optimistic), checkbox dikunci selama menyimpan.
+            t.done = want; t.busy = true;
+            _itRenderTaskList();
+            _itRenderDetail();
+            try {
+                const body = JSON.stringify({ action: 'toggleInputTaskDone', token: sessionToken, row: t.row, task: t.task, done: want });
+                const j = await fetchWriteWithRetry(PO_GAS_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body }, 30000);
+                if (!j.success) { const er = new Error(j.message || 'Server menolak permintaan'); er.stale = !!j.stale; throw er; }
+                t.busy = false;
+                t.done = j.done === true;
+                _itRenderTaskList();
+                _itRenderDetail();
+            } catch (err) {
+                t.busy = false;
+                t.done = prev; // kembalikan ke keadaan semula
+                _itRenderTaskList();
+                _itRenderDetail();
+                showToastAlert('error', 'Gagal Memperbarui Task', escapeHtml(err.message || String(err)));
+                if (err.stale) _itLoadCalendar(); // baris di sheet sudah bergeser -> sinkronkan ulang
+            }
         }
 
         function itMonth(delta) {
@@ -16448,12 +16579,13 @@
 
                 hideProgressOverlay(false); // toast sukses ditampilkan di bawah
                 // Tampilkan langsung di kalender tanpa menunggu muat ulang, lalu sinkronkan dengan sheet.
-                _it.tasks.push({ row: j.row, task, type, deadline, pic: pics.join(', '), time });
+                _it.tasks.push({ row: j.row, task, type, deadline, pic: pics.join(', '), time, done: false, status: 'On Progress', busy: false });
                 _itIndexByDate();
                 _it.selected = deadline;
                 const dp = deadline.split('-').map(Number);
                 _it.viewY = dp[0]; _it.viewM = dp[1] - 1;
                 _itRenderCalendar();
+                _itRenderTaskList();
                 _itResetForm();
                 showToastAlert('success', 'Task Tersimpan', (j.duplicate ? 'Task ini sudah pernah tersimpan (tidak dobel). ' : '') + (j.message || ''));
                 _itLoadCalendar();
