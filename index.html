@@ -3249,7 +3249,7 @@
             return url + sep + 'token=' + encodeURIComponent(sessionToken);
         }
 
-        async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+        async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeoutMs);
             try {
@@ -3384,7 +3384,7 @@
         // Timeout default dinaikkan ke 25 detik (dari 15 detik) karena payload
         // submit biasanya menyertakan PDF base64 + upload ke Drive di sisi GAS,
         // yang butuh waktu lebih lama terutama saat GAS baru cold-start.
-        async function fetchWriteWithRetry(url, options = {}, timeoutMs = 25000) {
+        async function fetchWriteWithRetry(url, options = {}, timeoutMs = 30000) {
             let res;
             try {
                 res = await fetchWithTimeout(url, options, timeoutMs);
@@ -3416,6 +3416,43 @@
                 }
                 throw err;
             }
+        }
+
+        // [FIX 38] Kirim submit (PO/RO/Service) dengan AUTO-RETRY saat server membalas
+        // {retryable:true} (antrean lock GAS penuh) atau timeout. Aman dari data ganda karena
+        // SEMUA percobaan memakai payload yang sama (idempotencyKey sama) — backend akan
+        // mengembalikan hasil yang sudah ada kalau percobaan sebelumnya ternyata sudah tertulis.
+        async function submitWithLockRetry(url, payload, opts = {}) {
+            const maxAttempts = opts.maxAttempts || 5;
+            const timeoutMs = opts.timeoutMs || 60000;
+            const onWait = typeof opts.onWait === 'function' ? opts.onWait : () => {};
+            const body = JSON.stringify(payload);
+            let result = null;
+            let timeoutRetries = 0;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    result = await fetchWriteWithRetry(url, {
+                        method: 'POST', redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body
+                    }, timeoutMs);
+                } catch (err) {
+                    // Timeout browser: coba sekali lagi dgn key yang sama (server mengembalikan
+                    // hasil lama bila percobaan pertama ternyata sudah tertulis).
+                    if (err && err.isGasTimeout && timeoutRetries < 1 && attempt < maxAttempts) {
+                        timeoutRetries++;
+                        onWait(attempt, maxAttempts, 0, 'timeout');
+                        continue;
+                    }
+                    throw err;
+                }
+                if (!(result && result.success === false && result.retryable)) return result;
+                if (attempt === maxAttempts) break;
+                const delay = Math.min(1500 * Math.pow(1.7, attempt - 1), 9000) + Math.random() * 900;
+                onWait(attempt, maxAttempts, delay, 'busy');
+                await new Promise(r => setTimeout(r, delay));
+            }
+            return result;
         }
 
         // [LOAD BALANCER — bagian 1: request coalescing di sisi browser]
@@ -9705,9 +9742,7 @@
             let resolvedTicketNumber = null;
             const basePrefix = `Service-${formatDateForPO(new Date())}-`;
             const prefix = window._fsType === 'return' ? `Retur-${basePrefix}` : basePrefix;
-            if (window._fsReservedNo && !window._revisiFormServiceActive) {
-                resolvedTicketNumber = window._fsReservedNo; // [ANTI-TABRAKAN v2] nomor resmi dari server
-            } else try {
+            try {
                 let fsData = [];
                 try {
                     const r = await fetchWithTimeout(API_URLS.serviceCenter + '?action=getFormServiceData');
@@ -9883,6 +9918,8 @@
         // [FIX] Guard anti-dobel-submit Form Service (lihat pola yang sama di
         // Process Inbound/Process PO/Receive PO) — mencegah data terkirim 2x
         // kalau tombol "Kirim Form Service" sempat diklik/tap berkali-kali.
+        // [FIX 38] idempotencyKey Form Service — dibuat sekali per percobaan, direset hanya setelah SUKSES.
+        let _fsIdempotencyKey = null;
         let _isSubmittingFormService = false;
         async function submitFormService() {
             if (window._revisiFormServiceActive) { return _doSubmitRevisiFormService(); }
@@ -9953,13 +9990,6 @@
             showProgressOverlay('Membuat PDF Form Service...');
             try {
                 // ── Generate PDF Form Service dari isi form (menggantikan tombol Download PDF terpisah) ──
-                const _fp = _formFingerprint(['fs-nama', 'fs-customer', 'fs-customer-return', 'fs-alamat', 'fs-phone', 'fs-shipping-date', 'fs-shipto'],
-                    'fs-item-table-body', ['.fs-item-id', '.fs-item-nama', '.fs-item-qty', '.fs-item-uom', '.fs-item-serial', '.fs-item-remark'],
-                    (window._fsType || '') + '|' + (window._fsStatusCategory || ''));
-                if (!_fsIdempotencyKey || _fsIdemFp !== _fp) { _fsIdempotencyKey = _newPOIdempotencyKey(); _fsIdemFp = _fp; }
-                setProgressOverlay(10, 'Memesan No. Tiket...');
-                const reservedNo = await _reserveDocNo('SERVICE', { type: window._fsType === 'pickup' ? 'Pick Up' : 'Return', tanggal: formatDateForPO(new Date()) }, _fsIdempotencyKey);
-                window._fsReservedNo = reservedNo;
                 const pdfResult = await buildServiceOrderPDF();
                 if (!pdfResult) { setSubmitLoading(false); return; }
                 const { doc, fileName } = pdfResult;
@@ -9970,9 +10000,7 @@
                 const payload = {
                     action: 'submitFormService',
                     token: sessionToken,
-                    idempotencyKey: _fsIdempotencyKey,
-                    contentHash: _fp,
-                    reservedNo: reservedNo || undefined,
+                    idempotencyKey: (_fsIdempotencyKey = _fsIdempotencyKey || _newPOIdempotencyKey()),
                     noTiket: window._fsResolvedTicket || document.getElementById('fs-preview')?.textContent?.trim() || '',
                     orderedBy: namaEl.value,
                     category: 'Service',
@@ -9992,16 +10020,13 @@
                 // [FIX 12] submitFormService sekarang dicatat ke PO_Data / Retur_Data,
                 // sheet yang dikelola oleh backend PO_GAS (Code.gs) yang sama dengan
                 // Form PO/Form RO — bukan lagi backend Service Center terpisah.
-                const result = await fetchWriteWithRetry(API_URLS.purchaseOrder, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
+                const result = await submitWithLockRetry(API_URLS.purchaseOrder, payload, {
+                    onWait: (n, max, ms, why) => setProgressOverlay(45, why === 'timeout' ? 'Koneksi lambat, memastikan data terkirim...' : 'Server sedang ramai, mencoba lagi (' + n + '/' + (max - 1) + ')...')
                 });
                 if (!result.success) { throw new Error(result.message || 'Gagal mengirim Form Service.'); }
                 setProgressOverlay(100, 'Selesai!');
                 const noTiketFinal = result.noTiket || result.ticket || payload.noTiket;
-                _fsIdempotencyKey = null; _fsIdemFp = null;
+                _fsIdempotencyKey = null; // sukses -> tiket berikutnya dapat key baru
                 resetFormService();
                 showPdfPreviewModal(
                     doc.output('bloburl'),
@@ -10015,7 +10040,6 @@
             } finally {
                 setSubmitLoading(false);
                 _isSubmittingFormService = false;
-                window._fsReservedNo = null;
                 hideProgressOverlay(true);
             }
         }
@@ -17300,8 +17324,6 @@
                 return;
             }
             const outlets = await getOutletSourceData();
-            // [ANTI-TABRAKAN v2] Pilihan Ship To bisa sudah berubah selama menunggu data — jangan timpa alamat dgn data outlet lama.
-            if ((document.getElementById('allocated-to')?.value || '') !== shipToValue) return;
             const match = outlets.find(o => o.shipTo === shipToValue);
             if (alamatEl) alamatEl.value = match ? match.alamat : '';
             if (phoneEl) phoneEl.value = match ? match.phone : '';
@@ -17352,9 +17374,7 @@
             const isOutlet = category === 'Outlet';
             const isFAS = category === 'FAS';
             const existingVal = document.getElementById('allocated-to')?.value || '';
-            const _tok = window._poCatTok = (window._poCatTok || 0) + 1;
             await renderShipToField(isOutlet, existingVal);
-            if (_tok !== window._poCatTok) return; // [ANTI-TABRAKAN v2] kategori sudah diganti lagi — hentikan proses yang basi
 
             _syncFasImportBlockVisibility(category);
             _syncNoFakturVisibility(category);
@@ -17520,14 +17540,15 @@
 
             try {
                 // 1. Ambil metadata header dari sheet PO_Data (lebih akurat daripada hasil ekstraksi PDF)
-                // [ANTI-TABRAKAN v2] Baris sheet + PDF diambil TERKINI sekaligus (tanpa cache) lewat getRevisiSource,
-                // supaya header & Detail Item selalu satu versi (dulu: header cache 15-150 dtk, PDF cache 10 menit).
-                setProgressOverlay(30, 'Mengunduh data terkini...');
-                const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRevisiSource&kind=PO&noPO=' + encodeURIComponent(noPO) + '&_ts=' + Date.now(), { redirect: 'follow' }, 30000);
+                const poDataRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getPOData', { redirect: 'follow' });
+                const poRows = await poDataRes.json();
+                const row = Array.isArray(poRows) ? poRows.slice(1).find(r => String(r[1] || '').trim() === noPO) : null;
+
+                // 2. Ambil file PDF Request Order & ekstrak tabel item
+                setProgressOverlay(30, 'Mengunduh file PDF...');
+                const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const pdfResult = await pdfRes.json();
-                if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'Data PO terkini tidak ditemukan.');
-                const row = Array.isArray(pdfResult.row) ? pdfResult.row : null;
-                window._revisiPOBaseUrl = pdfResult.fileUrl || '';
+                if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
 
                 setProgressOverlay(60, 'Membaca isi PDF...');
                 const byteChars = atob(pdfResult.base64);
@@ -17583,6 +17604,24 @@
                 const submitBtnLabel = document.getElementById('submitBtnLabel');
                 if (submitBtnLabel) submitBtnLabel.textContent = 'Simpan Revisi';
                 _showBatalRevisiButton('po');
+
+                // [PERBAIKAN] Nonaktifkan field No PO & semua input penentu data
+                // saat mode revisi — user TIDAK BOLEH mengubah No PO/Total
+                // karena yang direvisi adalah PO yang sudah ada di sheet.
+                const noPoInput = document.getElementById('po-shipping-date');
+                const namaInput = document.getElementById('nama');
+                const allocatedToInput = document.getElementById('allocated-to');
+                const categoryInput = document.getElementById('category');
+                if (noPoInput) noPoInput.disabled = true;
+                if (namaInput) namaInput.disabled = true;
+                if (allocatedToInput) allocatedToInput.disabled = true;
+                if (categoryInput) categoryInput.disabled = true;
+                const poNote = document.getElementById('po-note-khusus');
+                if (poNote) poNote.disabled = true;
+                const poAlamat = document.getElementById('po-alamat');
+                if (poAlamat) poAlamat.disabled = true;
+                const poPhone = document.getElementById('po-phone');
+                if (poPhone) poPhone.disabled = true;
 
                 if (statusEl) { statusEl.textContent = '✅ Data PO "' + noPO + '" berhasil ditarik. Form siap diedit — mengisi file PDF baru bersifat opsional.'; statusEl.className = 'text-xs text-green-600 mt-1 font-semibold'; }
                 hideProgressOverlay(true);
@@ -17662,7 +17701,6 @@
                     action: 'revisiPO',
                     token: sessionToken,
                     noPO,
-                    baseFileUrl: window._revisiPOBaseUrl || '',
                     nama: namaEl.value,
                     allocatedTo: allocatedToEl.value.trim(),
                     alamat: document.getElementById('po-alamat')?.value?.trim() || '',
@@ -17709,42 +17747,6 @@
         // — supaya klik ulang setelah gagal tetap dianggap "percobaan yang
         // sama", tapi PO baru yang beda tetap dapat key baru.
         let _poIdempotencyKey = null;
-        let _poIdemFp = null;
-        let _roIdempotencyKey = null, _roIdemFp = null;
-        let _fsIdempotencyKey = null, _fsIdemFp = null;
-
-        /** [ANTI-TABRAKAN v2] Sidik jari isi form (hash sinkron cyrb53). Beda isi = BUKAN retry dari submit sebelumnya. */
-        function _hashContent(obj) {
-            const str = JSON.stringify(obj);
-            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-            for (let i = 0; i < str.length; i++) {
-                const ch = str.charCodeAt(i);
-                h1 = Math.imul(h1 ^ ch, 2654435761);
-                h2 = Math.imul(h2 ^ ch, 1597334677);
-            }
-            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-            return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
-        }
-        function _formFingerprint(fieldIds, tbodyId, itemSelectors, extra) {
-            const f = {};
-            fieldIds.forEach(id => { const el = document.getElementById(id); f[id] = el ? (el.type === 'checkbox' ? !!el.checked : String(el.value || '').trim()) : ''; });
-            const items = [];
-            document.querySelectorAll('#' + tbodyId + ' tr:not([data-placeholder])').forEach(tr => {
-                items.push(itemSelectors.map(sel => String(tr.querySelector(sel)?.value || '').trim()));
-            });
-            return _hashContent({ f, items, extra: extra || '' });
-        }
-        /** Pesan nomor resmi ke server. Return nomor, atau null kalau GAS belum di-deploy versi baru (pakai cara lama). */
-        async function _reserveDocNo(kind, extra, idemKey) {
-            const res = await fetchWriteWithRetry(API_URLS.purchaseOrder, {
-                method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(Object.assign({ action: 'reserveDocNumber', token: sessionToken, kind, idempotencyKey: idemKey }, extra))
-            });
-            if (res && res.success && res.no) return res.no;
-            if (res && /tidak dikenal/i.test(res.message || '')) return null;
-            throw new Error((res && res.message) || 'Gagal memesan nomor dokumen.');
-        }
         function _newPOIdempotencyKey() {
             if (window.crypto && typeof window.crypto.randomUUID === 'function') {
                 return window.crypto.randomUUID();
@@ -17758,6 +17760,12 @@
             if (_isSubmittingFormPO) return;
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
+
+            // [PERBAIKAN] Validasi No PO — pastikan user memilih No PO terlebih dahulu
+            const noPoInput = document.getElementById('po-shipping-date');
+            // Note: No PO is displayed in the preview, not an input. Validation
+            // is done server-side via idempotency and the resolvedPONumber logic.
+            // Frontend validation ensures form completion.
             const allocatedToEl = document.getElementById('allocated-to');
             const btn = document.getElementById('submitBtn');
             const btnLabel = document.getElementById('submitBtnLabel');
@@ -17811,13 +17819,6 @@
             _isSubmittingFormPO = true;
             showProgressOverlay('Membuat PDF PO...');
             try {
-                // [ANTI-TABRAKAN v2] Key idempotensi terikat ISI form; nomor PO dipesan resmi ke server SEBELUM PDF dibuat.
-                const _fp = _formFingerprint(['nama', 'category', 'allocated-to', 'po-alamat', 'po-phone', 'po-shipping-date', 'po-note-khusus', 'po-no-faktur', 'po-preorder-toggle'],
-                    'po-item-table-body', ['.po-item-id', '.po-item-nama', '.po-item-qty', '.po-item-uom', '.po-item-desc', '.po-item-note']);
-                if (!_poIdempotencyKey || _poIdemFp !== _fp) { _poIdempotencyKey = _newPOIdempotencyKey(); _poIdemFp = _fp; }
-                setProgressOverlay(10, 'Memesan No. PO...');
-                const reservedNo = await _reserveDocNo('PO', { categoryCode: CATEGORY_CODE[categoryEl.value], tanggal: formatDateForPO(new Date()) }, _poIdempotencyKey);
-                window._reservedPONo = reservedNo;
                 // ── Generate PDF Request Order dari isi form (menggantikan tombol Download PDF terpisah) ──
                 const pdfResult = await buildRequestOrderPDF();
                 if (!pdfResult) { setSubmitLoading(false); return; }
@@ -17829,12 +17830,12 @@
                 // [FIX BUG DUPLIKAT PO] Buat idempotencyKey HANYA kalau belum
                 // ada (percobaan pertama utk PO ini) — retry otomatis/klik
                 // ulang di bawah tetap memakai key yang SAMA sampai sukses.
+                if (!_poIdempotencyKey) _poIdempotencyKey = _newPOIdempotencyKey();
+
                 const payload = {
                     action: 'submitPO',
                     token: sessionToken,
                     idempotencyKey: _poIdempotencyKey,
-                    contentHash: _fp,
-                    reservedNo: reservedNo || undefined,
                     nama: namaEl.value,
                     allocatedTo: allocatedToEl ? allocatedToEl.value.trim() : '',
                     alamat: document.getElementById('po-alamat')?.value?.trim() || '',
@@ -17851,11 +17852,8 @@
                     fileName,
                     fileType: 'application/pdf',
                 };
-                const result = await fetchWriteWithRetry(API_URLS.purchaseOrder, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
+                const result = await submitWithLockRetry(API_URLS.purchaseOrder, payload, {
+                    onWait: (n, max, ms, why) => setProgressOverlay(45, why === 'timeout' ? 'Koneksi lambat, memastikan data terkirim...' : 'Server sedang ramai, mencoba lagi (' + n + '/' + (max - 1) + ')...')
                 });
                 if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim PO.');
                 setProgressOverlay(100, 'Selesai!');
@@ -17866,7 +17864,7 @@
                         : '';
                 // [FIX BUG DUPLIKAT PO] Baru reset key SETELAH submit ini
                 // benar-benar sukses — supaya PO berikutnya dapat key baru.
-                _poIdempotencyKey = null; _poIdemFp = null;
+                _poIdempotencyKey = null;
                 _b2bQueueOnSubmitted('PO'); // antrian Request B2B/B2C: tandai selesai & lanjut ke data berikutnya
                 resetFormPO();
                 _clearDraft(DRAFT_KEYS.formPO);
@@ -17876,14 +17874,12 @@
                     'No. PO: ' + result.po + statusNote,
                     { blob: pdfBlob, fileName }
                 );
-                if (result.warning) showAlert('warning', 'Periksa Alamat', result.warning);
             } catch (err) {
                 hideProgressOverlay(false);
                 showAlert('error', 'Gagal Mengirim PO', err.message);
             } finally {
                 setSubmitLoading(false);
                 _isSubmittingFormPO = false;
-                window._reservedPONo = null;
                 hideProgressOverlay(true);
             }
         }
@@ -18161,7 +18157,6 @@
                 return;
             }
             const outlets = await getOutletSourceData();
-            if ((document.getElementById('retur-from-location')?.value || '') !== fromLocationValue) return; // [ANTI-TABRAKAN v2] pilihan sudah berubah
             const match = outlets.find(o => o.shipTo === fromLocationValue);
             if (alamatEl) alamatEl.value = match ? match.alamat : '';
             if (phoneEl) phoneEl.value = RETUR_OUTLET_FIXED_PHONE;
@@ -18247,13 +18242,15 @@
 
             try {
                 // 1. Ambil metadata header dari sheet Retur_Data
-                // [ANTI-TABRAKAN v2] baris Retur_Data + PDF TERKINI sekaligus, tanpa cache (getRevisiSource)
-                setProgressOverlay(30, 'Mengunduh data terkini...');
-                const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRevisiSource&kind=RO&noPO=' + encodeURIComponent(noRO) + '&_ts=' + Date.now(), { redirect: 'follow' }, 30000);
+                const roDataRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getReturData', { redirect: 'follow' });
+                const roRows = await roDataRes.json();
+                const row = Array.isArray(roRows) ? roRows.slice(1).find(r => String(r[1] || '').trim() === noRO) : null;
+
+                // 2. Ambil file PDF Request Order (RO) & ekstrak tabel item
+                setProgressOverlay(30, 'Mengunduh file PDF...');
+                const pdfRes = await fetchWithTimeout(API_URLS.purchaseOrder + '?action=getRequestOrderPDF&fileId=' + encodeURIComponent(fileId), { redirect: 'follow' }, 30000);
                 const pdfResult = await pdfRes.json();
-                if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'Data RO terkini tidak ditemukan.');
-                const row = Array.isArray(pdfResult.row) ? pdfResult.row : null;
-                window._revisiROBaseUrl = pdfResult.fileUrl || '';
+                if (!pdfResult || !pdfResult.success || !pdfResult.base64) throw new Error((pdfResult && pdfResult.message) || 'File PDF tidak ditemukan di Google Drive.');
 
                 setProgressOverlay(60, 'Membaca isi PDF...');
                 const byteChars = atob(pdfResult.base64);
@@ -18364,7 +18361,6 @@
 
                 const payload = {
                     action: 'revisiRO',
-                    baseFileUrl: window._revisiROBaseUrl || '',
                     token: sessionToken,
                     noRO,
                     nama: namaEl.value,
@@ -18403,6 +18399,8 @@
 
         // [FIX] Guard anti-dobel-submit Form RO — mencegah Retur terkirim 2x kalau
         // tombol "Kirim Retur" sempat diklik/tap berkali-kali.
+        // [FIX 38] idempotencyKey Form RO — dibuat sekali per percobaan, direset hanya setelah SUKSES.
+        let _roIdempotencyKey = null;
         let _isSubmittingFormRetur = false;
         async function submitRetur() {
             if (window._revisiROActive) { return _doSubmitRevisiRO(); }
@@ -18447,12 +18445,6 @@
             showProgressOverlay('Membuat PDF Retur...');
             try {
                 // ── Generate PDF Return Order dari isi form (menggantikan tombol Download PDF terpisah) ──
-                const _fp = _formFingerprint(['retur-nama', 'retur-category', 'retur-allocated-to', 'retur-from-location', 'retur-alamat', 'retur-phone', 'retur-shipping-date', 'retur-note-khusus'],
-                    'retur-item-table-body', ['.po-item-id', '.po-item-nama', '.po-item-qty', '.po-item-uom', '.po-item-desc', '.po-item-note']);
-                if (!_roIdempotencyKey || _roIdemFp !== _fp) { _roIdempotencyKey = _newPOIdempotencyKey(); _roIdemFp = _fp; }
-                setProgressOverlay(10, 'Memesan No. RO...');
-                const reservedNo = await _reserveDocNo('RO', { categoryCode: CATEGORY_CODE[categoryEl.value], tanggal: formatDateForPO(new Date()) }, _roIdempotencyKey);
-                window._reservedRONo = reservedNo;
                 const pdfResult = await buildReturPDF();
                 if (!pdfResult) { setSubmitLoading(false); return; }
                 const { doc, fileName } = pdfResult;
@@ -18463,9 +18455,7 @@
                 const payload = {
                     action: 'submitRetur',
                     token: sessionToken,
-                    idempotencyKey: _roIdempotencyKey,
-                    contentHash: _fp,
-                    reservedNo: reservedNo || undefined,
+                    idempotencyKey: (_roIdempotencyKey = _roIdempotencyKey || _newPOIdempotencyKey()),
                     nama: namaEl.value,
                     allocatedTo: allocatedToEl ? allocatedToEl.value.trim() : '',
                     fromLocation: document.getElementById('retur-from-location')?.value?.trim() || '',
@@ -18482,15 +18472,12 @@
                     targetSheet: 'Retur_Data',
                     poPrefix: 'Retur-',
                 };
-                const result = await fetchWriteWithRetry(API_URLS.purchaseOrder, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
+                const result = await submitWithLockRetry(API_URLS.purchaseOrder, payload, {
+                    onWait: (n, max, ms, why) => setProgressOverlay(45, why === 'timeout' ? 'Koneksi lambat, memastikan data terkirim...' : 'Server sedang ramai, mencoba lagi (' + n + '/' + (max - 1) + ')...')
                 });
                 if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim Retur.');
                 setProgressOverlay(100, 'Selesai!');
-                _roIdempotencyKey = null; _roIdemFp = null;
+                _roIdempotencyKey = null; // sukses -> RO berikutnya dapat key baru
                 _b2bQueueOnSubmitted('RO'); // antrian Request B2B/B2C: tandai selesai & lanjut ke data berikutnya
                 resetFormRetur();
                 _clearDraft(DRAFT_KEYS.formRetur);
@@ -18506,7 +18493,6 @@
             } finally {
                 setSubmitLoading(false);
                 _isSubmittingFormRetur = false;
-                window._reservedRONo = null;
                 hideProgressOverlay(true);
             }
         }
@@ -18737,7 +18723,9 @@
             const phone = document.getElementById('retur-phone')?.value?.trim() || '';
             const shippingDateRaw = document.getElementById('retur-shipping-date')?.value || '';
             const shippingDate = shippingDateRaw ? formatTanggalIndo(shippingDateRaw) : '-';
-            const noPO = poPreview ? poPreview.textContent.trim() : '';
+            const noPO = (window._revisiPOActive)
+              ? window._revisiPOActive
+              : (poPreview ? poPreview.textContent.trim() : '');
             const noteKhusus = document.getElementById('retur-note-khusus')?.value?.trim() || '';
 
             // Ambil item dari tabel
@@ -18774,8 +18762,6 @@
             let resolvedPONumber = null;
             if (window._revisiROActive) {
                 resolvedPONumber = window._revisiROActive;
-            } else if (window._reservedRONo) {
-                resolvedPONumber = window._reservedRONo; // [ANTI-TABRAKAN v2]
             } else if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
                 const catCode = CATEGORY_CODE[categoryEl.value];
                 const dateStr = formatDateForPO(new Date());
@@ -19304,8 +19290,6 @@
             let resolvedPONumber = null;
             if (window._revisiPOActive) {
                 resolvedPONumber = window._revisiPOActive;
-            } else if (window._reservedPONo) {
-                resolvedPONumber = window._reservedPONo; // [ANTI-TABRAKAN v2] nomor resmi dari server, bukan tebakan
             } else if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
                 const catCode = CATEGORY_CODE[categoryEl.value];
                 const dateStr = formatDateForPO(new Date());
