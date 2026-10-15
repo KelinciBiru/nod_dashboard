@@ -17819,18 +17819,36 @@
             _isSubmittingFormPO = true;
             showProgressOverlay('Membuat PDF PO...');
             try {
+                // [FIX BUG DUPLIKAT PO] Buat idempotencyKey HANYA kalau belum
+                // ada (percobaan pertama utk PO ini) — retry otomatis/klik
+                // ulang di bawah tetap memakai key yang SAMA sampai sukses.
+                if (!_poIdempotencyKey) _poIdempotencyKey = _newPOIdempotencyKey();
+
+                // [FIX 39] Minta No. PO ke SERVER dulu, baru buat PDF dengan nomor itu —
+                // supaya nomor di PDF, nama file, QR, dan sheet PASTI sama.
+                const tanggalPO = formatDateForPO(new Date());
+                setProgressOverlay(10, 'Mengambil No. PO dari server...');
+                const rsv = await submitWithLockRetry(API_URLS.purchaseOrder, {
+                    action: 'reservePONumber',
+                    token: sessionToken,
+                    idempotencyKey: _poIdempotencyKey,
+                    categoryCode: CATEGORY_CODE[categoryEl.value],
+                    tanggal: tanggalPO,
+                }, {
+                    timeoutMs: 30000,
+                    onWait: (n, max) => setProgressOverlay(10, 'Server sedang ramai, mencoba lagi (' + n + '/' + (max - 1) + ')...')
+                });
+                if (!rsv || rsv.success === false || !rsv.noPO) throw new Error((rsv && rsv.message) || 'Gagal mengambil No. PO dari server.');
+                const reservedNoPO = rsv.noPO;
+
                 // ── Generate PDF Request Order dari isi form (menggantikan tombol Download PDF terpisah) ──
-                const pdfResult = await buildRequestOrderPDF();
+                setProgressOverlay(25, 'Membuat PDF PO...');
+                const pdfResult = await buildRequestOrderPDF({ reservedNoPO });
                 if (!pdfResult) { setSubmitLoading(false); return; }
                 const { doc, fileName } = pdfResult;
                 const pdfBlob = doc.output('blob');
                 const fileData = doc.output('datauristring').split(',')[1];
                 setProgressOverlay(45, 'Mengirim PO ke server...');
-
-                // [FIX BUG DUPLIKAT PO] Buat idempotencyKey HANYA kalau belum
-                // ada (percobaan pertama utk PO ini) — retry otomatis/klik
-                // ulang di bawah tetap memakai key yang SAMA sampai sukses.
-                if (!_poIdempotencyKey) _poIdempotencyKey = _newPOIdempotencyKey();
 
                 const payload = {
                     action: 'submitPO',
@@ -17845,7 +17863,8 @@
                     category: categoryEl.value,
                     noFaktur: _isFakturCategory(categoryEl.value) ? (document.getElementById('po-no-faktur')?.value?.trim() || '') : '',
                     categoryCode: CATEGORY_CODE[categoryEl.value],
-                    tanggal: formatDateForPO(new Date()),
+                    tanggal: tanggalPO,
+                    reservedNoPO: reservedNoPO, // [FIX 39]
                     isPreOrder: isPreOrder,
                     needApproval: needApproval,
                     fileData,
@@ -17855,7 +17874,12 @@
                 const result = await submitWithLockRetry(API_URLS.purchaseOrder, payload, {
                     onWait: (n, max, ms, why) => setProgressOverlay(45, why === 'timeout' ? 'Koneksi lambat, memastikan data terkirim...' : 'Server sedang ramai, mencoba lagi (' + n + '/' + (max - 1) + ')...')
                 });
-                if (result && result.success === false) throw new Error(result.message || 'Gagal mengirim PO.');
+                if (result && result.success === false) {
+                    // [FIX 39] Nomor reservasi ditolak server -> lepas key supaya klik berikutnya meminta nomor baru.
+                    if (result.reservationMismatch) _poIdempotencyKey = null;
+                    throw new Error(result.message || 'Gagal mengirim PO.');
+                }
+                if (result.po && result.po !== reservedNoPO) console.warn('[FIX 39] No. PO server (' + result.po + ') != PDF (' + reservedNoPO + ')');
                 setProgressOverlay(100, 'Selesai!');
                 const statusNote = result.status === 'Pre-Order'
                     ? ' (status: Pre-Order)'
@@ -19236,7 +19260,8 @@
         // tombol "Download PDF" terpisah sudah dihapus; PDF sekarang dibuat otomatis
         // saat tombol "Kirim PO" diklik)
         // =========================================================================
-        async function buildRequestOrderPDF() {
+        async function buildRequestOrderPDF(opts) {
+            opts = opts || {};
             const namaEl = document.getElementById('nama');
             const categoryEl = document.getElementById('category');
             const allocatedToEl = document.getElementById('allocated-to');
@@ -19290,6 +19315,9 @@
             let resolvedPONumber = null;
             if (window._revisiPOActive) {
                 resolvedPONumber = window._revisiPOActive;
+            } else if (opts.reservedNoPO) {
+                // [FIX 39] No. PO sudah DICADANGKAN server — pakai apa adanya (tanpa tebak-tebakan dari getPOData).
+                resolvedPONumber = opts.reservedNoPO;
             } else if (categoryEl && categoryEl.value && CATEGORY_CODE[categoryEl.value]) {
                 const catCode = CATEGORY_CODE[categoryEl.value];
                 const dateStr = formatDateForPO(new Date());
