@@ -19152,13 +19152,17 @@
             };
 
             try {
-                const res = await cachedFetch(API_URLS.purchaseOrder + '?action=getHampersPackages', 'getHampersPackages');
+                // [FIX 41] selalu ambil data terbaru (jangan pakai hasil lama yang mungkin kosong)
+                clearCache('getHampersPackages');
+                const res = await cachedFetch(API_URLS.purchaseOrder + '?action=getHampersPackages&_=' + Date.now(), 'getHampersPackages');
                 if (!res || res.success === false || !Array.isArray(res.packages)) {
                     clearCache('getHampersPackages');
                     throw new Error((res && res.message) || 'Respons server tidak valid. Pastikan GAS sudah di-deploy ulang (New version).');
                 }
                 if (!document.getElementById('po-hampers-modal')) return; // modal sudah ditutup user
                 _hampersPOState.packages = res.packages;
+                _hampersPOState.meta = res.meta || null;
+                try { console.log('[Hampers Package] meta:', res.meta); } catch (_) { }
                 fillSelect(res.packages.map(p => p.name));
                 statusEl.textContent = 'Pilih package untuk menampilkan daftar produknya.';
             } catch (err) {
@@ -19175,7 +19179,8 @@
             const addBtn = document.getElementById('po-hampers-add-btn');
             const statusEl = document.getElementById('po-hampers-status');
             if (!box) return;
-            const pkg = (_hampersPOState.packages || []).find(p => p.name === pkgName) || null;
+            const _normPkg = (x) => String(x || '').trim().toLowerCase();
+            const pkg = (_hampersPOState.packages || []).find(p => _normPkg(p.name) === _normPkg(pkgName)) || null;
             _hampersPOState.current = pkg;
             if (!pkg) {
                 box.innerHTML = '';
@@ -19184,7 +19189,15 @@
             }
             const items = pkg.items || [];
             if (!items.length) {
-                box.innerHTML = '<div class="p-4 text-center text-sm text-gray-400 italic border rounded-lg">Belum ada produk untuk package ini di sheet "Hampers Package".</div>';
+                const _m = _hampersPOState.meta || null;
+                let _diag = '';
+                if (_m) {
+                    const cols = _m.columns ? Object.keys(_m.columns).map(k => k + '=' + _m.columns[k]).join(', ') : '';
+                    _diag = '<div class="mt-2 text-xs text-gray-400 not-italic">Layout terbaca: ' + escapeHtml(String(_m.layout || '-')) +
+                        (_m.headerRow ? ' · baris judul: ' + _m.headerRow : '') + (cols ? ' · kolom: ' + escapeHtml(cols) : '') +
+                        (_m.note ? '<br>' + escapeHtml(_m.note) : '') + '</div>';
+                }
+                box.innerHTML = '<div class="p-4 text-center text-sm text-gray-400 italic border rounded-lg">Belum ada produk untuk package ini di sheet "Hampers Package".' + _diag + '</div>';
                 if (addBtn) addBtn.disabled = true;
                 return;
             }
