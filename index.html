@@ -17075,6 +17075,10 @@
                         <svg class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                         Tambah Baris
                     </button>
+                    <button type="button" id="po-hampers-btn" onclick="bukaHampersPackagePO()" class="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-xs transition shadow-sm">
+                        <svg class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12v8a1 1 0 01-1 1H5a1 1 0 01-1-1v-8m16 0H4m16 0V9a1 1 0 00-1-1H5a1 1 0 00-1 1v3m8-4v13m0-13c-1.5-3-5-3.5-5-1.5S10 8 12 8zm0 0c1.5-3 5-3.5 5-1.5S14 8 12 8z"/></svg>
+                        Hampers Package
+                    </button>
                 </div>
             </div>
 
@@ -19074,6 +19078,223 @@
             if (tbody.querySelectorAll('tr').length === 0) {
                 tbody.innerHTML = '<tr data-placeholder><td colspan="7" class="p-6 text-center text-gray-400 italic">Klik "Tambah Baris" untuk menambah item</td></tr>';
             }
+        }
+
+        // =========================================================================
+        // FORM PO: HAMPERS PACKAGE
+        // Tombol "Hampers Package" di bawah tabel Detail Item. User memilih salah
+        // satu Package (LE GRAND (nod. x Harvest), MAXIMO GIFT SET, IZZIO GIFT SET),
+        // lalu daftar produknya tampil (sumber: sheet "Hampers Package" di
+        // spreadsheet "Purchase Order nod." lewat GAS ?action=getHampersPackages).
+        // User menentukan Qty Package + Qty per item; Qty di tabel Detail Item =
+        // Qty Package x Qty per item. Setiap produk masuk sebagai baris biasa
+        // sehingga Kirim PO, PDF, preview No. PO & draft autosave tetap sama.
+        // =========================================================================
+        const HAMPERS_PO_FALLBACK_NAMES = ['LE GRAND (nod. x Harvest)', 'MAXIMO GIFT SET', 'IZZIO GIFT SET'];
+        let _hampersPOState = { packages: [], current: null };
+
+        function _closeHampersPackagePO() {
+            const m = document.getElementById('po-hampers-modal');
+            if (m) m.remove();
+            document.body.style.overflow = '';
+        }
+
+        async function bukaHampersPackagePO() {
+            if (!document.getElementById('po-item-table-body')) return;
+            _closeHampersPackagePO();
+            _hampersPOState = { packages: [], current: null };
+
+            const modal = document.createElement('div');
+            modal.id = 'po-hampers-modal';
+            modal.className = 'fixed inset-0 flex items-center justify-center';
+            modal.style.cssText = 'z-index:9999;background:rgba(0,0,0,0.6);padding:16px;';
+            modal.addEventListener('mousedown', e => { if (e.target === modal) _closeHampersPackagePO(); });
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col" style="max-height:90vh;">
+                    <div class="flex items-center justify-between px-5 py-3 border-b">
+                        <h3 class="text-base font-bold text-gray-800">Hampers Package</h3>
+                        <button type="button" onclick="_closeHampersPackagePO()" class="text-gray-400 hover:text-gray-700 text-xl leading-none" title="Tutup">&times;</button>
+                    </div>
+                    <div class="p-5 overflow-y-auto" style="min-height:120px;">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="sm:col-span-2">
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Package</label>
+                                <select id="po-hampers-select" class="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-400 outline-none" disabled>
+                                    <option value="">Memuat daftar package...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Qty Package</label>
+                                <input type="number" id="po-hampers-qty" min="1" step="1" value="1" class="w-full p-2.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-purple-400 outline-none">
+                            </div>
+                        </div>
+                        <p id="po-hampers-status" class="text-xs text-gray-400 mt-2"></p>
+                        <div id="po-hampers-items" class="mt-3"></div>
+                    </div>
+                    <div class="flex flex-col-reverse sm:flex-row gap-2 justify-end px-5 py-3 border-t bg-gray-50 rounded-b-xl">
+                        <button type="button" onclick="_closeHampersPackagePO()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-200 text-gray-700 hover:bg-gray-300 transition">Batal</button>
+                        <button type="button" id="po-hampers-add-btn" onclick="_tambahkanHampersKeFormPO()" class="px-4 py-2 rounded-lg text-sm font-bold bg-purple-600 text-white hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Tambahkan ke Detail Item</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            document.body.style.overflow = 'hidden';
+
+            const sel = document.getElementById('po-hampers-select');
+            const statusEl = document.getElementById('po-hampers-status');
+            sel.addEventListener('change', () => _renderHampersItemsPO(sel.value));
+            document.getElementById('po-hampers-qty').addEventListener('input', _recalcHampersTotalsPO);
+
+            // Isi dropdown: pakai 3 nama resmi dulu supaya langsung bisa dipilih, data produk menyusul
+            const fillSelect = (names) => {
+                sel.innerHTML = '<option value="">— Pilih Package —</option>' +
+                    names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+                sel.disabled = false;
+            };
+
+            try {
+                const res = await cachedFetch(API_URLS.purchaseOrder + '?action=getHampersPackages', 'getHampersPackages');
+                if (!res || res.success === false || !Array.isArray(res.packages)) {
+                    clearCache('getHampersPackages');
+                    throw new Error((res && res.message) || 'Respons server tidak valid. Pastikan GAS sudah di-deploy ulang (New version).');
+                }
+                if (!document.getElementById('po-hampers-modal')) return; // modal sudah ditutup user
+                _hampersPOState.packages = res.packages;
+                fillSelect(res.packages.map(p => p.name));
+                statusEl.textContent = 'Pilih package untuk menampilkan daftar produknya.';
+            } catch (err) {
+                console.error('[Hampers Package] gagal memuat:', err);
+                if (!document.getElementById('po-hampers-modal')) return;
+                fillSelect(HAMPERS_PO_FALLBACK_NAMES);
+                statusEl.textContent = 'Gagal memuat data package: ' + (err && err.message ? err.message : err);
+                statusEl.className = 'text-xs text-red-500 mt-2';
+            }
+        }
+
+        function _renderHampersItemsPO(pkgName) {
+            const box = document.getElementById('po-hampers-items');
+            const addBtn = document.getElementById('po-hampers-add-btn');
+            const statusEl = document.getElementById('po-hampers-status');
+            if (!box) return;
+            const pkg = (_hampersPOState.packages || []).find(p => p.name === pkgName) || null;
+            _hampersPOState.current = pkg;
+            if (!pkg) {
+                box.innerHTML = '';
+                if (addBtn) addBtn.disabled = true;
+                return;
+            }
+            const items = pkg.items || [];
+            if (!items.length) {
+                box.innerHTML = '<div class="p-4 text-center text-sm text-gray-400 italic border rounded-lg">Belum ada produk untuk package ini di sheet "Hampers Package".</div>';
+                if (addBtn) addBtn.disabled = true;
+                return;
+            }
+            statusEl.className = 'text-xs text-gray-400 mt-2';
+            statusEl.textContent = items.length + ' produk. Atur Qty per item (per 1 package); centang/hapus centang untuk menyertakan produk.';
+            box.innerHTML = `
+                <div class="overflow-x-auto border rounded-lg">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-800 text-white">
+                                <th class="p-2 text-center" style="width:36px"><input type="checkbox" id="po-hampers-check-all" checked></th>
+                                <th class="p-2 text-left" style="min-width:80px">ID</th>
+                                <th class="p-2 text-left" style="min-width:200px">Item</th>
+                                <th class="p-2 text-center" style="width:100px">Qty / Package</th>
+                                <th class="p-2 text-center" style="width:70px">UOM</th>
+                                <th class="p-2 text-center" style="width:80px">Total Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody id="po-hampers-tbody">
+                            ${items.map((it, i) => `
+                            <tr class="border-b border-gray-100 ${i % 2 ? 'bg-gray-50' : 'bg-white'}" data-idx="${i}">
+                                <td class="p-2 text-center"><input type="checkbox" class="po-hampers-chk" checked></td>
+                                <td class="p-2 text-gray-600">${escapeHtml(it.id || '')}</td>
+                                <td class="p-2 font-medium">${escapeHtml(it.nama || '')}</td>
+                                <td class="p-2 text-center"><input type="number" min="0" step="1" value="${escapeHtml(String(it.qty || 1))}" class="po-hampers-itemqty w-full p-1.5 border border-gray-300 rounded text-center text-xs focus:ring-1 focus:ring-purple-400 outline-none"></td>
+                                <td class="p-2 text-center text-gray-600">${escapeHtml(it.uom || '')}</td>
+                                <td class="p-2 text-center font-bold text-purple-700 po-hampers-total">0</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            const tb = document.getElementById('po-hampers-tbody');
+            tb.addEventListener('input', _recalcHampersTotalsPO);
+            tb.addEventListener('change', _recalcHampersTotalsPO);
+            document.getElementById('po-hampers-check-all').addEventListener('change', e => {
+                tb.querySelectorAll('.po-hampers-chk').forEach(c => { c.checked = e.target.checked; });
+                _recalcHampersTotalsPO();
+            });
+            if (addBtn) addBtn.disabled = false;
+            _recalcHampersTotalsPO();
+        }
+
+        function _hampersPkgQtyPO() {
+            const v = parseFloat(document.getElementById('po-hampers-qty')?.value);
+            return (isFinite(v) && v > 0) ? v : 0;
+        }
+
+        function _recalcHampersTotalsPO() {
+            const pkgQty = _hampersPkgQtyPO();
+            document.querySelectorAll('#po-hampers-tbody tr').forEach(tr => {
+                const q = parseFloat(tr.querySelector('.po-hampers-itemqty')?.value);
+                const total = (isFinite(q) && q > 0 && pkgQty > 0) ? Math.round(q * pkgQty * 100) / 100 : 0;
+                const cell = tr.querySelector('.po-hampers-total');
+                if (cell) cell.textContent = total;
+                tr.style.opacity = tr.querySelector('.po-hampers-chk')?.checked ? '' : '0.45';
+            });
+        }
+
+        async function _tambahkanHampersKeFormPO() {
+            const pkg = _hampersPOState.current;
+            const tbody = document.getElementById('po-item-table-body');
+            if (!pkg || !tbody) return;
+            const pkgQty = _hampersPkgQtyPO();
+            if (!pkgQty) { showToastAlert('warning', 'Qty Package belum valid', 'Isi Qty Package minimal 1.'); return; }
+
+            const picked = [];
+            document.querySelectorAll('#po-hampers-tbody tr').forEach(tr => {
+                if (!tr.querySelector('.po-hampers-chk')?.checked) return;
+                const it = pkg.items[parseInt(tr.dataset.idx, 10)];
+                const q = parseFloat(tr.querySelector('.po-hampers-itemqty')?.value);
+                if (!it || !isFinite(q) || q <= 0) return;
+                picked.push({ it, total: Math.round(q * pkgQty * 100) / 100 });
+            });
+            if (!picked.length) { showToastAlert('warning', 'Belum ada item', 'Centang minimal satu produk dengan Qty lebih dari 0.'); return; }
+
+            // Lengkapi ID yang kosong di sheet dari master "LIST"
+            let master = [];
+            try { master = await getSourceItems(); } catch (_) { master = []; }
+            const idByName = {};
+            (Array.isArray(master) ? master : []).forEach(m => { if (m && m.nama) idByName[String(m.nama).trim().toLowerCase()] = m.id || ''; });
+
+            const noteText = 'Hampers: ' + pkg.name + ' x' + pkgQty;
+            const isEmptyRow = (tr) => !tr.querySelector('.po-item-nama')?.value.trim() && !tr.querySelector('.po-item-id')?.value.trim();
+            const rows = [];
+            for (const p of picked) {
+                let tr = Array.from(tbody.querySelectorAll('tr:not([data-placeholder])')).find(isEmptyRow);
+                if (!tr) tr = tambahBarisFormPO(false);
+                if (!tr) continue;
+                const nama = String(p.it.nama || '').trim();
+                const idEl = tr.querySelector('.po-item-id');
+                const namaEl = tr.querySelector('.po-item-nama');
+                const qtyEl = tr.querySelector('.po-item-qty');
+                const noteEl = tr.querySelector('.po-item-note');
+                if (idEl) idEl.value = p.it.id || idByName[nama.toLowerCase()] || '';
+                if (namaEl) { namaEl.value = nama; namaEl.title = nama; }
+                if (qtyEl) qtyEl.value = p.total;
+                if (noteEl) { noteEl.value = noteText; autoResizeTextarea(noteEl); }
+                rows.push({ tr, nama, uom: p.it.uom });
+            }
+
+            // UOM & Description otomatis (sheet Report Summary / List Category); UOM dari sheet Hampers Package diutamakan
+            await Promise.all(rows.map(async r => {
+                try { await autoFillUomDescForRow(r.tr, r.nama); } catch (_) { }
+                if (r.uom) _setSelectValueCaseInsensitive(r.tr.querySelector('.po-item-uom'), r.uom);
+            }));
+
+            _closeHampersPackagePO();
+            if (typeof updatePOPreview === 'function') updatePOPreview();
+            if (typeof _formPOAutosaveHandler === 'function') _formPOAutosaveHandler();
+            showToastAlert('success', 'Hampers Package ditambahkan', rows.length + ' item dari "' + pkg.name + '" (x' + pkgQty + ') masuk ke Detail Item.');
         }
 
         // =========================================================================
