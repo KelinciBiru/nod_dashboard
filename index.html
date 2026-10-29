@@ -19677,21 +19677,9 @@
             y += Math.max(infoLeft.length * lineH, rightY - y) + 6;
 
             // ── Tabel Item ──
-            const tableBody = items.map((it, idx) => [
-                String(idx + 1),
-                it.id || '-',
-                it.nama,
-                it.qty || '-',
-                it.uom || '-',
-                it.description || '-',
-                it.note || '-'
-            ]);
-
-            doc.autoTable({
-                startY: y,
-                head: [['No', 'ID', 'Item', 'Qty', 'UOM', 'Description', 'Note']],
-                body: tableBody,
-                theme: 'grid',
+            // [BARU] Kategori Event & Outlet: item dipisah per kategori "List Category"
+            // (Machine Selling selalu paling atas). Kategori lain: tabel tunggal seperti semula.
+            const _roCommon = {
                 styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
@@ -19702,7 +19690,43 @@
                     6: { cellWidth: 32 },
                 },
                 margin: { left: marginX, right: marginX },
-            });
+            };
+            let _roGroupedDone = false;
+            if (_isGroupedItemPdfCategory(categoryEl ? categoryEl.value : '')) {
+                try {
+                    const _roGroups = await _groupItemsForPdf(items);
+                    _drawGroupedItemTables(doc, Object.assign({
+                        startY: y,
+                        groups: _roGroups,
+                        head: ['No', 'ID', 'Item', 'Qty', 'UOM', 'Description', 'Note'],
+                        rowFn: (it, no) => [String(no), it.id || '-', it.nama, it.qty || '-', it.uom || '-', it.description || '-', it.note || '-'],
+                    }, _roCommon, {
+                        // Lebar kolom dikunci supaya kolom antar-kelompok sejajar rapi.
+                        columnStyles: Object.assign({}, _roCommon.columnStyles, { 2: { cellWidth: 52 }, 5: { cellWidth: 39 } })
+                    }));
+                    _roGroupedDone = true;
+                } catch (errGrp) {
+                    console.warn('[Request Order PDF] Gagal mengelompokkan item per kategori, memakai tabel tunggal:', errGrp);
+                }
+            }
+            if (!_roGroupedDone) {
+                const tableBody = items.map((it, idx) => [
+                    String(idx + 1),
+                    it.id || '-',
+                    it.nama,
+                    it.qty || '-',
+                    it.uom || '-',
+                    it.description || '-',
+                    it.note || '-'
+                ]);
+
+                doc.autoTable(Object.assign({
+                    startY: y,
+                    head: [['No', 'ID', 'Item', 'Qty', 'UOM', 'Description', 'Note']],
+                    body: tableBody,
+                    theme: 'grid',
+                }, _roCommon));
+            }
 
             // ── Note Khusus ──
             let finalY = doc.lastAutoTable.finalY + 6;
@@ -20604,7 +20628,12 @@
                         // kata-katanya satu per satu ke bucket desc — pada kasus
                         // terparah nyaris seluruh nama barang "hilang" dan yang
                         // tersisa di bucket name hanya token seperti "-".
-                        const isDescWordToken = DESC_WORDS.has(s.toLowerCase());
+                        // [FIX] Token Description boleh UTUH satu string (mis. "Machine Selling") — terjadi bila
+                        // kolom Description cukup lebar sehingga tidak terbungkus jadi 2 baris. Semua
+                        // kata penyusunnya harus berasal dari VALID_DESC agar nama barang tidak ikut terambil.
+                        const _sLow = s.toLowerCase();
+                        const isDescWordToken = DESC_WORDS.has(_sLow) || isDescription(s) ||
+                            _sLow.split(/\s+/).every(w => DESC_WORDS.has(w));
                         allowedCols = isDescWordToken
                             ? colKeys.filter(k => k === 'name' || k === 'desc' || k === 'note')
                             : colKeys.filter(k => k === 'name' || k === 'note');
@@ -20667,7 +20696,8 @@
                 return { id: idStr, nama_barang: namaStr, qty_po: qty, uom, description: desc, note: noteRaw };
             }
 
-            for (const rows of pageData) {
+            for (const _rowsRaw of pageData) {
+                const rows = _dropGroupedPdfChromeRows(_rowsRaw); // [BARU] abaikan judul kelompok & header berulang
                 let hdrIdx = -1;
                 let cols = null; // { no, name, qty, uom, desc } → x position of each header
                 let pendingTokens = []; // token dari baris fisik yang menunggu digabung jadi 1 item
@@ -21343,12 +21373,14 @@
             // (supaya revisi No. Faktur di Form PO ikut terbaca); fallback ke hasil auto-fill terakhir. ──
             let noFakturDO = '';
             let showNoFakturDO = false;
+            let kategoriDO = ''; // [BARU] kategori PO (dipakai untuk pengelompokan item per kategori List Category)
             // [PERBAIKAN V2] Pakai data yang SUDAH diambil saat No. PO dipilih (_procPOMeta, maks 2 menit)
             // — tidak perlu round-trip GAS lagi saat submit. Fetch ulang hanya sebagai fallback.
             const _mDO = window._procPOMeta;
             if (_mDO && _mDO.noPO === String(noPO).trim() && _mDO.hasKategori && _mDO.fetchedAt && (Date.now() - _mDO.fetchedAt) < 120000) {
                 showNoFakturDO = _isFakturCategory(String(_mDO.kategori || '').trim());
                 noFakturDO = String(_mDO.noFaktur || '').trim();
+                kategoriDO = String(_mDO.kategori || '').trim();
             } else {
             try {
                 const fkRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
@@ -21356,12 +21388,14 @@
                 if (fkData && fkData.success) {
                     showNoFakturDO = _isFakturCategory(String(fkData.kategori || '').trim());
                     noFakturDO = String(fkData.noFaktur || '').trim();
+                    kategoriDO = String(fkData.kategori || '').trim();
                 }
             } catch (err) {
                 const meta = window._procPOMeta;
                 if (meta && meta.noPO === String(noPO).trim()) {
                     showNoFakturDO = _isFakturCategory(String(meta.kategori || '').trim());
                     noFakturDO = String(meta.noFaktur || '').trim();
+                    kategoriDO = String(meta.kategori || '').trim();
                 }
                 console.warn('[DO No. Faktur] Gagal mengambil No. Faktur:', err);
             }
@@ -21472,21 +21506,9 @@
             y += Math.max(infoLeft.length * lineH, rightY - y) + 6;
 
             // ── Tabel Item ──
-            const tableBody = items.map((it, idx) => [
-                String(idx + 1),
-                it.id || '-',
-                it.nama,
-                it.qty || '-',
-                it.uom || '-',
-                it.description || '-',
-                it.remark || '-'
-            ]);
-
-            doc.autoTable({
-                startY: y,
-                head: [['No', 'ID', 'Nama Barang', 'Qty', 'UOM', 'Description', 'Remark']],
-                body: tableBody,
-                theme: 'grid',
+            // [BARU] Kategori Event & Outlet: item dipisah per kategori "List Category"
+            // (Machine Selling selalu paling atas). Kategori lain: tabel tunggal seperti semula.
+            const _doCommon = {
                 styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.2, valign: 'middle', overflow: 'linebreak' },
                 headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
@@ -21497,7 +21519,43 @@
                     6: { cellWidth: 28 },
                 },
                 margin: { left: marginX, right: marginX },
-            });
+            };
+            let _doGroupedDone = false;
+            if (_isGroupedItemPdfCategory(kategoriDO)) {
+                try {
+                    const _doGroups = await _groupItemsForPdf(items);
+                    _drawGroupedItemTables(doc, Object.assign({
+                        startY: y,
+                        groups: _doGroups,
+                        head: ['No', 'ID', 'Nama Barang', 'Qty', 'UOM', 'Description', 'Remark'],
+                        rowFn: (it, no) => [String(no), it.id || '-', it.nama, it.qty || '-', it.uom || '-', it.description || '-', it.remark || '-'],
+                    }, _doCommon, {
+                        // Lebar kolom dikunci supaya kolom antar-kelompok sejajar rapi.
+                        columnStyles: Object.assign({}, _doCommon.columnStyles, { 2: { cellWidth: 54 }, 5: { cellWidth: 39 } })
+                    }));
+                    _doGroupedDone = true;
+                } catch (errGrp) {
+                    console.warn('[Delivery Order PDF] Gagal mengelompokkan item per kategori, memakai tabel tunggal:', errGrp);
+                }
+            }
+            if (!_doGroupedDone) {
+                const tableBody = items.map((it, idx) => [
+                    String(idx + 1),
+                    it.id || '-',
+                    it.nama,
+                    it.qty || '-',
+                    it.uom || '-',
+                    it.description || '-',
+                    it.remark || '-'
+                ]);
+
+                doc.autoTable(Object.assign({
+                    startY: y,
+                    head: [['No', 'ID', 'Nama Barang', 'Qty', 'UOM', 'Description', 'Remark']],
+                    body: tableBody,
+                    theme: 'grid',
+                }, _doCommon));
+            }
 
             // ── Tanda Tangan ──
             let finalY = doc.lastAutoTable.finalY + 18;
@@ -21765,12 +21823,152 @@
                 const data = await res.json();
                 _itemAutoFillCache = {
                     uomMap: (data && data.uomMap) || {},
-                    descriptionMap: (data && data.descriptionMap) || {}
+                    descriptionMap: (data && data.descriptionMap) || {},
+                    categoryOrder: (data && Array.isArray(data.categoryOrder)) ? data.categoryOrder : []
                 };
             } catch (_) {
-                _itemAutoFillCache = { uomMap: {}, descriptionMap: {} };
+                _itemAutoFillCache = { uomMap: {}, descriptionMap: {}, categoryOrder: [] };
             }
             return _itemAutoFillCache;
+        }
+
+        // =========================================================================
+        // [BARU] PDF REQUEST ORDER & DELIVERY ORDER — ITEM DIPISAH PER KATEGORI
+        // Berlaku HANYA untuk kategori PO "Event" dan "Outlet". Item dikelompokkan
+        // sesuai kolom D (Kategori) pada sheet "List Category" (spreadsheet
+        // "Purchase Order nod."), dicocokkan lewat Nama Barang (kolom C).
+        //   - Kelompok "Machine Selling" SELALU di paling atas.
+        //   - Kelompok lain mengikuti urutan kemunculan kategori di sheet.
+        //   - Item yang tidak ditemukan di List Category memakai isi kolom
+        //     Description baris itu; kalau kosong -> kelompok "Lainnya" (paling bawah).
+        //   - Kategori PO lain (B2B, B2C, KOL, dst.) TIDAK berubah (tabel tunggal).
+        // =========================================================================
+        const PDF_GROUPED_PO_CATEGORIES = ['event', 'outlet'];
+        const PDF_GROUP_TOP = 'machine selling';
+        const PDF_GROUP_FALLBACK = 'Lainnya';
+
+        // -------------------------------------------------------------------------
+        // [BARU] PEMBACA PDF (Revisi PO / Process PO / Receive PO) — abaikan "chrome"
+        // layout berkelompok: baris judul kelompok ("Supplies  (5 item)") dan header
+        // kolom yang diulang per kelompok. Tanpa ini parser menganggapnya bagian
+        // dari item. PDF lama (tabel tunggal) tidak mengandung keduanya, jadi aman.
+        // -------------------------------------------------------------------------
+        const _PDF_GROUP_BAR_RE = /\(\s*\d+\s*item\s*\)\s*$/i;
+
+        /** Versi baris (pageData[].rows): buang baris judul kelompok & header kolom kedua dst. di halaman yang sama. */
+        function _dropGroupedPdfChromeRows(rows) {
+            let headerSeen = false;
+            return rows.filter(r => {
+                const t = r.tokens.map(x => x.str).join(' ').trim();
+                if (r.tokens.length <= 2 && _PDF_GROUP_BAR_RE.test(t)) return false;
+                const up = t.toUpperCase();
+                const isHdr = /\bNAME\b|\bITEM\b|\bNAMA BARANG\b|\bPRODUCT\b/.test(up) && /\bQTY\b|\bQUANTITY\b|\bJUMLAH\b/.test(up);
+                if (isHdr) {
+                    if (headerSeen) return false;
+                    headerSeen = true;
+                }
+                return true;
+            });
+        }
+
+        /** Versi token (tokens[] dengan page,x,y): buang judul kelompok & semua header "Nama Barang" selain yang pertama. */
+        function _stripGroupedPdfChromeTokens(tokens) {
+            if (!Array.isArray(tokens) || tokens.length === 0) return tokens;
+            let out = tokens.filter(t => !_PDF_GROUP_BAR_RE.test(String(t.str || '').trim()));
+            const hdrs = out.filter(t => /^NAMA\s*BARANG$/i.test(String(t.str || '').trim()))
+                .map(t => ({ page: t.page || 1, y: t.y }))
+                .sort((a, b) => a.page - b.page || a.y - b.y);
+            if (hdrs.length <= 1) return out;
+            const extra = hdrs.slice(1);
+            // Header pertama di halaman 1 dipertahankan (dipakai parser untuk posisi kolom);
+            // header yang diulang (per kelompok / per halaman) dibuang beserta token sebarisnya.
+            out = out.filter(t => !extra.some(h => (t.page || 1) === h.page && Math.abs(t.y - h.y) <= 8));
+            return out;
+        }
+
+        function _isGroupedItemPdfCategory(category) {
+            return PDF_GROUPED_PO_CATEGORIES.indexOf(String(category || '').trim().toLowerCase()) !== -1;
+        }
+
+        /** Kelompokkan item PDF per kategori "List Category". Return [{name, items[]}] sudah berurutan. */
+        async function _groupItemsForPdf(items) {
+            let data = await getItemAutoFillData();
+            // Kalau fetch sebelumnya gagal (map kosong & tersimpan di cache), coba sekali lagi.
+            if (!data || !data.descriptionMap || Object.keys(data.descriptionMap).length === 0) {
+                _itemAutoFillCache = null;
+                data = await getItemAutoFillData();
+            }
+            const descMap = (data && data.descriptionMap) || {};
+
+            // Urutan kategori mengikuti sheet (categoryOrder dari GAS; fallback: urutan nilai descMap).
+            const order = [];
+            const seenOrder = {};
+            const pushOrder = (c) => {
+                const k = String(c || '').trim().toLowerCase();
+                if (!k || seenOrder[k]) return;
+                seenOrder[k] = true;
+                order.push(k);
+            };
+            ((data && data.categoryOrder) || []).forEach(pushOrder);
+            Object.keys(descMap).forEach(k => pushOrder(descMap[k]));
+
+            const groups = {};   // key lowercase -> { name, items }
+            const firstSeen = []; // kategori yang tidak ada di sheet (dari Description baris)
+            items.forEach(it => {
+                const nameKey = String(it.nama || '').trim().toLowerCase();
+                let cat = descMap[nameKey] || '';
+                if (!cat) {
+                    const d = String(it.description || '').trim();
+                    cat = (d && d !== '-') ? d : '';
+                }
+                cat = String(cat).trim() || PDF_GROUP_FALLBACK;
+                const key = cat.toLowerCase();
+                if (!groups[key]) {
+                    groups[key] = { name: cat, items: [] };
+                    if (!seenOrder[key] && key !== PDF_GROUP_FALLBACK.toLowerCase()) firstSeen.push(key);
+                }
+                groups[key].items.push(it);
+            });
+
+            const finalOrder = [];
+            if (groups[PDF_GROUP_TOP]) finalOrder.push(PDF_GROUP_TOP);
+            order.forEach(k => { if (k !== PDF_GROUP_TOP && groups[k]) finalOrder.push(k); });
+            firstSeen.forEach(k => { if (k !== PDF_GROUP_TOP && finalOrder.indexOf(k) === -1) finalOrder.push(k); });
+            const fbKey = PDF_GROUP_FALLBACK.toLowerCase();
+            if (groups[fbKey] && finalOrder.indexOf(fbKey) === -1) finalOrder.push(fbKey);
+            return finalOrder.map(k => groups[k]);
+        }
+
+        /** Gambar 1 tabel per kelompok kategori (judul kelompok + header kolom diulang di tiap halaman).
+         *  Nomor urut berlanjut (1..N) di seluruh dokumen. Return posisi Y akhir tabel terakhir. */
+        function _drawGroupedItemTables(doc, opt) {
+            let y = opt.startY;
+            let no = 0;
+            const colCount = opt.head.length;
+            opt.groups.forEach(g => {
+                const body = g.items.map(it => { no++; return opt.rowFn(it, no); });
+                doc.autoTable({
+                    startY: y,
+                    head: [
+                        [{
+                            content: g.name + '  (' + g.items.length + ' item)',
+                            colSpan: colCount,
+                            styles: { halign: 'left', fillColor: [229, 231, 235], textColor: [17, 24, 39], fontStyle: 'bold', fontSize: 9, cellPadding: 2.4 }
+                        }],
+                        opt.head
+                    ],
+                    body: body,
+                    theme: 'grid',
+                    showHead: 'everyPage',
+                    rowPageBreak: 'avoid', // satu item tidak boleh terbelah antar-halaman (pembaca PDF butuh baris utuh)
+                    styles: opt.styles,
+                    headStyles: opt.headStyles,
+                    columnStyles: opt.columnStyles,
+                    margin: opt.margin,
+                });
+                y = doc.lastAutoTable.finalY + 4;
+            });
+            return doc.lastAutoTable.finalY;
         }
 
         /** Pilih <option> pada elemen <select> yang cocok (tanpa peduli huruf
@@ -25744,6 +25942,7 @@
          * Halaman 2+: lanjutan data tabel (mungkin ada header ulang)
          */
         function parseDeliveryOrderPDFText(tokens) {
+            tokens = _stripGroupedPdfChromeTokens(tokens); // [BARU] abaikan judul kelompok & header berulang (layout per kategori)
             const result = { noPO: '', tglProses: '', crewPacking: '', orderedBy: '', shipTo: '', shippingDate: '', items: [] };
             if (!tokens || tokens.length === 0) return result;
 
