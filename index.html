@@ -21002,7 +21002,7 @@
             sel.innerHTML = `<option value="">— Memuat daftar... —</option>`;
             if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-xs text-gray-400 mt-1'; }
             try {
-                const res = await fetchWithTimeout(WEB_APP_URL + '?action=listRequestOrderPDF', { redirect: 'follow' }, 30000);
+                const res = await fetchWithTimeout(WEB_APP_URL + '?action=listRequestOrderPDF&type=PO&days=120', { redirect: 'follow' }, 30000);
                 const result = await res.json();
 
                 // Bedakan: backend tidak mengenali action / error (result.success bukan true)
@@ -25068,7 +25068,99 @@
             }, 300);
         }
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwqrtvhwq2Erw9VlIsfsnBKiBpM4rHGJGEFVZjE5jh96Kzw8Z2fIsk34DP6wJvyUHs/exec";
+        // [FIX 43] Process PO sebelumnya memakai deployment GAS terpisah (URL lama
+        // AKfycbwqrtvh...). Sekarang DIGABUNG ke GAS utama (PO_GAS_URL): sudah di-keep-warm
+        // (keepGasWarm), tervalidasi token+role, dan anti-dobel 3 lapis (lihat FIX 43 di Code.gs).
+        // Nama WEB_APP_URL dipertahankan supaya semua pemanggil lama tetap jalan.
+        const WEB_APP_URL = PO_GAS_URL;
+
+        // [FIX 43] Kunci idempotensi Process PO disimpan di sessionStorage (bukan hanya memori
+        // halaman) — tetap SAMA walau tab di-refresh setelah timeout. Kunci baru dibuat hanya
+        // bila isi batch (No. PO + item) berubah atau sudah lewat 6 jam.
+        function _procHash(str) {
+            let h = 5381;
+            for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+            return (h >>> 0).toString(36);
+        }
+        function _procGetSubmitKey(noPO, items) {
+            const sig = _procHash(noPO + '|' + JSON.stringify(items)) + '_' + items.length;
+            let st = null;
+            try { st = JSON.parse(sessionStorage.getItem('procSubmitKey') || 'null'); } catch (_) { st = null; }
+            if (!st || st.sig !== sig || (Date.now() - (st.t || 0)) > 6 * 3600 * 1000) {
+                st = { sig: sig, key: 'outb_' + Date.now() + '_' + Math.random().toString(36).slice(2), t: Date.now() };
+                try { sessionStorage.setItem('procSubmitKey', JSON.stringify(st)); } catch (_) { }
+            }
+            window._procSubmitKey = st;
+            return st.key;
+        }
+        function _procClearSubmitKey() {
+            window._procSubmitKey = null;
+            try { sessionStorage.removeItem('procSubmitKey'); } catch (_) { }
+        }
+
+        // [FIX 43] Tanya server: "submit dengan key ini SUDAH tersimpan?" (cekOutboundStatus —
+        // baca cache lalu sheet, tanpa kunci → cepat walau server sibuk).
+        async function _cekOutboundStatus(idempotencyKey, noPO) {
+            try {
+                const res = await fetchWithTimeout(PO_GAS_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'cekOutboundStatus', token: sessionToken, idempotencyKey: idempotencyKey, noPO: noPO })
+                }, 12000);
+                const data = await res.json();
+                return (data && data.success && data.found && data.result) ? data.result : null;
+            } catch (e) {
+                return null; // gagal cek ≠ belum tersimpan; lanjut ke strategi retry
+            }
+        }
+
+        // [FIX 43] Kirim Process PO dengan strategi "cek dulu sebelum kirim ulang":
+        //  • timeout / jaringan putus / server balas retryable → TIDAK langsung kirim ulang buta;
+        //    tanya server dulu apakah percobaan sebelumnya SUDAH tersimpan.
+        //  • belum → tunggu (backoff) lalu kirim ulang dengan idempotencyKey yang SAMA.
+        //  • maksimal 3 percobaan (25/30/30 dtk) + 2x cek akhir sebelum menampilkan error.
+        async function _kirimOutboundAman(payload) {
+            const opts = {
+                method: 'POST',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain (hindari CORS preflight)
+                body: JSON.stringify(payload)
+            };
+            const TIMEOUTS = [25000, 30000, 30000];
+            const BACKOFF = [0, 2000, 4000];
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            let lastErr = null;
+            for (let i = 0; i < TIMEOUTS.length; i++) {
+                if (i > 0) {
+                    setProgressOverlay(40 + i * 15, 'Koneksi lambat, memastikan data tersimpan (percobaan ' + (i + 1) + '/' + TIMEOUTS.length + ')...');
+                    const done = await _cekOutboundStatus(payload.idempotencyKey, payload.noPO);
+                    if (done) return done; // percobaan sebelumnya ternyata sudah sukses
+                    await sleep(BACKOFF[i]);
+                }
+                try {
+                    const result = await fetchWriteWithRetry(PO_GAS_URL, opts, TIMEOUTS[i]);
+                    if (result && result.retryable && i < TIMEOUTS.length - 1) {
+                        lastErr = new Error(result.message || 'Server sibuk');
+                        continue; // server bilang data BELUM ditulis → aman diulang
+                    }
+                    if (result && result.serverMs) console.info('[Process PO] waktu proses server: ' + result.serverMs + ' ms' + (result.replayed ? ' (replay idempotent — ' + (result.duplicateBy || 'cache') + ')' : ''));
+                    return result;
+                } catch (err) {
+                    lastErr = err;
+                    console.warn('[Process PO] percobaan ' + (i + 1) + ' gagal:', err.message);
+                }
+            }
+            // Cek akhir: mungkin percobaan terakhir sebenarnya sudah masuk.
+            for (let k = 0; k < 2; k++) {
+                await sleep(3000);
+                const done = await _cekOutboundStatus(payload.idempotencyKey, payload.noPO);
+                if (done) return done;
+            }
+            const finalErr = lastErr || new Error('Server tidak merespons.');
+            finalErr.isGasTimeout = true; // = "belum terkonfirmasi" → UI menampilkan PDF + instruksi aman
+            throw finalErr;
+        }
 
         // [FIX] Guard anti-dobel-submit Process PO — pola sama dengan Process
         // Inbound: flag di-set SEBELUM modal konfirmasi tampil, supaya klik/tap
@@ -25160,7 +25252,7 @@
                 action: 'simpanOutbound',
                 token: sessionToken,
                 // [PERBAIKAN V2] key sama selama belum sukses → retry/klik ulang aman dari data ganda
-                idempotencyKey: (() => { const _sig = noPO + '|' + JSON.stringify(items); if (!window._procSubmitKey || window._procSubmitKey.sig !== _sig) window._procSubmitKey = { sig: _sig, key: 'outb_' + Date.now() + '_' + Math.random().toString(36).slice(2) }; return window._procSubmitKey.key; })(),
+                idempotencyKey: _procGetSubmitKey(noPO, items),
                 noPO: noPO,
                 orderedBy: orderedBy,
                 shipTo: shipTo,
@@ -25202,40 +25294,23 @@
                         { blob: _blob, fileName: pdfBuild.fileName });
                 }
 
-                // ── 2) & 3) Simpan data ke Outbound_Log (KRITIS — status PO ikut
-                //      berubah) dan simpan salinan PDF ke Drive (PENDUKUNG saja,
-                //      dipakai nanti di Receive PO) dijalankan PARALEL, bukan
-                //      berurutan. Sebelumnya kedua panggilan GAS ini di-await
-                //      satu-satu sehingga total waktu tunggu DOBEL — kalau upload
-                //      Drive saja sudah lambat/cold-start, user keburu timeout
-                //      sebelum sempat sampai ke modal share PDF, padahal PDF-nya
-                //      sendiri sudah selesai dibuat di browser sejak awal.
-                //      Upload ke Drive TIDAK di-await di sini (jalan di background)
-                //      karena kegagalannya tidak boleh menggagalkan proses utama —
-                //      PDF tetap bisa langsung di-share dari sini walau salinan
-                //      cadangan di Drive belum/gagal tersimpan.
-                // [PERBAIKAN V2] Ditunda 1 tick: request simpanOutbound terkirim DULU, baru encode base64 PDF.
-                setTimeout(() => {
-                    uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc })
-                        .catch(() => { /* sudah ditangani di dalam fungsinya */ });
-                }, 0);
-
-                // [FIX TIMEOUT PROCESS PO] Timeout dinaikkan dari 30 → 45 detik.
-                // Payload simpanOutbound bisa berisi banyak item + trigger update
-                // status PO_Data di sisi GAS, jadi rawan lebih lambat dari submit
-                // biasa terutama saat GAS baru cold-start. 30 detik sering kurang
-                // dan bikin user "digagalkan" duluan padahal server sebenarnya
-                // masih memproses (dan PDF-nya sendiri sudah selesai dibuat sejak
-                // langkah 1 di atas).
-                const result = await fetchWriteWithRetry(WEB_APP_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain untuk avoid CORS preflight
-                    body: JSON.stringify(payload)
-                }, 45000);
+                // ── 2) Simpan data ke Outbound_Log (KRITIS — status PO ikut berubah).
+                // [FIX 43] Upload salinan PDF ke Drive TIDAK lagi dikirim PARALEL dengan request ini:
+                // PDF base64 (beberapa MB) berebut bandwidth & eksekusi GAS sehingga simpan jadi
+                // lambat → timeout palsu ("server lambat") padahal data sebenarnya masuk. Upload
+                // baru dijalankan SETELAH simpan sukses (lihat di bawah). Pengiriman memakai
+                // strategi cek-dulu-sebelum-retry + idempotencyKey tetap → aman dari data ganda.
+                const result = await _kirimOutboundAman(payload);
 
                 if (result.success) {
                     setProgressOverlay(100, 'Selesai!');
+
+                    // [FIX 43] Data sudah tersimpan → BARU sekarang upload salinan PDF ke Drive
+                    // (background, tidak di-await; kegagalannya tidak menggagalkan proses utama).
+                    setTimeout(() => {
+                        uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc })
+                            .catch(() => { /* sudah ditangani di dalam fungsinya */ });
+                    }, 0);
 
                     // ── Status PO sudah diupdate oleh GAS Outbound sekaligus ──
                     const statusUpdated = result.statusUpdated === true;
@@ -25286,11 +25361,11 @@
                             : `No. PO: ${noPO} · ⚠️ status tidak ditemukan di PO_Data`)
                         : `${items.length} item tersimpan ke Outbound_Log`;
                     // [PERBAIKAN V2] Preview sudah terbuka sejak PDF jadi — cukup perbarui judul/status.
-                    window._procSubmitKey = null; // sukses → batch berikutnya dapat key baru
+                    _procClearSubmitKey(); // sukses → batch berikutnya dapat key baru
                     const _tEl = document.getElementById('pdf-preview-title');
                     const _sEl = document.getElementById('pdf-preview-subtitle');
                     if (_tEl) _tEl.textContent = '✅ Berhasil Diproses!';
-                    if (_sEl) _sEl.textContent = statusMsg;
+                    if (_sEl) _sEl.textContent = statusMsg + (result.replayed ? ' · ✔ sudah tersimpan sebelumnya (tidak dobel)' : '');
 
                 } else {
                     try { closePdfPreviewModal(); } catch (_) { }
@@ -25315,7 +25390,7 @@
                     showPdfPreviewModal(
                         pdfBuild.doc.output('bloburl'),
                         '⚠️ Server Lambat Merespon',
-                        `PDF sudah selesai dibuat & bisa langsung di-Share/Simpan. Data BISA JADI sudah tersimpan di server meski koneksi terputus — cek dulu status No. PO ${pdfBuild.noPO || ''} di Report Status sebelum kirim ulang, untuk menghindari data ganda.`,
+                        `PDF sudah selesai dibuat & bisa langsung di-Share/Simpan. Server belum membalas setelah beberapa percobaan & pengecekan otomatis, jadi data BELUM terkonfirmasi tersimpan. Klik "Proses" lagi — aman dari data ganda (server mengenali kiriman yang sama).`,
                         { blob: pdfBuild.doc.output('blob'), fileName: pdfBuild.fileName }
                     );
                 } else {
