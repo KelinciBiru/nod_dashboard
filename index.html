@@ -23124,8 +23124,8 @@
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
             };
-            const TIMEOUTS = [25000, 30000, 30000];
-            const BACKOFF = [0, 2000, 4000];
+            const TIMEOUTS = [35000, 50000, 50000]; // 35s pertama + 50s retry
+            const BACKOFF = [0, 5000, 10000];
             const sleep = ms => new Promise(r => setTimeout(r, ms));
             let lastErr = null;
             for (let i = 0; i < TIMEOUTS.length; i++) {
@@ -23149,8 +23149,8 @@
                 }
             }
             // Cek akhir: mungkin percobaan terakhir sebenarnya sudah masuk.
-            for (let k = 0; k < 2; k++) {
-                await sleep(3000);
+            for (let k = 0; k < 10; k++) {
+                await sleep(5000);
                 const done = await _cekInboundStatus(payload.idempotencyKey);
                 if (done) return done;
             }
@@ -25127,8 +25127,8 @@
                 headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain (hindari CORS preflight)
                 body: JSON.stringify(payload)
             };
-            const TIMEOUTS = [25000, 30000, 30000];
-            const BACKOFF = [0, 2000, 4000];
+            const TIMEOUTS = [35000, 50000, 50000]; // 35s pertama + 50s retry
+            const BACKOFF = [0, 5000, 10000];
             const sleep = ms => new Promise(r => setTimeout(r, ms));
             let lastErr = null;
             for (let i = 0; i < TIMEOUTS.length; i++) {
@@ -25152,8 +25152,8 @@
                 }
             }
             // Cek akhir: mungkin percobaan terakhir sebenarnya sudah masuk.
-            for (let k = 0; k < 2; k++) {
-                await sleep(3000);
+            for (let k = 0; k < 10; k++) {
+                await sleep(5000);
                 const done = await _cekOutboundStatus(payload.idempotencyKey, payload.noPO);
                 if (done) return done;
             }
