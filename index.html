@@ -25317,7 +25317,7 @@
                 kategori: kategori,
                 tanggalProsesPO: tglProses,
                 crewPacking: crewPacking,
-                deferStatus: noPO ? true : false,      // [FIX 46] status PO_Data diupdate terpisah (setPOReady), tidak menahan simpan
+                deferStatus: false,                    // [FIX 48] status PO_Data diupdate LANGSUNG oleh server saat simpan (server otomatis menunda bila sheet sedang lambat)
                 updatePOStatus: noPO ? true : false,   // flag: update status PO_Data
                 newPOStatus: 'Ready To Ship',
                 items: items
