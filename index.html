@@ -25478,6 +25478,8 @@
         // =========================================================================
 
         async function showReceivePO() {
+            try { _ensureJsPDF().catch(() => { }); } catch (_) { }   // [FIX 49] pemanasan: PDF mismatch tak menunggu CDN/logo
+            try { loadImageAsDataURL(NOD_LOGO_URL); } catch (_) { }
             document.getElementById('content-area').innerHTML = `
         <h1 class="text-2xl font-bold text-gray-700 mb-6">Receive PO</h1>
 
@@ -27091,6 +27093,49 @@
         // [FIX] Guard anti-dobel-submit Receive PO — pola sama dengan Process
         // Inbound/Process PO.
         let _isSubmittingReceivePO = false;
+        // [FIX 49] Receive PO — pola yang sama dgn Process PO/Inbound: idempotencyKey, cek status, kirim satu kali.
+        let _recvSubmitKey = null, _recvSubmitSig = '';
+        function _recvGetKey(noPO, tgl, items) {
+            const sig = noPO + '|' + tgl + '|' + JSON.stringify(items);
+            if (!_recvSubmitKey || _recvSubmitSig !== sig) {
+                _recvSubmitSig = sig;
+                _recvSubmitKey = 'recv_' + String(noPO).replace(/[^A-Za-z0-9_-]/g, '') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+            }
+            return _recvSubmitKey;
+        }
+        async function _cekReceiveStatus(idempotencyKey) {
+            try {
+                const res = await fetchWithTimeout(RECEIVE_GAS_URL, {
+                    method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'cekReceiveStatus', token: sessionToken, idempotencyKey: idempotencyKey })
+                }, 12000);
+                const data = await res.json();
+                return (data && data.success && data.found && data.result) ? data.result : null;
+            } catch (e) {
+                console.warn('[Submit] cek status gagal (jaringan/server):', e && e.message);
+                return null;
+            }
+        }
+        // Status PO di latar belakang — hanya dipakai bila server menunda (sheet sedang lambat) atau pada replay.
+        async function _finalizeReceiveBg(noPO, newPOStatus) {
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const res = await fetchWithTimeout(RECEIVE_GAS_URL, {
+                        method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'finalizeReceiveStatus', token: sessionToken, noPO: noPO, newPOStatus: newPOStatus })
+                    }, 120000);
+                    const j = await res.json();
+                    console.info('[Receive PO] finalizeReceiveStatus ' + noPO + ':', j && j.finalStatus, j && j.serverMs ? j.serverMs + ' ms' : '');
+                    if (j && j.success) return true;
+                } catch (e) {
+                    console.warn('[Receive PO] finalizeReceiveStatus percobaan ' + (i + 1) + ' gagal:', e && e.message);
+                }
+                await sleep(4000 * (i + 1));
+            }
+            if (typeof showBgToast === 'function') showBgToast('warning', 'Data receive tersimpan, tetapi status PO ' + noPO + ' belum terupdate di sheet. Cek Report Status.', 9000);
+            return false;
+        }
         async function simpanReceiveFinal() {
             if (_isSubmittingReceivePO) return;
             const tglTerima = document.getElementById('recv-tgl-terima')?.value || '';
@@ -27160,6 +27205,8 @@
                 updatePOStatus: true,
                 newPOStatus,   // 'Closed' jika semua Sesuai, 'Done' jika ada yang Tidak Sesuai
                 items,
+                idempotencyKey: _recvGetKey(noPO, tglTerima, items), // [FIX 49] retry/klik ganda tidak menulis dobel
+                deferStatus: false,
             };
 
             // [FIX TIMEOUT RECEIVE PO] Item mismatch (❌) sudah bisa ditentukan dari
@@ -27199,15 +27246,17 @@
             }
 
             try {
-                const result = await fetchWriteWithRetry(RECEIVE_GAS_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(payload),
-                }, 30000);
+                // [FIX 49] satu request + cek status paralel (lihat _submitSmooth); pesan progres di tombol.
+                const _spin = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> `;
+                const result = await _submitSmooth(RECEIVE_GAS_URL, payload,
+                    () => _cekReceiveStatus(payload.idempotencyKey),
+                    (m) => { if (saveBtn) saveBtn.innerHTML = _spin + m; });
 
                 if (result.success) {
-                    const statusUpdated = result.statusUpdated === true;
+                    _recvSubmitKey = null; // [FIX 49] sukses -> kunci baru utk submit berikutnya
+                    const _stDeferred = result.statusDeferred === true;
+                    const statusUpdated = result.statusUpdated === true || _stDeferred;
+                    if (_stDeferred) { _finalizeReceiveBg(noPO, newPOStatus); }
                     // Update badge di DOM Report Status jika ada
                     const statusCell = document.getElementById(`status-${noPO}`);
                     if (statusCell) {
@@ -27296,7 +27345,7 @@
                     try { pdfBuild.doc.save(pdfBuild.fileName); } catch (_) { /* simpan otomatis best-effort */ }
                     showPdfPreviewModal(
                         pdfBuild.doc.output('bloburl'),
-                        '⚠️ Server Lambat Merespon',
+                        '⚠️ Simpan Belum Terkonfirmasi',
                         `PDF item tidak sesuai sudah selesai dibuat & bisa langsung di-Share/Simpan. Data BISA JADI sudah tersimpan di server meski koneksi terputus — cek dulu status No. PO ${noPO} di Report Status sebelum kirim ulang, untuk menghindari data ganda.`
                     );
                 } else {
