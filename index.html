@@ -25199,6 +25199,31 @@
         // kedua yang masuk selagi modal konfirmasi masih terbuka langsung
         // diabaikan, bukan baru diblok setelah user klik "Ya".
         let _isSubmittingProcessPO = false;
+        // [FIX 46] Update status PO_Data -> Ready To Ship di LATAR BELAKANG setelah data Outbound tersimpan.
+        // Di spreadsheet berat langkah ini bisa puluhan detik; dulu dikerjakan DI DALAM request simpan
+        // (menahan kunci & respons). Sekarang terpisah: user tidak menunggu, ada retry, aman diulang.
+        async function _setPOReadyBg(noPO) {
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const res = await fetchWithTimeout(PO_GAS_URL, {
+                        method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'setPOReady', token: sessionToken, noPO: noPO })
+                    }, 120000);
+                    const j = await res.json();
+                    console.info('[Process PO] setPOReady ' + noPO + ':', j && j.statusUpdated ? 'OK' : 'TIDAK diubah', j && j.timing ? JSON.stringify(j.timing) : '', (j && j.reason) || '');
+                    if (j && j.success) {
+                        if (!j.statusUpdated && typeof showBgToast === 'function') showBgToast('warning', 'Status PO ' + noPO + ' tidak diubah di sheet: ' + (j.reason || 'periksa Report Status'), 8000);
+                        return !!j.statusUpdated;
+                    }
+                } catch (e) {
+                    console.warn('[Process PO] setPOReady percobaan ' + (i + 1) + ' gagal:', e && e.message);
+                }
+                await sleep(4000 * (i + 1));
+            }
+            if (typeof showBgToast === 'function') showBgToast('warning', 'Data tersimpan, tetapi status PO ' + noPO + ' belum terupdate di sheet. Cek Report Status.', 9000);
+            return false;
+        }
         async function simpanOutboundFinal() {
             if (_isSubmittingProcessPO) return;
             const orderedByEl = document.getElementById('proc-ordered-by');
@@ -25292,6 +25317,7 @@
                 kategori: kategori,
                 tanggalProsesPO: tglProses,
                 crewPacking: crewPacking,
+                deferStatus: noPO ? true : false,      // [FIX 46] status PO_Data diupdate terpisah (setPOReady), tidak menahan simpan
                 updatePOStatus: noPO ? true : false,   // flag: update status PO_Data
                 newPOStatus: 'Ready To Ship',
                 items: items
@@ -25346,8 +25372,10 @@
                             .catch(() => { /* sudah ditangani di dalam fungsinya */ });
                     }, 1500); // beri waktu UI menampilkan PDF/formulir bersih dulu
 
-                    // ── Status PO sudah diupdate oleh GAS Outbound sekaligus ──
-                    const statusUpdated = result.statusUpdated === true;
+                    // ── [FIX 46] Status PO diupdate terpisah di latar belakang (setPOReady); UI langsung optimistik ──
+                    const _stDeferred = result.statusDeferred === true;
+                    const statusUpdated = result.statusUpdated === true || _stDeferred;
+                    if (noPO && _stDeferred) { _setPOReadyBg(noPO); }
 
                     if (noPO && statusUpdated) {
                         // ── Update badge di DOM (Report Status) jika halaman sedang terbuka ──
