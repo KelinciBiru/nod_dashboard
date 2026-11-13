@@ -3485,7 +3485,7 @@
             let lastErr = null;
             for (let send = 1; send <= MAX_SENDS; send++) {
                 if (send > 1) {
-                    say('Menyambungkan ulang ke server, data tetap aman...');
+                    say('Memastikan data tersimpan...');
                     const before = await checkStatus();
                     if (before) return before;           // kiriman sebelumnya ternyata sudah tersimpan
                     await sleep(1500 + Math.random() * 1000);
@@ -3496,10 +3496,15 @@
                 const pollP = new Promise(async (resolve) => {
                     await sleep(POLL_AFTER_MS);
                     if (stopPoll) return;
-                    say('Server sedang sibuk, menunggu konfirmasi data tersimpan...');
+                    say('Menyimpan data...');
+                    let n = 0;
+                    const tPoll = Date.now();
                     while (!stopPoll) {
+                        n++;
                         const done = await checkStatus();
-                        if (done) { resolve({ kind: 'found', r: done }); return; }
+                        if (done) { console.info('[Submit] cek status #' + n + ': SUDAH tersimpan (' + Math.round((Date.now() - tPoll) / 1000) + ' dtk setelah mulai cek)'); resolve({ kind: 'found', r: done }); return; }
+                        if (n === 1 || n % 4 === 0) console.info('[Submit] cek status #' + n + ': belum tersimpan (' + Math.round((Date.now() - tPoll) / 1000) + ' dtk)');
+                        if (n === 5) say('Masih menyimpan, mohon tunggu — jangan tutup halaman.');
                         await sleep(POLL_EVERY_MS);
                     }
                 });
@@ -3512,7 +3517,7 @@
                         lastErr = new Error(r.message || 'Server sibuk');
                         continue;
                     }
-                    if (r && r.serverMs) console.info('[Submit] waktu proses server: ' + r.serverMs + ' ms' + (r.replayed ? ' (replay idempotent)' : ''));
+                    if (r && r.serverMs) console.info('[Submit] waktu proses server: ' + r.serverMs + ' ms' + (r.replayed ? ' (replay idempotent)' : '') + (r.timing ? ' | rincian: ' + JSON.stringify(r.timing) : ''));
                     return r;
                 }
                 lastErr = first.e;
@@ -23205,6 +23210,7 @@
                 const data = await res.json();
                 return (data && data.success && data.found && data.result) ? data.result : null;
             } catch (e) {
+                console.warn('[Submit] cek status gagal (jaringan/server):', e && e.message);
                 return null; // gagal cek ≠ belum tersimpan; lanjut ke strategi retry
             }
         }
@@ -25171,6 +25177,7 @@
                 const data = await res.json();
                 return (data && data.success && data.found && data.result) ? data.result : null;
             } catch (e) {
+                console.warn('[Submit] cek status gagal (jaringan/server):', e && e.message);
                 return null; // gagal cek ≠ belum tersimpan; lanjut ke strategi retry
             }
         }
