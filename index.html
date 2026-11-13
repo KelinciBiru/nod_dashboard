@@ -3455,6 +3455,80 @@
             return result;
         }
 
+
+        // =========================================================================
+        // [FIX 44 — SUBMIT MULUS] Pengirim submit untuk Process PO & Process Inbound.
+        // MASALAH LAMA: request di-ABORT di 35 dtk lalu dikirim ULANG (2x lagi, 50 dtk) + 10x cek
+        //   per 5 dtk = bisa menunggu ~4 menit sebelum error "Server Lambat". Kirim ulang saat server
+        //   cuma lambat justru menambah antrean kunci di GAS (makin lambat).
+        // SEKARANG: kirim SATU request & JANGAN di-abort cepat-cepat (maks 60 dtk). Mulai detik ke-5
+        //   dicek status ringan ("sudah tersimpan belum?", baca cache/sheet tanpa kunci) tiap 2,5 dtk
+        //   SAMBIL request asli masih berjalan. Siapa yang selesai duluan menang -> begitu server
+        //   selesai menulis, UI langsung lanjut (tidak menunggu timeout). Kirim ulang (idempotencyKey
+        //   SAMA, aman dari dobel) hanya bila request benar-benar gagal / server bilang "retryable".
+        // =========================================================================
+        function _overlayMsg(m) {
+            try {
+                const b = document.getElementById('progress-overlay-bar');
+                setProgressOverlay(b ? (parseFloat(b.style.width) || 40) : 40, m);
+            } catch (_) { }
+        }
+        async function _submitSmooth(url, payload, checkStatus, onProgress) {
+            const sleep = ms => new Promise(r => setTimeout(r, ms));
+            const opts = {
+                method: 'POST', redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain (hindari CORS preflight)
+                body: JSON.stringify(payload)
+            };
+            const REQ_TIMEOUT_MS = 60000, POLL_AFTER_MS = 5000, POLL_EVERY_MS = 2500, MAX_SENDS = 2;
+            const say = m => { try { if (onProgress) onProgress(m); } catch (_) { } };
+            let lastErr = null;
+            for (let send = 1; send <= MAX_SENDS; send++) {
+                if (send > 1) {
+                    say('Menyambungkan ulang ke server, data tetap aman...');
+                    const before = await checkStatus();
+                    if (before) return before;           // kiriman sebelumnya ternyata sudah tersimpan
+                    await sleep(1500 + Math.random() * 1000);
+                }
+                let stopPoll = false;
+                const reqP = fetchWriteWithRetry(url, opts, REQ_TIMEOUT_MS)
+                    .then(r => ({ kind: 'resp', r }), e => ({ kind: 'err', e }));
+                const pollP = new Promise(async (resolve) => {
+                    await sleep(POLL_AFTER_MS);
+                    if (stopPoll) return;
+                    say('Server sedang sibuk, menunggu konfirmasi data tersimpan...');
+                    while (!stopPoll) {
+                        const done = await checkStatus();
+                        if (done) { resolve({ kind: 'found', r: done }); return; }
+                        await sleep(POLL_EVERY_MS);
+                    }
+                });
+                const first = await Promise.race([reqP, pollP]);
+                stopPoll = true;
+                if (first.kind === 'found') return first.r;
+                if (first.kind === 'resp') {
+                    const r = first.r;
+                    if (r && r.success === false && r.retryable) {   // antrean kunci penuh -> data BELUM ditulis
+                        lastErr = new Error(r.message || 'Server sibuk');
+                        continue;
+                    }
+                    if (r && r.serverMs) console.info('[Submit] waktu proses server: ' + r.serverMs + ' ms' + (r.replayed ? ' (replay idempotent)' : ''));
+                    return r;
+                }
+                lastErr = first.e;
+                console.warn('[Submit] kiriman ' + send + ' gagal:', lastErr && lastErr.message);
+            }
+            // Cek akhir singkat: mungkin kiriman terakhir sebenarnya sudah masuk.
+            for (let k = 0; k < 5; k++) {
+                await sleep(4000);
+                const done = await checkStatus();
+                if (done) return done;
+            }
+            const finalErr = lastErr || new Error('Server tidak merespons.');
+            finalErr.isGasTimeout = true; // = "belum terkonfirmasi tersimpan"
+            throw finalErr;
+        }
+
         // [LOAD BALANCER — bagian 1: request coalescing di sisi browser]
         // Kalau beberapa bagian UI (mis. _prefetchCommonData + render halaman)
         // sama-sama minta cacheKey yang SAMA hampir bersamaan sebelum salah
@@ -19953,7 +20027,15 @@
             showToastAlert('success', 'Halaman Direfresh', 'Tampilan Process PO sudah dikosongkan/direset.');
         }
 
+        // [FIX 44] Pemanasan saat menu Process PO dibuka: library jsPDF, logo, & data kategori sudah siap
+        // sebelum tombol Proses ditekan -> pembuatan PDF tidak lagi menunggu jaringan/CDN.
+        function _warmProcessPOPdf() {
+            try { _ensureJsPDF().catch(() => { }); } catch (_) { }
+            try { loadImageAsDataURL(NOD_LOGO_URL); } catch (_) { }
+            try { Promise.resolve(getItemAutoFillData()).catch(() => { }); } catch (_) { }
+        }
         async function showProcessPO() {
+            _warmProcessPOPdf();
             document.getElementById('content-area').innerHTML = `
         <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
             <h1 class="text-2xl font-bold text-gray-700">Proses PO Masuk</h1>
@@ -21352,7 +21434,7 @@
             if (!phoneDO || !alamatFromServer) {
                 try {
                     console.log('[DO Contact] Mengambil No. Telepon & Alamat untuk No. PO:', noPO);
-                    const phoneRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                    const phoneRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' }, 8000);
                     const phoneData = await phoneRes.json();
                     console.log('[DO Contact] Response dari GAS:', phoneData);
                     if (phoneData && phoneData.success) {
@@ -21377,13 +21459,13 @@
             // [PERBAIKAN V2] Pakai data yang SUDAH diambil saat No. PO dipilih (_procPOMeta, maks 2 menit)
             // — tidak perlu round-trip GAS lagi saat submit. Fetch ulang hanya sebagai fallback.
             const _mDO = window._procPOMeta;
-            if (_mDO && _mDO.noPO === String(noPO).trim() && _mDO.hasKategori && _mDO.fetchedAt && (Date.now() - _mDO.fetchedAt) < 120000) {
+            if (_mDO && _mDO.noPO === String(noPO).trim() && _mDO.hasKategori && _mDO.fetchedAt && (Date.now() - _mDO.fetchedAt) < 1800000) {
                 showNoFakturDO = _isFakturCategory(String(_mDO.kategori || '').trim());
                 noFakturDO = String(_mDO.noFaktur || '').trim();
                 kategoriDO = String(_mDO.kategori || '').trim();
             } else {
             try {
-                const fkRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' });
+                const fkRes = await fetchWithTimeout(PO_GAS_URL + '?action=getPhoneByPO&noPO=' + encodeURIComponent(noPO), { redirect: 'follow' }, 8000);
                 const fkData = await fkRes.json();
                 if (fkData && fkData.success) {
                     showNoFakturDO = _isFakturCategory(String(fkData.kategori || '').trim());
@@ -21606,7 +21688,15 @@
          * Tidak menggagalkan proses generate PDF jika upload gagal — PDF tetap
          * ter-download secara lokal, hanya status upload yang ditampilkan.
          */
-        async function uploadDeliveryOrderPDFToDrive({ noPO, fileName, doc }) {
+        function _blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+                fr.onerror = () => reject(fr.error || new Error('Gagal membaca PDF'));
+                fr.readAsDataURL(blob);
+            });
+        }
+        async function uploadDeliveryOrderPDFToDrive({ noPO, fileName, doc, blob }) {
             const statusEl = document.getElementById('do-drive-upload-status');
             const setStatus = (text, cls) => {
                 if (!statusEl) return;
@@ -21617,7 +21707,8 @@
                 setStatus('Menyimpan salinan PDF ke Google Drive...', 'text-blue-500');
 
                 // Ambil PDF sebagai base64 (tanpa prefix data URI)
-                const pdfBase64 = doc.output('datauristring').split(',')[1];
+                // [FIX 44] pakai blob yang sudah ada + FileReader async (output('datauristring') sinkron = UI macet)
+                const pdfBase64 = blob ? await _blobToBase64(blob) : doc.output('datauristring').split(',')[1];
 
                 const result = await fetchWriteWithRetry(PO_GAS_URL, {
                     method: 'POST',
@@ -23118,43 +23209,10 @@
             }
         }
         async function _kirimInboundAman(payload) {
-            const opts = {
-                method: 'POST',
-                redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify(payload)
-            };
-            const TIMEOUTS = [35000, 50000, 50000]; // 35s pertama + 50s retry
-            const BACKOFF = [0, 5000, 10000];
-            const sleep = ms => new Promise(r => setTimeout(r, ms));
-            let lastErr = null;
-            for (let i = 0; i < TIMEOUTS.length; i++) {
-                if (i > 0) {
-                    showProgressOverlay('Koneksi lambat, memastikan data tersimpan (percobaan ' + (i + 1) + '/' + TIMEOUTS.length + ')...');
-                    const done = await _cekInboundStatus(payload.idempotencyKey);
-                    if (done) return done; // percobaan sebelumnya ternyata sudah sukses
-                    await sleep(BACKOFF[i]);
-                }
-                try {
-                    const result = await fetchWriteWithRetry(INBOUND_GAS_URL, opts, TIMEOUTS[i]);
-                    if (result && result.retryable && i < TIMEOUTS.length - 1) {
-                        lastErr = new Error(result.message || 'Server sibuk');
-                        continue; // server bilang data BELUM ditulis → aman diulang
-                    }
-                    if (result && result.serverMs) console.info('[Inbound] waktu proses server: ' + result.serverMs + ' ms' + (result.replayed ? ' (replay idempotent)' : ''));
-                    return result;
-                } catch (err) {
-                    lastErr = err;
-                    console.warn('[prosesInbound] percobaan ' + (i + 1) + ' gagal:', err.message);
-                }
-            }
-            // Cek akhir: mungkin percobaan terakhir sebenarnya sudah masuk.
-            for (let k = 0; k < 10; k++) {
-                await sleep(5000);
-                const done = await _cekInboundStatus(payload.idempotencyKey);
-                if (done) return done;
-            }
-            throw lastErr || new Error('Server tidak merespons.');
+            // [FIX 44] satu request + cek status paralel (lihat _submitSmooth).
+            return _submitSmooth(INBOUND_GAS_URL, payload,
+                () => _cekInboundStatus(payload.idempotencyKey),
+                _overlayMsg);
         }
         async function prosesInbound() {
             if (_inboundSubmitting) return; // sudah ada proses simpan yang berjalan, abaikan klik tambahan
@@ -23240,11 +23298,13 @@
                 items: items
             };
 
+            let _inbSaved = false; // [FIX 44]
             try {
                 // [FIX 37] retry bertahap + cek status (lihat _kirimInboundAman di atas).
                 const result = await _kirimInboundAman(payload);
 
                 if (result.success) {
+                    _inbSaved = true;
                     setProgressOverlay(100, 'Selesai!');
                     showToastAlert('success', 'Berhasil disimpan', `Data inbound (${items.length} item) tersimpan ke spreadsheet.`);
                     // Reset form
@@ -23273,7 +23333,7 @@
             } finally {
                 _inboundSubmitting = false;
                 if (btn) { btn.disabled = false; btn.innerHTML = originalHTML; }
-                hideProgressOverlay(true);
+                hideProgressOverlay(_inbSaved);
             }
         }
 
@@ -25121,45 +25181,10 @@
         //  • belum → tunggu (backoff) lalu kirim ulang dengan idempotencyKey yang SAMA.
         //  • maksimal 3 percobaan (25/30/30 dtk) + 2x cek akhir sebelum menampilkan error.
         async function _kirimOutboundAman(payload) {
-            const opts = {
-                method: 'POST',
-                redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain' }, // GAS butuh text/plain (hindari CORS preflight)
-                body: JSON.stringify(payload)
-            };
-            const TIMEOUTS = [35000, 50000, 50000]; // 35s pertama + 50s retry
-            const BACKOFF = [0, 5000, 10000];
-            const sleep = ms => new Promise(r => setTimeout(r, ms));
-            let lastErr = null;
-            for (let i = 0; i < TIMEOUTS.length; i++) {
-                if (i > 0) {
-                    setProgressOverlay(40 + i * 15, 'Koneksi lambat, memastikan data tersimpan (percobaan ' + (i + 1) + '/' + TIMEOUTS.length + ')...');
-                    const done = await _cekOutboundStatus(payload.idempotencyKey, payload.noPO);
-                    if (done) return done; // percobaan sebelumnya ternyata sudah sukses
-                    await sleep(BACKOFF[i]);
-                }
-                try {
-                    const result = await fetchWriteWithRetry(PO_GAS_URL, opts, TIMEOUTS[i]);
-                    if (result && result.retryable && i < TIMEOUTS.length - 1) {
-                        lastErr = new Error(result.message || 'Server sibuk');
-                        continue; // server bilang data BELUM ditulis → aman diulang
-                    }
-                    if (result && result.serverMs) console.info('[Process PO] waktu proses server: ' + result.serverMs + ' ms' + (result.replayed ? ' (replay idempotent — ' + (result.duplicateBy || 'cache') + ')' : ''));
-                    return result;
-                } catch (err) {
-                    lastErr = err;
-                    console.warn('[Process PO] percobaan ' + (i + 1) + ' gagal:', err.message);
-                }
-            }
-            // Cek akhir: mungkin percobaan terakhir sebenarnya sudah masuk.
-            for (let k = 0; k < 10; k++) {
-                await sleep(5000);
-                const done = await _cekOutboundStatus(payload.idempotencyKey, payload.noPO);
-                if (done) return done;
-            }
-            const finalErr = lastErr || new Error('Server tidak merespons.');
-            finalErr.isGasTimeout = true; // = "belum terkonfirmasi" → UI menampilkan PDF + instruksi aman
-            throw finalErr;
+            // [FIX 44] satu request + cek status paralel (lihat _submitSmooth).
+            return _submitSmooth(PO_GAS_URL, payload,
+                () => _cekOutboundStatus(payload.idempotencyKey, payload.noPO),
+                _overlayMsg);
         }
 
         // [FIX] Guard anti-dobel-submit Process PO — pola sama dengan Process
@@ -25271,6 +25296,7 @@
             // step 1 tidak boleh hilang begitu saja hanya karena step 2 (simpan ke
             // server) gagal/lambat.
             let pdfBuild = null;
+            let _poSaved = false; // [FIX 44] overlay ditutup dgn status sebenarnya (bukan selalu 'berhasil')
             try {
                 // ── 1) Bangun PDF berisi seluruh data Process PO (menggantikan tombol
                 //      "Delivery Order" yang sudah dihapus dari tampilan) ──
@@ -25303,14 +25329,15 @@
                 const result = await _kirimOutboundAman(payload);
 
                 if (result.success) {
+                    _poSaved = true;
                     setProgressOverlay(100, 'Selesai!');
 
                     // [FIX 43] Data sudah tersimpan → BARU sekarang upload salinan PDF ke Drive
                     // (background, tidak di-await; kegagalannya tidak menggagalkan proses utama).
                     setTimeout(() => {
-                        uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc })
+                        uploadDeliveryOrderPDFToDrive({ noPO: pdfBuild.noPO, fileName: pdfBuild.fileName, doc: pdfBuild.doc, blob: pdfBuild._blob })
                             .catch(() => { /* sudah ditangani di dalam fungsinya */ });
-                    }, 0);
+                    }, 1500); // beri waktu UI menampilkan PDF/formulir bersih dulu
 
                     // ── Status PO sudah diupdate oleh GAS Outbound sekaligus ──
                     const statusUpdated = result.statusUpdated === true;
@@ -25389,7 +25416,7 @@
                 if (err && err.isGasTimeout && pdfBuild) {
                     showPdfPreviewModal(
                         pdfBuild.doc.output('bloburl'),
-                        '⚠️ Server Lambat Merespon',
+                        '⚠️ Simpan Belum Terkonfirmasi',
                         `PDF sudah selesai dibuat & bisa langsung di-Share/Simpan. Server belum membalas setelah beberapa percobaan & pengecekan otomatis, jadi data BELUM terkonfirmasi tersimpan. Klik "Proses" lagi — aman dari data ganda (server mengenali kiriman yang sama).`,
                         { blob: pdfBuild.doc.output('blob'), fileName: pdfBuild.fileName }
                     );
@@ -25403,7 +25430,7 @@
                     saveBtn.disabled = false;
                     saveBtn.innerHTML = originalBtnHTML || `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Proses`;
                 }
-                hideProgressOverlay(true);
+                hideProgressOverlay(_poSaved);
             }
         }
         // =========================================================================
