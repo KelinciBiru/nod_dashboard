@@ -3571,8 +3571,8 @@
                     // concurrency sesaat) — coba sekali lagi sebelum menyerah,
                     // supaya user tidak lihat error hanya karena kebetulan kena
                     // 1 request yang nyasar ke halaman error Google.
-                    if (err.isGasParseError) {
-                        console.warn(`[cachedFetch] respons tidak valid utk ${cacheKey}, retry sekali:`, err.message);
+                    if (err.isGasParseError || err.name === 'AbortError') {
+                        console.warn(`[cachedFetch] ${err.name === 'AbortError' ? 'timeout/abort' : 'respons tidak valid'} utk ${cacheKey}, retry sekali:`, err.message);
                         await new Promise(r => setTimeout(r, 1200));
                         const res2 = await fetchWithTimeout(url, {}, timeoutMs);
                         const data2 = await res2.json();
@@ -4460,8 +4460,8 @@
                 add(() => cachedFetch(API_URLS.serviceCenter + '?action=getPICList', 'getPICList'));
             }
             if (currentUserRole === 'ADMIN' || currentUserRole === 'CS_User' || currentUserRole === 'Teknisi') {
-                heavy.push(() => cachedFetch(API_URLS.serviceCenter + '?action=getReportStatusRepair', 'getReportStatusRepair', 25000));
-                heavy.push(() => cachedFetch(API_URLS.serviceCenter + '?action=getTaskTechnicianInit', 'getTaskTechnicianInit', 25000));
+                heavy.push(() => cachedFetch(API_URLS.serviceCenter + '?action=getReportStatusRepair', 'getReportStatusRepair', 40000));
+                heavy.push(() => cachedFetch(API_URLS.serviceCenter + '?action=getTaskTechnicianInit', 'getTaskTechnicianInit', 40000));
             }
             // Teknisi/CS_User: menu utamanya justru endpoint berat → duluan. Role lain: paling akhir.
             if (currentUserRole === 'Teknisi' || currentUserRole === 'CS_User') tasks.unshift(...heavy); else tasks.push(...heavy);
@@ -6410,6 +6410,7 @@
             </div>
             <p class="text-sm text-gray-500 mb-4">Status mesin "On Going" / "Pending" &amp; "Solved" (7 hari terakhir) dari sheet "Repair".</p>
             <div id="mobile-dashboard-nav-slot"></div>
+            <div id="rsr-status-note" class="hidden"></div>
 
             <div class="relative mb-6">
                 <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -6685,12 +6686,53 @@
             }
         }
 
-        /** Ambil & render 2 tabel (On Going/Pending & Solved) Report Status Repair dari backend (action=getReportStatusRepair) */
+        // ── Snapshot (sessionStorage) supaya tabel langsung tampil walau server lambat ──
+        const RSR_SNAPSHOT_KEY = 'rsr_snapshot_v1';
+        function rsrSaveSnapshot(onGoing, solved) {
+            try { sessionStorage.setItem(RSR_SNAPSHOT_KEY, JSON.stringify({ ts: Date.now(), onGoing, solved })); } catch (e) { /* kuota penuh: abaikan */ }
+        }
+        function rsrLoadSnapshot() {
+            try {
+                const s = sessionStorage.getItem(RSR_SNAPSHOT_KEY);
+                const o = s ? JSON.parse(s) : null;
+                return (o && Array.isArray(o.onGoing) && Array.isArray(o.solved)) ? o : null;
+            } catch (e) { return null; }
+        }
+        function rsrSetNote(msg, kind) {
+            const el = document.getElementById('rsr-status-note');
+            if (!el) return;
+            if (!msg) { el.className = 'hidden'; el.textContent = ''; return; }
+            el.className = 'mb-3 text-xs rounded-lg px-3 py-2 border ' +
+                (kind === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-gray-50 border-gray-200 text-gray-600');
+            el.textContent = msg;
+        }
+        function rsrAgeText(ts) {
+            const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+            return m < 1 ? 'baru saja' : (m < 60 ? m + ' menit lalu' : Math.round(m / 60) + ' jam lalu');
+        }
+        function rsrIsTimeoutError(err) {
+            return !!err && (err.name === 'AbortError' || err.name === 'TimeoutError' || /aborted|timed out|timeout/i.test(err.message || ''));
+        }
+        /** Urutkan & pasang data ke state tabel, lalu render. */
+        function rsrApplyData(onGoingRows, solvedRows) {
+            // Pending paling atas; sisanya urut urgensi SLA (Overdue dulu).
+            onGoingRows.sort((a, b) => {
+                const aPending = (a.status || '').toLowerCase() === 'pending' ? 0 : 1;
+                const bPending = (b.status || '').toLowerCase() === 'pending' ? 0 : 1;
+                if (aPending !== bPending) return aPending - bPending;
+                return computeSlaRemainingDays(a.inboundDate) - computeSlaRemainingDays(b.inboundDate);
+            });
+            rsrOngoingRowsRaw = onGoingRows;
+            rsrSolvedRowsRaw = solvedRows;
+            applyRsrSearchFilter();
+        }
+
+        /** Ambil & render 2 tabel (On Going/Pending & Solved) Report Status Repair dari backend (action=getReportStatusRepair).
+         *  [FIX "signal is aborted"] Tampilkan data lama dulu (memori/snapshot), timeout 40 dtk + retry 1x di cachedFetch,
+         *  pesan error ramah, dan data lama tetap tampil kalau pembaruan gagal. */
         async function loadReportStatusRepair() {
             const ongoingTbody = document.getElementById('rsr-ongoing-tbody');
             const solvedTbody = document.getElementById('rsr-solved-tbody');
-            const ongoingCountEl = document.getElementById('rsr-ongoing-count');
-            const solvedCountEl = document.getElementById('rsr-solved-count');
             const paginationEl = document.getElementById('rsr-ongoing-pagination');
             const btn = document.getElementById('rsr-refresh-btn');
             if (!ongoingTbody || !solvedTbody) return;
@@ -6703,38 +6745,52 @@
 
             const forceRefresh = document.activeElement === btn;
             if (btn) { btn.disabled = true; btn.textContent = '⏳ Memuat...'; }
+
+            // Tampilkan data lama lebih dulu supaya layar tidak kosong selama menunggu server.
+            let showingOld = false;
+            if (rsrOngoingRowsRaw.length || rsrSolvedRowsRaw.length) {
+                applyRsrSearchFilter();
+                showingOld = true;
+                rsrSetNote('Memperbarui data dari server...', 'info');
+            } else {
+                const snap = rsrLoadSnapshot();
+                if (snap) {
+                    rsrApplyData(snap.onGoing, snap.solved);
+                    showingOld = true;
+                    rsrSetNote('Menampilkan data tersimpan (' + rsrAgeText(snap.ts) + ') — memperbarui dari server...', 'info');
+                }
+            }
+
             try {
                 const url = SERVICE_CENTER_GAS_URL + '?action=getReportStatusRepair';
-                // Pakai cachedFetch (cache 5 menit) supaya navigasi bolak-balik ke menu ini
-                // instan, bukan menunggu GAS baca ulang sheet dari awal tiap kali.
-                // Klik tombol "⟳ Refresh" tetap memaksa ambil data terbaru (bypass cache).
                 if (forceRefresh) clearCache('getReportStatusRepair');
-                const result = await cachedFetch(url, 'getReportStatusRepair', 20000);
+                const result = await cachedFetch(url, 'getReportStatusRepair', 40000);
                 if (!result.success) throw new Error(result.message || 'Gagal mengambil data.');
 
                 // Fallback untuk backend lama yang cuma mengirim field "data" gabungan
                 const onGoingRows = result.onGoing || (result.data || []).filter(r => (r.status || '').toLowerCase() !== 'solved');
                 const solvedRows = result.solved || (result.data || []).filter(r => (r.status || '').toLowerCase() === 'solved');
 
-                // Urutkan On Going & Pending:
-                // 1) Status "Pending" selalu di paling atas.
-                // 2) Di antara sisanya (termasuk sesama grup Pending), urutkan berdasarkan urgensi SLA:
-                //    Overdue paling atas, lalu yang sisa harinya paling sedikit (paling mendekati Overdue) berikutnya, dst.
-                onGoingRows.sort((a, b) => {
-                    const aPending = (a.status || '').toLowerCase() === 'pending' ? 0 : 1;
-                    const bPending = (b.status || '').toLowerCase() === 'pending' ? 0 : 1;
-                    if (aPending !== bPending) return aPending - bPending;
-                    return computeSlaRemainingDays(a.inboundDate) - computeSlaRemainingDays(b.inboundDate);
-                });
-
-                // Simpan data mentah (belum difilter), lalu terapkan kata kunci Search yang sedang aktif (jika ada)
-                rsrOngoingRowsRaw = onGoingRows;
-                rsrSolvedRowsRaw = solvedRows;
-                applyRsrSearchFilter();
+                rsrApplyData(onGoingRows, solvedRows);
+                rsrSaveSnapshot(onGoingRows, solvedRows);
+                if (result.stale) {
+                    rsrSetNote('Server sedang lambat — menampilkan data cadangan dari server. Tekan ⟳ Refresh sebentar lagi.', 'warn');
+                } else {
+                    rsrSetNote('');
+                }
+                if (result.cache || result.serverMs) console.info('[RSR] cache=' + result.cache + ' serverMs=' + result.serverMs);
             } catch (err) {
-                ongoingTbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
-                solvedTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
-                if (paginationEl) paginationEl.innerHTML = '';
+                console.warn('[RSR] gagal memuat:', err);
+                const msg = rsrIsTimeoutError(err)
+                    ? 'Server lambat / waktu tunggu habis. Tekan ⟳ Refresh untuk mencoba lagi.'
+                    : (err.message || 'Gagal memuat data.');
+                if (showingOld) {
+                    rsrSetNote('Gagal memperbarui (' + msg + ') — data lama ditampilkan.', 'warn');
+                } else {
+                    ongoingTbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(msg)}</td></tr>`;
+                    solvedTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(msg)}</td></tr>`;
+                    if (paginationEl) paginationEl.innerHTML = '';
+                }
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh'; }
             }
