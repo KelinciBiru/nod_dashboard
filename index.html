@@ -2869,6 +2869,16 @@
                         List Paket
                     </button>
 
+                    <!-- Jubelio (khusus ADMIN) — daftar order dari akun Jubelio -->
+                    <button id="menu-jubelio" onclick="navTo('Jubelio')"
+                        class="hidden nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-700 hover:bg-amber-50 hover:text-amber-600 font-semibold text-sm transition">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                        Jubelio
+                    </button>
+
                 </nav>
 
                 <!-- Footer sidebar: role info -->
@@ -4294,7 +4304,7 @@
             // seharusnya tidak boleh. Pola deny-by-default ini menutup celah itu.
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
                 'menu-po', 'menu-process-po', 'menu-scan-sn', 'menu-process-inbound', 'menu-team-delivery',
-                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c', 'menu-print-label'
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-jubelio', 'menu-request-b2b-b2c', 'menu-print-label'
             ].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -4426,6 +4436,8 @@
                 document.getElementById('menu-service-center').classList.remove('hidden');
                 // List Paket hanya untuk ADMIN
                 document.getElementById('menu-list-paket').classList.remove('hidden');
+                // Jubelio hanya untuk ADMIN
+                document.getElementById('menu-jubelio').classList.remove('hidden');
                 // Request B2B/B2C (sub-menu B2B & B2C) hanya untuk ADMIN
                 document.getElementById('menu-request-b2b-b2c').classList.remove('hidden');
                 // Print Label (Label Produk) untuk ADMIN & Warehouse
@@ -4593,7 +4605,7 @@
             // berikutnya (mis. sekilas ke-flash sebelum startApp() menata ulang).
             ['menu-dashboard', 'menu-inventory', 'menu-plan-task', 'menu-maintenance',
                 'menu-po', 'menu-process-po', 'menu-scan-sn', 'menu-process-inbound', 'menu-team-delivery',
-                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-request-b2b-b2c', 'menu-print-label'
+                'menu-catalogue', 'menu-service-center', 'menu-list-paket', 'menu-jubelio', 'menu-request-b2b-b2c', 'menu-print-label'
             ].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
@@ -5629,6 +5641,11 @@
                 showAlert('error', 'Akses Ditolak', 'Menu "List Paket" hanya dapat diakses oleh Admin.');
                 return;
             }
+            // ── AKSES KONTROL: Jubelio hanya untuk ADMIN ──
+            if (pageName === 'Jubelio' && currentUserRole !== 'ADMIN') {
+                showAlert('error', 'Akses Ditolak', 'Menu "Jubelio" hanya dapat diakses oleh Admin.');
+                return;
+            }
             // ── AKSES KONTROL: Request B2B/B2C (B2B & B2C) hanya untuk ADMIN ──
             if ((pageName === 'Request B2B' || pageName === 'Request B2C') && currentUserRole !== 'ADMIN') {
                 showAlert('error', 'Akses Ditolak', 'Menu "Request B2B/B2C" hanya dapat diakses oleh Admin.');
@@ -5685,6 +5702,7 @@
                 'Task Technician': 'Service Center - Task Technician',
                 'Form Service': 'Service Center - Form Service',
                 'List Paket': 'List Paket - Drop Off Mandiri',
+                'Jubelio': 'Jubelio - Order',
                 'Request B2B': 'Request B2B/B2C - B2B',
                 'Request B2C': 'Request B2B/B2C - B2C',
                 'Label Produk': 'Print Label - Label Produk',
@@ -5764,6 +5782,7 @@
                 case 'Report Status Repair': await showReportStatusRepair(); break;
                 case 'Form Service': await showFormService(); break;
                 case 'List Paket': await showListPaket(); break;
+                case 'Jubelio': await showJubelio(); break;
                 case 'Request B2B': await showRequestB2BB2C('B2B'); break;
                 case 'Request B2C': await showRequestB2BB2C('B2C'); break;
                 case 'Label Produk': await showPrintLabel(); break;
@@ -7743,6 +7762,200 @@
 
             // Muat daftar No. Tiket bulan berjalan untuk dropdown "Revisi Form Service"
             _loadRevisiFormServiceDropdown();
+        }
+
+        // =========================================================================
+        // MENU: JUBELIO (khusus ADMIN) — daftar order dari akun Jubelio (hanya baca)
+        // Data dari PO_GAS_URL action 'getJubelioOrders'. Backend login ke API Jubelio
+        // (kredensial di Script Properties, TIDAK ada di frontend) dan menolak role
+        // selain ADMIN. Tiap order menampilkan item, qty, dan status dari Jubelio.
+        // =========================================================================
+        let _jubelioRows = [];
+        let _jubelioStatuses = [];
+        let _jubelioStatusFilter = '';
+        let _jubelioLoadSeq = 0;
+        let _jubelioLoadedAt = null;
+
+        /** Badge status: warna ditebak dari kata kunci status asli Jubelio (teks aslinya tetap ditampilkan). */
+        function _jbStatusBadge(label) {
+            const s = String(label || '').toLowerCase();
+            let c = 'bg-gray-100 text-gray-700';
+            if (/batal|cancel|void|reject|gagal|fail/.test(s)) c = 'bg-red-100 text-red-800';
+            else if (/ship|kirim|deliver|complete|selesai|done|receiv|diterima/.test(s)) c = 'bg-emerald-100 text-emerald-800';
+            else if (/pack/.test(s)) c = 'bg-violet-100 text-violet-800';
+            else if (/pick|ready|siap/.test(s)) c = 'bg-amber-100 text-amber-800';
+            else if (/new|baru|pending|paid|unpaid|process|proses|confirm|wait|tunggu/.test(s)) c = 'bg-blue-100 text-blue-800';
+            return `<span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold whitespace-nowrap ${c}">${escapeHtml(label || '-')}</span>`;
+        }
+
+        function _jbFormatDate(raw) {
+            if (!raw) return '-';
+            const d = new Date(raw);
+            if (isNaN(d.getTime())) return escapeHtml(String(raw));
+            const opt = { timeZone: 'Asia/Jakarta' };
+            const tgl = d.toLocaleDateString('id-ID', Object.assign({ day: 'numeric', month: 'short', year: 'numeric' }, opt));
+            const jam = d.toLocaleTimeString('id-ID', Object.assign({ hour: '2-digit', minute: '2-digit', hour12: false }, opt)).replace('.', ':');
+            return `${escapeHtml(tgl)}<br><span class="text-xs text-gray-500">${escapeHtml(jam)}</span>`;
+        }
+
+        async function showJubelio() {
+            document.getElementById('content-area').innerHTML = `
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700">Jubelio</h1>
+                <button id="jb-refresh-btn" onclick="loadJubelio(true)"
+                    class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold shadow-sm transition disabled:opacity-60">
+                    ⟳ Refresh
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">Orderan dari akun Jubelio (hanya baca). <span id="jb-loaded-at" class="text-gray-400"></span></p>
+
+            <div class="relative mb-4">
+                <svg class="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="text" id="jb-search" oninput="renderJubelio()"
+                    placeholder="Cari No. Order, Customer, Item, SKU, Channel..."
+                    class="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 transition">
+            </div>
+
+            <div id="jb-chips" class="flex flex-wrap gap-2 mb-4"></div>
+
+            <div class="flex items-center justify-between mb-2">
+                <span id="jb-count" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">0 order</span>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm" style="min-width:860px">
+                        <thead>
+                            <tr class="bg-gray-800 text-white text-xs uppercase tracking-wide">
+                                <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">No. Order</th>
+                                <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Tanggal</th>
+                                <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Customer / Channel</th>
+                                <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Item</th>
+                                <th class="px-4 py-3 text-center font-semibold whitespace-nowrap">Qty</th>
+                                <th class="px-4 py-3 text-left font-semibold whitespace-nowrap">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="jb-tbody">
+                            <tr><td colspan="6" class="px-4 py-10 text-center text-gray-400">
+                                <div class="flex items-center justify-center gap-3">
+                                    <div class="w-6 h-6 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+                                    Memuat data...
+                                </div>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+
+            // Data lama (kunjungan sebelumnya) langsung ditampilkan, lalu disegarkan di latar belakang.
+            if (_jubelioRows.length) { _jubelioUpdateLoadedAt(); renderJubelio(); }
+            await loadJubelio(false);
+        }
+
+        function _jubelioUpdateLoadedAt() {
+            const el = document.getElementById('jb-loaded-at');
+            if (el && _jubelioLoadedAt) {
+                el.textContent = 'Terakhir dimuat: ' + _jubelioLoadedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
+            }
+        }
+
+        async function loadJubelio(force) {
+            const btn = document.getElementById('jb-refresh-btn');
+            const mySeq = ++_jubelioLoadSeq;
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Memuat...'; }
+            try {
+                const url = PO_GAS_URL + '?action=getJubelioOrders' + (force ? '&refresh=' + Date.now() : '');
+                const res = await fetchWithRetry(url, {}, 60000);
+                const result = await res.json();
+                if (result.error || result.success === false) {
+                    throw new Error(result.error || result.message || 'Gagal mengambil data Jubelio.');
+                }
+                const rows = Array.isArray(result.rows) ? result.rows : [];
+                rows.forEach(r => {
+                    const items = Array.isArray(r.items) ? r.items : [];
+                    r._search = [r.no, r.customer, r.channel, r.status, r.statusAlt]
+                        .concat(items.map(i => (i.name || '') + ' ' + (i.sku || '')))
+                        .join(' | ').toLowerCase();
+                });
+                _jubelioRows = rows;
+                _jubelioLoadedAt = new Date();
+                if (mySeq !== _jubelioLoadSeq || !document.getElementById('jb-tbody')) return;
+                _jubelioUpdateLoadedAt();
+                renderJubelio();
+            } catch (err) {
+                if (mySeq !== _jubelioLoadSeq) return;
+                if (_jubelioRows.length) {
+                    showToastAlert('error', 'Gagal memuat ulang', err.message || String(err));
+                    return;
+                }
+                const tb = document.getElementById('jb-tbody');
+                if (tb) {
+                    tb.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-red-500 text-sm">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+                }
+                const cnt = document.getElementById('jb-count');
+                if (cnt) cnt.textContent = '0 order';
+            } finally {
+                const cur = document.getElementById('jb-refresh-btn');
+                if (cur && mySeq === _jubelioLoadSeq) { cur.disabled = false; cur.textContent = '⟳ Refresh'; }
+            }
+        }
+
+        function setJubelioStatus(idx) {
+            _jubelioStatusFilter = (idx < 0) ? '' : (_jubelioStatuses[idx] || '');
+            renderJubelio();
+        }
+
+        function renderJubelio() {
+            const tbody = document.getElementById('jb-tbody');
+            if (!tbody) return;
+
+            // Chip status = status asli yang ada di data (dinamis), lengkap dengan jumlah.
+            const counts = {};
+            _jubelioRows.forEach(r => { const k = r.status || '-'; counts[k] = (counts[k] || 0) + 1; });
+            _jubelioStatuses = Object.keys(counts).sort();
+            if (_jubelioStatusFilter && !counts[_jubelioStatusFilter]) _jubelioStatusFilter = '';
+            const chips = document.getElementById('jb-chips');
+            if (chips) {
+                const base = 'px-3.5 py-2 rounded-full border text-[13px] font-semibold transition ';
+                const on = 'bg-gray-800 border-gray-800 text-white';
+                const off = 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50';
+                chips.innerHTML = `<button onclick="setJubelioStatus(-1)" class="${base}${_jubelioStatusFilter === '' ? on : off}">Semua · ${_jubelioRows.length}</button>` +
+                    _jubelioStatuses.map((s, i) =>
+                        `<button onclick="setJubelioStatus(${i})" class="${base}${_jubelioStatusFilter === s ? on : off}">${escapeHtml(s)} · ${counts[s]}</button>`
+                    ).join('');
+            }
+
+            const q = ((document.getElementById('jb-search') || {}).value || '').trim().toLowerCase();
+            const list = _jubelioRows.filter(r =>
+                (!_jubelioStatusFilter || (r.status || '-') === _jubelioStatusFilter) && (!q || r._search.indexOf(q) !== -1));
+
+            const cnt = document.getElementById('jb-count');
+            if (cnt) cnt.textContent = list.length + ' order';
+
+            if (!list.length) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-10 text-center text-gray-400 text-sm">${_jubelioRows.length ? 'Tidak ada order yang cocok.' : 'Belum ada order.'}</td></tr>`;
+                return;
+            }
+            const td = 'px-4 py-3 align-top border-t border-gray-100 ';
+            tbody.innerHTML = list.map(r => {
+                const items = Array.isArray(r.items) ? r.items : [];
+                const itemHtml = items.length
+                    ? items.map(i => `<div class="leading-6">${escapeHtml(i.name || '-')}${i.sku ? `<span class="text-[11px] text-gray-500 ml-1.5">${escapeHtml(i.sku)}</span>` : ''}</div>`).join('')
+                    : '<span class="text-gray-400 italic text-xs">Item tidak tersedia</span>';
+                const qtyHtml = items.length
+                    ? items.map(i => `<div class="leading-6 font-bold">${escapeHtml(i.qty)}</div>`).join('')
+                    : '<span class="text-gray-400">-</span>';
+                const alt = r.statusAlt ? `<div class="text-[11px] text-gray-500 mt-1">${escapeHtml(r.statusAlt)}</div>` : '';
+                return `<tr class="hover:bg-amber-50/40 transition">
+                    <td class="${td}font-bold text-gray-800 whitespace-nowrap">${escapeHtml(r.no || '-')}</td>
+                    <td class="${td}text-gray-700 whitespace-nowrap">${_jbFormatDate(r.date)}</td>
+                    <td class="${td}text-gray-700">${escapeHtml(r.customer || '-')}<div class="text-xs text-gray-500">${escapeHtml(r.channel || '')}</div></td>
+                    <td class="${td}text-gray-700">${itemHtml}</td>
+                    <td class="${td}text-center text-gray-800">${qtyHtml}</td>
+                    <td class="${td}">${_jbStatusBadge(r.status)}${alt}</td>
+                </tr>`;
+            }).join('');
         }
 
         // =========================================================================
@@ -28561,7 +28774,7 @@ window.NodQRGen=function(){var t=function(){var t=function(t,r){var e=t,n=g[r],o
                     '.p{width:' + lw + 'mm;height:' + hMm + 'mm;overflow:hidden;page-break-after:always;break-after:page}' +
                     '.p:last-child{page-break-after:auto;break-after:auto}' +
                     'img{display:block;width:' + lw + 'mm;height:' + hMm + 'mm;image-rendering:pixelated}' +
-                    '</style></head><body>' + imgs + '</body></html>');
+                    '</style><\/head><body>' + imgs + '<\/body><\/html>');
                 doc.close();
                 const cleanup = function () { setTimeout(function () { try { ifr.remove(); } catch (_) { } }, 1000); };
                 const go = function () {
@@ -29642,11 +29855,11 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
                 var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
                     '<head><meta charset="utf-8"><title>Template Marking Pengiriman</title>' +
                     '<style>@page{size:21cm 29.7cm;margin:1.2cm;} table{border-collapse:collapse;} body{font-family:Arial,sans-serif;}</style>' +
-                    '</head><body>' +
+                    '<\/head><body>' +
                     '<p style="font-family:Arial,sans-serif;font-size:11pt;font-weight:bold;margin:0 0 3mm 0;">Template Label Marking Pengiriman</p>' +
                     '<p style="font-family:Arial,sans-serif;font-size:8.5pt;color:#6b7280;margin:0 0 4mm 0;">Ukuran label: Tom &amp; Jerry No. 121 (38 x 75 mm) — 1 lembar berisi 5 baris x 2 kolom. Isi Ship To dan Alamat secara manual, lalu cetak di kertas label yang sesuai.</p>' +
                     '<table>' + rowsHtml + '</table>' +
-                    '</body></html>';
+                    '<\/body><\/html>';
                 var blob = new Blob(['\ufeff', html], { type: 'application/msword' });
                 var a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
@@ -29948,7 +30161,7 @@ ${typeof ploActionsCardHtml === 'function' ? ploActionsCardHtml() : ''}
                         '.p{width:' + wMm + 'mm;height:' + (hMm - 0.3) + 'mm;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}' +
                         '.p:last-child{page-break-after:auto;break-after:auto}' +
                         'img{display:block;width:100%;height:100%;image-rendering:pixelated}' +
-                        '</style></head><body>' + imgs + '</body></html>');
+                        '</style><\/head><body>' + imgs + '<\/body><\/html>');
                     doc.close();
                     const cleanup = function () { setTimeout(function () { try { ifr.remove(); } catch (_) { } revokeAll(); }, 1000); };
                     const go = function () {
