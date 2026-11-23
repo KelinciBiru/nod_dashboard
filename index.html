@@ -621,7 +621,7 @@
         .jb-link { border: 0; background: none; padding: 0; font-size: .75rem; font-weight: 700; color: #b45309; cursor: pointer; }
         .jb-link:hover { text-decoration: underline; }
         .jb-scroll { overflow-x: auto; }
-        .jb-table { width: 100%; border-collapse: collapse; font-size: .8125rem; min-width: 56rem; }
+        .jb-table { width: 100%; border-collapse: collapse; font-size: .8125rem; min-width: 78rem; }
         .jb-table th { position: sticky; top: 0; background: #1f2937; color: #fff; text-align: left; padding: .7rem 1rem; font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
         .jb-table th.jb-c, .jb-table td.jb-c { text-align: center; }
         .jb-table td { padding: .8rem 1rem; border-top: 1px solid #f3f4f6; vertical-align: top; color: #374151; background: #fff; }
@@ -656,19 +656,45 @@
         .jb-wait-warn { background: #fffbeb; color: #b45309; }
         .jb-wait-late { background: #fef2f2; color: #b91c1c; }
 
-        /* Kartu untuk layar kecil */
-        .jb-cards { display: none; }
-        .jb-card { padding: .9rem 1rem; border-top: 1px solid #f3f4f6; }
-        .jb-card:first-child { border-top: 0; }
-        .jb-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; }
-        .jb-card-meta { margin: .35rem 0 .6rem; font-size: .75rem; color: #6b7280; line-height: 1.5; }
-        .jb-card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: .6rem; padding-top: .6rem; border-top: 1px solid #f3f4f6; font-size: .75rem; color: #6b7280; }
+        /* Kartu untuk layar kecil (HP) — satu order = satu kartu dengan blok: header, customer+alamat, 3PL, item, progres */
+        .jb-cards { display: none; padding: .6rem; background: #f9fafb; }
+        .jb-card { background: #fff; border: 1px solid #eef0f4; border-radius: 1rem; padding: .9rem; margin-bottom: .7rem; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+        .jb-card:last-child { margin-bottom: 0; }
+        .jb-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: .6rem; }
+        .jb-card-top .jb-no { font-size: .95rem; overflow-wrap: anywhere; white-space: normal; }
+        .jb-card-sub { margin-top: .25rem; display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .5rem; font-size: .75rem; color: #6b7280; }
+        .jb-card-sub .jb-chan { margin-top: 0; }
+        .jb-box { margin-top: .7rem; padding: .65rem .75rem; border-radius: .8rem; background: #f9fafb; border: 1px solid #f1f2f4; }
+        .jb-box-t { margin-bottom: .3rem; font-size: .625rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #9ca3af; }
+        .jb-box .jb-cust { font-size: .875rem; }
+        .jb-addr { margin-top: .2rem; font-size: .78rem; line-height: 1.5; color: #4b5563; overflow-wrap: anywhere; }
+        .jb-phone { display: inline-block; margin-top: .3rem; font-size: .78rem; font-weight: 600; color: #1d4ed8; text-decoration: none; }
+        .jb-ship { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .5rem; }
+        .jb-3pl { display: inline-block; padding: .2rem .6rem; border-radius: .5rem; background: #eff6ff; color: #1d4ed8; font-size: .75rem; font-weight: 700; }
+        .jb-awb { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .75rem; color: #4b5563; overflow-wrap: anywhere; }
+        .jb-card .jb-items { min-width: 0; max-width: none; }
+        .jb-card .jb-item { padding: .4rem 0; }
+        .jb-card .jb-item-name { font-size: .8125rem; }
+        .jb-card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: .7rem; padding-top: .65rem; border-top: 1px solid #f3f4f6; font-size: .75rem; color: #6b7280; }
+        .jb-steps { display: flex; gap: .25rem; margin-top: .65rem; }
+        .jb-st { flex: 1 1 0; padding: .28rem 0; border-radius: .45rem; background: #f3f4f6; color: #9ca3af; font-size: .625rem; font-weight: 700; text-align: center; white-space: nowrap; }
+        .jb-st.is-done { background: #d1fae5; color: #047857; }
+        .jb-st.is-cur { background: #fef3c7; color: #92400e; }
+        .jb-pbtn { display: flex; align-items: center; justify-content: center; gap: .4rem; width: 100%; min-height: 2.75rem; margin-top: .65rem; padding: .5rem 1rem; border: 0; border-radius: .85rem; background: #f59e0b; color: #fff; font-size: .875rem; font-weight: 800; cursor: pointer; box-shadow: 0 2px 6px rgba(245,158,11,.35); }
+        .jb-pbtn:hover { background: #d97706; }
+        .jb-pbtn svg { width: 1.05rem; height: 1.05rem; }
+        .jb-pbtn.jb-done { background: #ecfdf5; color: #047857; box-shadow: none; border: 1px solid #a7f3d0; }
+        .jb-pbtn-sm { width: auto; min-height: 2rem; margin-top: .45rem; padding: .3rem .85rem; border-radius: .6rem; font-size: .75rem; }
         @media (max-width: 767px) {
             .jb-desktop { display: none; }
             .jb-cards { display: block; }
             .jb-select { flex: 1 1 calc(50% - .4rem); }
             .jb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .jb-panel { border-radius: .9rem; }
         }
+        .jb-cust-d { font-weight: 600; color: #1f2937; overflow-wrap: anywhere; }
+        .jb-addr-d { margin-top: .2rem; max-width: 18rem; font-size: .75rem; line-height: 1.45; color: #6b7280; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .jb-table td .jb-steps { margin-top: 0; min-width: 13rem; }
 
         /* Loading & kosong */
         .jb-skel { display: block; height: .85rem; border-radius: .4rem; background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 37%, #f3f4f6 63%); background-size: 400% 100%; animation: jb-shim 1.3s ease infinite; }
@@ -678,6 +704,96 @@
         .jb-empty b { display: block; color: #4b5563; margin-bottom: .2rem; }
         .jb-error { padding: 2rem 1rem; text-align: center; color: #b91c1c; font-size: .875rem; }
         .jb-more { display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: .9rem; border-top: 1px solid #f3f4f6; font-size: .75rem; color: #9ca3af; }
+
+        /* ===== Tab sub-menu (Order | Inbound Retur) ===== */
+        .jb-tabs { display: flex; gap: .25rem; padding: .25rem; margin-bottom: 1rem; background: #f3f4f6; border-radius: .9rem; max-width: 26rem; }
+        .jb-tabs button { flex: 1 1 0; min-height: 2.5rem; padding: .45rem .75rem; border: 0; border-radius: .7rem; background: transparent; color: #6b7280; font-size: .8125rem; font-weight: 700; cursor: pointer; }
+        .jb-tabs button.on { background: #fff; color: #b45309; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+        .jb-head-act { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+        /* ===== Baris scan (dipakai Fulfillment & Retur) ===== */
+        .jb-scanrow { display: flex; gap: .5rem; margin: .75rem 0 .35rem; }
+        .jb-scanrow input { flex: 1 1 auto; min-width: 0; padding: .7rem .85rem; border: 2px solid #fbbf24; border-radius: .8rem; background: #fff; font-size: 16px; font-weight: 600; color: #111827; }
+        .jb-scanrow input:focus { outline: none; box-shadow: 0 0 0 3px rgba(251,191,36,.35); }
+        .jb-scanrow .jb-btn { flex: none; min-height: 2.75rem; }
+        .jb-msg { min-height: 1.25rem; margin-bottom: .5rem; font-size: .8125rem; font-weight: 700; }
+        .jb-msg.ok { color: #047857; } .jb-msg.err { color: #b91c1c; } .jb-msg.warn { color: #b45309; }
+        .jb-hint { font-size: .75rem; color: #6b7280; line-height: 1.45; }
+
+        /* ===== Modal Fulfillment ===== */
+        .jb-ff { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: stretch; justify-content: center; background: rgba(17,24,39,.55); }
+        .jb-ff-sheet { display: flex; flex-direction: column; width: 100%; max-width: 44rem; min-height: 0; background: #f9fafb; }
+        @media (min-width: 768px) { .jb-ff { align-items: center; padding: 1.5rem; } .jb-ff-sheet { max-height: 92vh; border-radius: 1.25rem; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.3); } }
+        .jb-ff-h { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .8rem 1rem; padding-top: calc(.8rem + env(safe-area-inset-top, 0px)); background: #1f2937; color: #fff; }
+        .jb-ff-t { font-size: 1rem; font-weight: 800; overflow-wrap: anywhere; }
+        .jb-ff-st { margin-top: .1rem; font-size: .75rem; color: #d1d5db; }
+        .jb-ff-x { flex: none; width: 2.5rem; height: 2.5rem; border: 0; border-radius: .7rem; background: rgba(255,255,255,.12); color: #fff; font-size: 1.5rem; line-height: 1; cursor: pointer; }
+        .jb-ff-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: .85rem 1rem; -webkit-overflow-scrolling: touch; }
+        .jb-ff-foot { padding: .75rem 1rem; padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px)); background: #fff; border-top: 1px solid #e5e7eb; }
+        .jb-ff-foot .jb-pbtn { margin-top: 0; }
+        .jb-ff-foot .jb-foot-t { margin-bottom: .5rem; font-size: .8125rem; font-weight: 700; color: #374151; display: flex; justify-content: space-between; gap: .5rem; align-items: center; }
+        .jb-ff-pick { padding: 1.5rem 1rem; text-align: center; font-size: .875rem; color: #6b7280; }
+        .jb-ff-info { padding: .75rem .85rem; border-radius: .9rem; background: #fff; border: 1px solid #eef0f4; font-size: .8125rem; line-height: 1.5; color: #4b5563; }
+        .jb-ff-info b { color: #111827; }
+        .jb-stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: .35rem; margin: .8rem 0 .2rem; }
+        .jb-stp { text-align: center; font-size: .6875rem; font-weight: 700; color: #9ca3af; }
+        .jb-stp i { display: flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; margin: 0 auto .25rem; border-radius: 9999px; background: #e5e7eb; color: #6b7280; font-style: normal; font-size: .8125rem; }
+        .jb-stp.is-done i { background: #10b981; color: #fff; } .jb-stp.is-done { color: #047857; }
+        .jb-stp.is-cur i { background: #f59e0b; color: #fff; box-shadow: 0 0 0 4px rgba(245,158,11,.25); } .jb-stp.is-cur { color: #92400e; }
+        .jb-fi { display: flex; align-items: center; gap: .6rem; padding: .7rem .8rem; margin-bottom: .5rem; border-radius: .9rem; background: #fff; border: 1px solid #eef0f4; transition: background-color .25s, border-color .25s; }
+        .jb-fi.is-full { background: #ecfdf5; border-color: #a7f3d0; }
+        .jb-fi.is-flash { background: #fef3c7; border-color: #fbbf24; }
+        .jb-fi-main { flex: 1 1 auto; min-width: 0; }
+        .jb-fi-name { font-size: .8125rem; font-weight: 600; color: #1f2937; line-height: 1.35; overflow-wrap: anywhere; }
+        .jb-bar { height: .35rem; margin-top: .4rem; border-radius: 9999px; background: #f3f4f6; overflow: hidden; }
+        .jb-bar > span { display: block; height: 100%; border-radius: 9999px; background: #f59e0b; transition: width .2s; }
+        .jb-fi.is-full .jb-bar > span { background: #10b981; }
+        .jb-fi-n { flex: none; min-width: 3.1rem; text-align: center; font-size: 1.05rem; font-weight: 800; color: #111827; font-variant-numeric: tabular-nums; }
+        .jb-fi-n small { display: block; font-size: .625rem; font-weight: 600; color: #9ca3af; }
+        .jb-pm { display: flex; flex-direction: column; gap: .3rem; flex: none; }
+        .jb-pm button, .jb-stepq button { width: 2.5rem; height: 2.5rem; border: 1px solid #e5e7eb; border-radius: .65rem; background: #f9fafb; color: #374151; font-size: 1.15rem; font-weight: 800; cursor: pointer; }
+        .jb-pm button:disabled { opacity: .4; }
+        .jb-done-box { padding: 1rem; border-radius: .9rem; background: #ecfdf5; border: 1px solid #a7f3d0; text-align: center; color: #065f46; font-weight: 700; font-size: .875rem; line-height: 1.5; }
+
+        /* ===== Inbound Retur ===== */
+        .jb-seg { display: flex; padding: .2rem; gap: .2rem; background: #f3f4f6; border-radius: .85rem; }
+        .jb-seg button { flex: 1 1 0; min-height: 2.5rem; padding: .4rem .3rem; border: 0; border-radius: .65rem; background: transparent; color: #6b7280; font-size: .8125rem; font-weight: 700; cursor: pointer; }
+        .jb-seg button.on { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+        .jb-seg button.on[data-r="Damage"] { color: #b91c1c; } .jb-seg button.on[data-r="Reture"] { color: #1d4ed8; } .jb-seg button.on[data-r="Expired"] { color: #b45309; }
+        .jb-rt-bar { padding: .9rem; margin-bottom: .9rem; background: #fff; border: 1px solid #eef0f4; border-radius: 1rem; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+        .jb-lbl { display: block; margin-bottom: .35rem; font-size: .6875rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #6b7280; }
+        .jb-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .9rem; }
+        .jb-chip { padding: .4rem .8rem; border-radius: .75rem; background: #fff; border: 1px solid #e5e7eb; font-size: .75rem; color: #6b7280; }
+        .jb-chip b { margin-left: .3rem; font-size: .9rem; color: #111827; }
+        .jb-rt-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; padding: .85rem; border-top: 1px solid #f3f4f6; background: #fff; }
+        .jb-rt-row:first-child { border-top: 0; }
+        .jb-rt-row.is-saved { background: #f0fdf4; } .jb-rt-row.is-fail { background: #fef2f2; }
+        .jb-rt-name { font-size: .875rem; font-weight: 700; color: #111827; overflow-wrap: anywhere; }
+        .jb-rt-meta { margin-top: .15rem; font-size: .75rem; color: #6b7280; line-height: 1.5; overflow-wrap: anywhere; }
+        .jb-rt-warn { margin-top: .25rem; font-size: .75rem; font-weight: 600; color: #b45309; }
+        .jb-rt-ctl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem; align-items: center; }
+        .jb-stepq { display: flex; align-items: center; gap: .3rem; }
+        .jb-stepq input { width: 3.2rem; height: 2.5rem; text-align: center; border: 1px solid #e5e7eb; border-radius: .65rem; font-size: 16px; font-weight: 800; }
+        .jb-in { width: 100%; min-width: 0; height: 2.5rem; padding: 0 .7rem; border: 1px solid #e5e7eb; border-radius: .65rem; background: #fff; font-size: 16px; color: #374151; box-sizing: border-box; }
+        .jb-in.r-Damage { border-color: #fca5a5; background: #fef2f2; } .jb-in.r-Reture { border-color: #93c5fd; background: #eff6ff; } .jb-in.r-Expired { border-color: #fcd34d; background: #fffbeb; }
+        .jb-rt-del { grid-column: 1 / -1; justify-self: end; border: 0; background: none; font-size: .75rem; font-weight: 700; color: #b91c1c; cursor: pointer; padding: .2rem .4rem; }
+        .jb-rt-act { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: 1.5rem; }
+        .jb-rt-act .jb-pbtn { grid-column: 1 / -1; margin-top: 0; }
+        .jb-rt-act .jb-btn { justify-content: center; min-height: 2.5rem; }
+        .jb-rbadge { display: inline-block; padding: .1rem .5rem; border-radius: 9999px; font-size: .6875rem; font-weight: 800; }
+        .jb-rbadge.Damage { background: #fee2e2; color: #991b1b; } .jb-rbadge.Reture { background: #dbeafe; color: #1e40af; } .jb-rbadge.Expired { background: #fef3c7; color: #92400e; }
+        @media (min-width: 768px) {
+            .jb-rt-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr); align-items: center; }
+            .jb-rt-ctl { grid-template-columns: auto 9rem minmax(0, 1fr) auto; }
+            .jb-rt-del { grid-column: auto; }
+            .jb-rt-act { grid-template-columns: 2fr 1fr 1fr; } .jb-rt-act .jb-pbtn { grid-column: auto; }
+        }
+
+        /* ===== Kamera scan ===== */
+        .jb-cam { position: fixed; inset: 0; z-index: 9500; display: flex; flex-direction: column; background: #000; }
+        .jb-cam-h { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .7rem 1rem; padding-top: calc(.7rem + env(safe-area-inset-top, 0px)); background: rgba(0,0,0,.85); color: #fff; font-size: .875rem; }
+        #jb-cam-view { flex: 1 1 auto; min-height: 0; }
+        .jb-cam-s { padding: .7rem 1rem; padding-bottom: calc(.7rem + env(safe-area-inset-bottom, 0px)); background: rgba(0,0,0,.85); color: #fff; text-align: center; font-size: .8125rem; min-height: 2.5rem; }
     </style>
 
     <!-- [MENU BARU — Print Label > Label Produk] Style halaman "print setup". Sengaja ditulis
@@ -7972,9 +8088,9 @@
         function jbToggleItems(i) { _jbExpanded[i] = !_jbExpanded[i]; renderJubelio(); }
 
         async function showJubelio() {
-            _jbStageFilter = 'baru'; _jbChannelFilter = ''; _jbStatusFilter = ''; _jbSort = 'auto'; _jbExpanded = {};
+            _jbStageFilter = 'baru'; _jbChannelFilter = ''; _jbStatusFilter = ''; _jbSort = 'auto'; _jbExpanded = {}; _jbTab = 'order';
             const skelRows = Array.from({ length: 5 }, () =>
-                `<tr>${'<td><span class="jb-skel" style="width:80%"></span></td>'.repeat(7)}</tr>`).join('');
+                `<tr>${'<td><span class="jb-skel" style="width:80%"></span></td>'.repeat(8)}</tr>`).join('');
             const skelCards = Array.from({ length: 4 }, () =>
                 `<div class="jb-card"><span class="jb-skel" style="width:55%;margin-bottom:.6rem"></span><span class="jb-skel" style="width:90%;margin-bottom:.4rem"></span><span class="jb-skel" style="width:70%"></span></div>`).join('');
 
@@ -7982,11 +8098,20 @@
             <div class="jb-head">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-semibold text-gray-700">Jubelio</h1>
-                    <p class="jb-sub">Antrean order dari akun Jubelio (hanya baca)<span id="jb-loaded-at"></span></p>
+                    <p class="jb-sub">Order Jubelio, fulfillment &amp; inbound retur<span id="jb-loaded-at"></span></p>
                 </div>
-                <button id="jb-refresh-btn" class="jb-btn" onclick="loadJubelio(true)">${JB_ICO.refresh}<span>Refresh</span></button>
+                <div class="jb-head-act">
+                    <button type="button" class="jb-btn" onclick="jbFfOpen()">${JB_ICO.scan}<span>Scan Order</span></button>
+                    <button id="jb-refresh-btn" class="jb-btn" onclick="loadJubelio(true)">${JB_ICO.refresh}<span>Refresh</span></button>
+                </div>
             </div>
 
+            <div class="jb-tabs" role="tablist">
+                <button type="button" id="jb-tab-order" class="on" onclick="jbSetTab('order')">Order</button>
+                <button type="button" id="jb-tab-retur" onclick="jbSetTab('retur')">Inbound Retur</button>
+            </div>
+
+            <div id="jb-view-order">
             <div id="jb-alert"></div>
             <div id="jb-kpis" class="jb-kpis"></div>
 
@@ -8013,15 +8138,17 @@
                 <div class="jb-desktop"><div class="jb-scroll">
                     <table class="jb-table">
                         <thead><tr>
-                            <th>No. Order</th><th>Tanggal</th><th>Customer</th><th>Item</th>
-                            <th class="jb-c">Total Qty</th><th>Status</th><th>Menunggu</th>
+                            <th>No. Order</th><th>Tanggal</th><th>Customer &amp; Alamat</th><th>3PL</th><th>Item</th>
+                            <th class="jb-c">Total Qty</th><th>Status</th><th>Fulfillment</th>
                         </tr></thead>
                         <tbody id="jb-tbody">${skelRows}</tbody>
                     </table>
                 </div></div>
                 <div id="jb-cards" class="jb-cards">${skelCards}</div>
                 <div id="jb-more" class="jb-more jb-hide"></div>
-            </div>`;
+            </div>
+            </div>
+            <div id="jb-view-retur" class="jb-hide"></div>`;
 
             // Data kunjungan sebelumnya langsung tampil, lalu disegarkan di latar belakang.
             if (_jubelioRows.length) { _jubelioUpdateLoadedAt(); renderJubelio(); }
@@ -8057,8 +8184,8 @@
                 rows.forEach((r, i) => {
                     r._i = i;
                     const items = Array.isArray(r.items) ? r.items : [];
-                    r._search = [r.no, r.customer, r.channel, r.status, r.statusAlt]
-                        .concat(items.map(it => (it.name || '') + ' ' + (it.sku || '')))
+                    r._search = [r.no, r.customer, r.recipient, r.address, r.phone, r.courier, r.awb, r.channel, r.status, r.statusAlt]
+                        .concat(items.map(it => (it.name || '') + ' ' + (it.sku || '') + ' ' + (it.barcode || '')))
                         .join(' | ').toLowerCase();
                 });
                 _jubelioRows = rows;
@@ -8067,6 +8194,7 @@
                 if (mySeq !== _jubelioLoadSeq || !document.getElementById('jb-tbody')) return;
                 _jubelioUpdateLoadedAt();
                 renderJubelio();
+                loadJbFulfillment();
             } catch (err) {
                 if (mySeq !== _jubelioLoadSeq) return;
                 if (_jubelioRows.length) {
@@ -8074,7 +8202,7 @@
                     return;
                 }
                 const tb = document.getElementById('jb-tbody');
-                if (tb) tb.innerHTML = `<tr><td colspan="7"><div class="jb-error">Gagal memuat data: ${escapeHtml(err.message)}<br><button type="button" class="jb-link" style="margin-top:.5rem" onclick="loadJubelio(true)">Coba lagi</button></div></td></tr>`;
+                if (tb) tb.innerHTML = `<tr><td colspan="8"><div class="jb-error">Gagal memuat data: ${escapeHtml(err.message)}<br><button type="button" class="jb-link" style="margin-top:.5rem" onclick="loadJubelio(true)">Coba lagi</button></div></td></tr>`;
                 const cards = document.getElementById('jb-cards');
                 if (cards) cards.innerHTML = `<div class="jb-error">Gagal memuat data: ${escapeHtml(err.message)}</div>`;
                 const cnt = document.getElementById('jb-count');
@@ -8186,23 +8314,29 @@
                 const msg = all.length
                     ? `<div class="jb-empty">${JB_ICO.inbox}<b>${_jbStageFilter === 'baru' && !q && !_jbChannelFilter && !_jbStatusFilter ? 'Tidak ada order yang belum dikerjakan' : 'Tidak ada order yang cocok'}</b>Ubah filter atau kata pencarian.</div>`
                     : `<div class="jb-empty">${JB_ICO.inbox}<b>Belum ada order</b>Order dari Jubelio akan tampil di sini.</div>`;
-                tbody.innerHTML = `<tr><td colspan="7" style="padding:0">${msg}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="padding:0">${msg}</td></tr>`;
                 if (cards) cards.innerHTML = msg;
             } else {
                 tbody.innerHTML = list.map(r => `<tr>
                     <td><div class="jb-no">${escapeHtml(r.no || '-')}</div>${r.channel ? `<span class="jb-chan">${escapeHtml(r.channel)}</span>` : ''}</td>
-                    <td class="jb-date">${_jbFormatDate(r.date)}</td>
-                    <td class="jb-cust">${escapeHtml(r.customer || '-')}</td>
+                    <td class="jb-date">${_jbFormatDate(r.date)}<span class="jb-time">${_jbWaitChip(r)}</span></td>
+                    <td><div class="jb-cust-d">${escapeHtml(r.customer || '-')}</div>${r.address ? `<div class="jb-addr-d" title="${escapeHtml(r.address)}">${escapeHtml(r.address)}</div>` : '<div class="jb-muted">Alamat belum tersedia</div>'}${_jbPhoneHtml(r)}</td>
+                    <td>${_jbShipHtml(r)}</td>
                     <td class="jb-items">${_jbItemsHtml(r)}</td>
                     <td class="jb-c"><span class="jb-total">${escapeHtml(r.totalQty || 0)}<small>pcs</small></span></td>
                     <td>${_jbStatusBadge(r)}${r.statusAlt ? `<div class="jb-alt">${escapeHtml(r.statusAlt)}</div>` : ''}</td>
-                    <td>${_jbWaitChip(r)}</td>
+                    <td>${_jbFfMini(r)}${_jbFfBtn(r, true)}</td>
                 </tr>`).join('');
                 if (cards) cards.innerHTML = list.map(r => `<div class="jb-card">
-                    <div class="jb-card-top"><div class="jb-no">${escapeHtml(r.no || '-')}</div>${_jbStatusBadge(r)}</div>
-                    <div class="jb-card-meta"><b style="color:#1f2937">${escapeHtml(r.customer || '-')}</b>${r.channel ? ' · ' + escapeHtml(r.channel) : ''}<br>${_jbFormatDate(r.date).replace('<span class="jb-time">', ' · <span>')}</div>
-                    ${_jbItemsHtml(r)}
-                    <div class="jb-card-foot"><span>Total <b style="color:#111827">${escapeHtml(r.totalQty || 0)} pcs</b></span>${_jbWaitChip(r)}</div>
+                    <div class="jb-card-top"><div><div class="jb-no">${escapeHtml(r.no || '-')}</div>
+                        <div class="jb-card-sub">${r.channel ? `<span class="jb-chan">${escapeHtml(r.channel)}</span>` : ''}<span>${escapeHtml(_jbShortDate(r.date))}</span></div></div>${_jbStatusBadge(r)}</div>
+                    <div class="jb-box"><div class="jb-box-t">Customer &amp; alamat</div>
+                        <div class="jb-cust">${escapeHtml(r.customer || '-')}</div>
+                        <div class="jb-addr">${r.address ? escapeHtml(r.address) : '<span class="jb-muted">Alamat belum tersedia</span>'}</div>${_jbPhoneHtml(r)}</div>
+                    <div class="jb-box"><div class="jb-box-t">Dikirim via (3PL)</div>${_jbShipHtml(r)}</div>
+                    <div class="jb-box"><div class="jb-box-t">Item (${(r.items || []).length}) · ${escapeHtml(r.totalQty || 0)} pcs</div><div class="jb-items">${_jbItemsHtml(r)}</div></div>
+                    <div class="jb-card-foot"><span>Menunggu</span>${_jbWaitChip(r)}</div>
+                    ${_jbFfMini(r)}${_jbFfBtn(r, false)}
                 </div>`).join('');
             }
 
@@ -8215,6 +8349,437 @@
                     (canMore ? `<button type="button" class="jb-btn" onclick="jbLoadMore()">Muat ${Math.min(JB_PAGE_SIZE, JB_MAX_LIMIT - _jbLimit)} order lagi</button>`
                              : (all.length >= JB_MAX_LIMIT ? `<span>Batas tampilan ${JB_MAX_LIMIT} order tercapai.</span>` : ''));
             }
+        }
+
+        // =========================================================================
+        // MENU JUBELIO — TAMBAHAN: alamat/3PL, FULFILLMENT (scan) & INBOUND RETUR
+        // - Fulfillment: Putaway > Picking > Packing > Finish Pack. Tiap tahap = scan SKU/barcode item
+        //   sampai qty lengkap, lalu dicatat ke sheet "Jubelio_Fulfillment" (spreadsheet "Purchase Order nod.").
+        // - Inbound Retur: scan No. Order / No. Resi / SKU, pilih Remark (Damage / Reture / Expired), simpan ke
+        //   sheet "Jubelio_Retur_Inbound". Status order di Jubelio TIDAK diubah.
+        // =========================================================================
+        const JB_FF_STAGES = ['Putaway', 'Picking', 'Packing', 'Finish Pack'];
+        const JB_RT_REMARKS = ['Damage', 'Reture', 'Expired'];
+        JB_ICO.cam = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7h3l2-2h8l2 2h3v12H3V7zm9 10a4 4 0 100-8 4 4 0 000 8z"/></svg>';
+        JB_ICO.scan = '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M4 12h16"/></svg>';
+
+        let _jbTab = 'order';
+        let _jbFulf = {};          // No. Order -> { stages: { Putaway: ts, ... }, last }
+        let _jbFf = null;          // state modal fulfillment
+        let _jbRt = { rows: [], remark: 'Damage', busy: false, batch: null, inited: false };
+        let _jbCam = null, _jbCamLast = { code: '', t: 0 }, _jbAudio = null;
+
+        function _jbNormCode(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
+        function _jbQty(it) { return Math.max(1, Number(it && it.qty) || 1); }
+        function _jbShortDate(raw) {
+            const d = new Date(raw);
+            if (!raw || isNaN(d.getTime())) return '-';
+            const o = { timeZone: 'Asia/Jakarta' };
+            return d.toLocaleDateString('id-ID', Object.assign({ day: 'numeric', month: 'short', year: 'numeric' }, o)) + ' · ' +
+                d.toLocaleTimeString('id-ID', Object.assign({ hour: '2-digit', minute: '2-digit', hour12: false }, o)).replace('.', ':');
+        }
+
+        function _jbFindOrder(code) {
+            const k = _jbNormCode(code);
+            if (!k) return null;
+            return _jubelioRows.find(r => _jbNormCode(r.no) === k || (r.awb && _jbNormCode(r.awb) === k) || _jbNormCode(r.id) === k) || null;
+        }
+        function _jbFindSku(code) {
+            const k = _jbNormCode(code);
+            if (!k) return null;
+            for (const r of _jubelioRows) {
+                for (const it of (r.items || [])) {
+                    if ((it.sku && _jbNormCode(it.sku) === k) || (it.barcode && _jbNormCode(it.barcode) === k)) return { sku: it.sku || it.barcode, name: it.name };
+                }
+            }
+            return null;
+        }
+
+        function _jbBeep(ok) {
+            try { if (navigator.vibrate) navigator.vibrate(ok ? 80 : [120, 60, 120]); } catch (e) { }
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+                const a = _jbAudio || (_jbAudio = new AC()), o = a.createOscillator(), g = a.createGain();
+                o.type = ok ? 'sine' : 'square'; o.frequency.value = ok ? 1040 : 220; g.gain.value = 0.08;
+                o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + (ok ? 0.1 : 0.28));
+            } catch (e) { }
+        }
+
+        /** Input scan: mode "scanner" (tanpa keyboard layar) <-> "ketik". Scanner fisik (HID) tetap bisa mengetik ke input. */
+        function jbToggleKb(id, btn) {
+            const el = document.getElementById(id); if (!el) return;
+            const on = el.getAttribute('inputmode') === 'none';
+            el.setAttribute('inputmode', on ? 'text' : 'none');
+            if (btn) btn.textContent = on ? 'Scanner' : 'Ketik';
+            el.focus();
+        }
+
+        // ---------- kolom alamat / 3PL untuk tabel & kartu ----------
+        function _jbShipHtml(r) {
+            if (!r.courier && !r.awb) return '<span class="jb-muted">3PL belum ada</span>';
+            return `<div class="jb-ship">${r.courier ? `<span class="jb-3pl">${escapeHtml(r.courier)}${r.service ? ' · ' + escapeHtml(r.service) : ''}</span>` : ''}${r.awb ? `<span class="jb-awb">${escapeHtml(r.awb)}</span>` : ''}</div>`;
+        }
+        function _jbPhoneHtml(r) {
+            const p = String(r.phone || '').trim();
+            return p ? `<a class="jb-phone" href="tel:${escapeHtml(p.replace(/[^0-9+]/g, ''))}">${escapeHtml(p)}</a>` : '';
+        }
+        function _jbFfDone(o) {
+            const p = _jbFulf[o.no];
+            let n = 0;
+            while (n < JB_FF_STAGES.length && p && p.stages && p.stages[JB_FF_STAGES[n]]) n++;
+            return n;
+        }
+        function _jbFfMini(o) {
+            const n = _jbFfDone(o);
+            return `<div class="jb-steps">${JB_FF_STAGES.map((s, i) => `<span class="jb-st${i < n ? ' is-done' : (i === n ? ' is-cur' : '')}">${s}</span>`).join('')}</div>`;
+        }
+        function _jbFfBtn(o, small) {
+            const n = _jbFfDone(o), all = n >= JB_FF_STAGES.length;
+            const stage = _jbStageOf(o);
+            if (stage === 'batal') return '';
+            return `<button type="button" class="jb-pbtn${small ? ' jb-pbtn-sm' : ''}${all ? ' jb-done' : ''}" onclick="jbFfOpen(${JSON.stringify(o.no).replace(/"/g, '&quot;')})">${JB_ICO.scan}<span>${all ? 'Selesai · lihat' : 'Fulfillment · ' + JB_FF_STAGES[n]}</span></button>`;
+        }
+
+        async function loadJbFulfillment() {
+            try {
+                const res = await fetchWithRetry(PO_GAS_URL + '?action=getJubelioFulfillment&t=' + Date.now(), {}, 30000);
+                const j = await res.json();
+                if (j && j.success && j.progress) { _jbFulf = j.progress; if (document.getElementById('jb-tbody')) renderJubelio(); }
+            } catch (e) { /* progres tidak fatal: tabel tetap tampil */ }
+        }
+
+        // ---------- tab ----------
+        function jbSetTab(t) {
+            _jbTab = t;
+            const a = document.getElementById('jb-view-order'), b = document.getElementById('jb-view-retur');
+            if (!a || !b) return;
+            a.classList.toggle('jb-hide', t !== 'order');
+            b.classList.toggle('jb-hide', t !== 'retur');
+            document.getElementById('jb-tab-order').classList.toggle('on', t === 'order');
+            document.getElementById('jb-tab-retur').classList.toggle('on', t === 'retur');
+            if (t === 'retur') jbRtInit();
+        }
+
+        // ---------- kamera ----------
+        async function jbCamOpen(title, onCode) {
+            try { await _ensureHtml5Qrcode(); } catch (e) { showToastAlert('error', 'Kamera', 'Pemindai gagal dimuat. Cek koneksi internet.'); return; }
+            let el = document.getElementById('jb-cam');
+            if (!el) {
+                el = document.createElement('div'); el.id = 'jb-cam'; el.className = 'jb-cam jb-hide';
+                el.innerHTML = '<div class="jb-cam-h"><b id="jb-cam-t"></b><button type="button" class="jb-btn" onclick="jbCamClose()">Selesai</button></div><div id="jb-cam-view"></div><div id="jb-cam-s" class="jb-cam-s">Arahkan kamera ke barcode / QR</div>';
+                document.body.appendChild(el);
+            }
+            document.getElementById('jb-cam-t').textContent = title;
+            el.classList.remove('jb-hide');
+            try {
+                const F = Html5QrcodeSupportedFormats;
+                _jbCam = new Html5Qrcode('jb-cam-view', { formatsToSupport: [F.QR_CODE, F.CODE_128, F.CODE_39, F.CODE_93, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.ITF, F.CODABAR, F.DATA_MATRIX], verbose: false });
+                await _jbCam.start({ facingMode: 'environment' },
+                    { fps: 10, qrbox: (w, h) => ({ width: Math.floor(w * 0.88), height: Math.floor(Math.min(h * 0.5, w * 0.5)) }) },
+                    txt => {
+                        const now = Date.now();
+                        if (txt === _jbCamLast.code && now - _jbCamLast.t < 1600) return;
+                        _jbCamLast = { code: txt, t: now };
+                        const s = document.getElementById('jb-cam-s'); if (s) s.textContent = 'Terbaca: ' + txt;
+                        onCode(txt);
+                    }, () => { });
+            } catch (err) {
+                jbCamClose();
+                showToastAlert('error', 'Kamera tidak bisa dibuka', escapeHtml((err && err.message) || String(err)) + ' — gunakan scanner / ketik manual.');
+            }
+        }
+        async function jbCamClose() {
+            try { if (_jbCam) { try { await _jbCam.stop(); } catch (e) { } try { _jbCam.clear(); } catch (e) { } } } catch (e) { }
+            _jbCam = null;
+            const el = document.getElementById('jb-cam'); if (el) el.classList.add('jb-hide');
+        }
+
+        // =========================================================================
+        // FULFILLMENT
+        // =========================================================================
+        function _jbFfEnsure() {
+            if (document.getElementById('jb-ff')) return;
+            const d = document.createElement('div');
+            d.id = 'jb-ff'; d.className = 'jb-ff jb-hide';
+            d.innerHTML = `<div class="jb-ff-sheet" role="dialog" aria-modal="true">
+                <div class="jb-ff-h"><div><div class="jb-ff-t" id="jb-ff-title">Fulfillment</div><div class="jb-ff-st" id="jb-ff-sub"></div></div>
+                    <button type="button" class="jb-ff-x" onclick="jbFfClose()" aria-label="Tutup">&times;</button></div>
+                <div class="jb-ff-body">
+                    <div id="jb-ff-info"></div>
+                    <div id="jb-ff-steps" class="jb-stepper"></div>
+                    <div class="jb-scanrow">
+                        <input id="jb-ff-in" type="text" inputmode="none" enterkeyhint="done" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Scan SKU / barcode item" onkeydown="if(event.key==='Enter'){event.preventDefault();jbFfScan(this.value);this.value='';}">
+                        <button type="button" class="jb-btn" onclick="jbToggleKb('jb-ff-in', this)">Ketik</button>
+                        <button type="button" class="jb-btn" onclick="jbFfCam()">${JB_ICO.cam}<span>Kamera</span></button>
+                    </div>
+                    <div id="jb-ff-msg" class="jb-msg"></div>
+                    <div id="jb-ff-list"></div>
+                </div>
+                <div class="jb-ff-foot" id="jb-ff-foot"></div></div>`;
+            document.body.appendChild(d);
+            d.addEventListener('mousedown', e => { if (e.target === d) jbFfClose(); });
+        }
+
+        function jbFfOpen(no) {
+            _jbFfEnsure();
+            const o = no ? _jubelioRows.find(r => r.no === no) : null;
+            document.getElementById('jb-ff').classList.remove('jb-hide');
+            document.body.style.overflow = 'hidden';
+            if (o) jbFfStart(o); else { _jbFf = { order: null }; jbFfPaint(); }
+            setTimeout(() => { const i = document.getElementById('jb-ff-in'); if (i) i.focus(); }, 80);
+        }
+        function jbFfClose() {
+            jbCamClose();
+            const el = document.getElementById('jb-ff'); if (el) el.classList.add('jb-hide');
+            document.body.style.overflow = '';
+            _jbFf = null;
+            if (document.getElementById('jb-tbody')) renderJubelio();
+        }
+        function jbFfStart(o) {
+            const n = _jbFfDone(o), items = o.items || [];
+            _jbFf = { order: o, idx: n, counts: items.map(() => 0), batch: {}, busy: false, flash: -1 };
+            try {
+                const d = JSON.parse(localStorage.getItem('jbFfDraft_' + o.no) || 'null');
+                if (d && d.idx === n && Array.isArray(d.counts) && d.counts.length === items.length) { _jbFf.counts = d.counts.map(Number); _jbFf.batch = d.batch || {}; }
+            } catch (e) { }
+            jbFfPaint();
+            jbFfMsg('', '');
+        }
+        function _jbFfDraft() {
+            const f = _jbFf; if (!f || !f.order) return;
+            try { localStorage.setItem('jbFfDraft_' + f.order.no, JSON.stringify({ idx: f.idx, counts: f.counts, batch: f.batch })); } catch (e) { }
+        }
+        function jbFfMsg(type, text) {
+            const el = document.getElementById('jb-ff-msg'); if (!el) return;
+            el.className = 'jb-msg ' + (type || ''); el.textContent = text || '';
+        }
+        function jbFfCam() {
+            jbCamOpen(_jbFf && _jbFf.order ? 'Scan item · ' + JB_FF_STAGES[Math.min(_jbFf.idx, 3)] : 'Scan No. Order / Resi', c => jbFfScan(c));
+        }
+
+        function jbFfScan(raw) {
+            const code = String(raw || '').trim();
+            const f = _jbFf;
+            if (!code || !f) return;
+            if (!f.order) {                                  // mode: cari order dulu
+                const o = _jbFindOrder(code);
+                if (!o) { _jbBeep(false); jbFfMsg('err', 'Order "' + code + '" tidak ditemukan di data yang dimuat. Refresh / muat lebih banyak order.'); return; }
+                _jbBeep(true); jbCamClose(); jbFfStart(o); return;
+            }
+            if (f.idx >= JB_FF_STAGES.length) { jbFfMsg('warn', 'Semua tahap sudah selesai.'); return; }
+            const k = _jbNormCode(code), items = f.order.items || [];
+            const hits = items.map((it, i) => i).filter(i => (items[i].sku && _jbNormCode(items[i].sku) === k) || (items[i].barcode && _jbNormCode(items[i].barcode) === k));
+            if (!hits.length) { _jbBeep(false); jbFfMsg('err', '"' + code + '" bukan item di order ini!'); return; }
+            const i = hits.find(x => f.counts[x] < _jbQty(items[x]));
+            if (i === undefined) { _jbBeep(false); jbFfMsg('warn', 'Qty ' + (items[hits[0]].sku || code) + ' sudah penuh (' + _jbQty(items[hits[0]]) + ').'); return; }
+            f.counts[i]++; f.flash = i;
+            _jbBeep(true);
+            jbFfMsg('ok', '✓ ' + (items[i].name || items[i].sku) + ' · ' + f.counts[i] + '/' + _jbQty(items[i]));
+            _jbFfDraft(); jbFfPaint();
+            setTimeout(() => { if (_jbFf === f) { f.flash = -1; jbFfPaint(); } }, 450);
+        }
+        function jbFfAdj(i, d) {
+            const f = _jbFf; if (!f || !f.order || f.busy) return;
+            const q = _jbQty(f.order.items[i]);
+            f.counts[i] = Math.max(0, Math.min(q, f.counts[i] + d));
+            _jbFfDraft(); jbFfPaint();
+        }
+        async function jbFfResetStage() {
+            const f = _jbFf; if (!f || !f.order) return;
+            if (!(await showConfirm('Ulangi scan tahap ini?', 'Hitungan scan tahap ' + JB_FF_STAGES[f.idx] + ' di layar dikembalikan ke 0 (belum disimpan ke sheet).'))) return;
+            f.counts = f.counts.map(() => 0); _jbFfDraft(); jbFfPaint(); jbFfMsg('', '');
+        }
+
+        function jbFfPaint() {
+            const f = _jbFf; if (!f) return;
+            const $ = id => document.getElementById(id);
+            if (!$('jb-ff')) return;
+            if (!f.order) {
+                $('jb-ff-title').textContent = 'Scan Order'; $('jb-ff-sub').textContent = 'Mulai fulfillment';
+                $('jb-ff-info').innerHTML = '<div class="jb-ff-pick">Scan <b>No. Order</b> atau <b>No. Resi</b> pada label untuk memulai fulfillment.</div>';
+                $('jb-ff-steps').innerHTML = ''; $('jb-ff-list').innerHTML = ''; $('jb-ff-foot').innerHTML = '';
+                return;
+            }
+            const o = f.order, items = o.items || [], all = f.idx >= JB_FF_STAGES.length;
+            $('jb-ff-title').textContent = o.no;
+            $('jb-ff-sub').textContent = [o.channel, _jbShortDate(o.date)].filter(Boolean).join(' · ');
+            $('jb-ff-info').innerHTML = `<div class="jb-ff-info"><b>${escapeHtml(o.recipient || o.customer || '-')}</b>${o.phone ? ' · ' + escapeHtml(o.phone) : ''}<br>${o.address ? escapeHtml(o.address) : '<span class="jb-muted">Alamat belum tersedia dari Jubelio</span>'}<br>3PL: <b>${escapeHtml(o.courier || '-')}</b>${o.service ? ' · ' + escapeHtml(o.service) : ''}${o.awb ? ' · Resi <b>' + escapeHtml(o.awb) + '</b>' : ''}</div>`;
+            $('jb-ff-steps').innerHTML = JB_FF_STAGES.map((s, i) => `<div class="jb-stp${i < f.idx ? ' is-done' : (i === f.idx ? ' is-cur' : '')}"><i>${i < f.idx ? '✓' : i + 1}</i>${s}</div>`).join('');
+            const scanRow = document.querySelector('#jb-ff .jb-scanrow'), msg = $('jb-ff-msg');
+            if (scanRow) scanRow.style.display = all ? 'none' : ''; if (msg && all) msg.textContent = '';
+            if (all) {
+                $('jb-ff-list').innerHTML = `<div class="jb-done-box">Fulfillment selesai ✓<br>Semua tahap (Putaway → Finish Pack) sudah dicatat.<br>Serahkan paket ke <b>${escapeHtml(o.courier || '3PL')}</b>.</div>`;
+                $('jb-ff-foot').innerHTML = '<button type="button" class="jb-pbtn jb-done" onclick="jbFfClose()"><span>Tutup</span></button>';
+                return;
+            }
+            $('jb-ff-list').innerHTML = items.length ? items.map((it, i) => {
+                const q = _jbQty(it), c = f.counts[i] || 0, full = c >= q;
+                return `<div class="jb-fi${full ? ' is-full' : ''}${f.flash === i ? ' is-flash' : ''}">
+                    <div class="jb-fi-main"><div class="jb-fi-name">${escapeHtml(it.name || '-')}</div>${it.sku ? `<span class="jb-sku">${escapeHtml(it.sku)}</span>` : '<span class="jb-sku">tanpa SKU — pakai tombol +</span>'}
+                        <div class="jb-bar"><span style="width:${Math.round(c / q * 100)}%"></span></div></div>
+                    <div class="jb-fi-n">${c}/${q}<small>${full ? 'lengkap' : 'scan'}</small></div>
+                    <div class="jb-pm"><button type="button" onclick="jbFfAdj(${i},1)" aria-label="Tambah" ${full || f.busy ? 'disabled' : ''}>+</button><button type="button" onclick="jbFfAdj(${i},-1)" aria-label="Kurangi" ${c <= 0 || f.busy ? 'disabled' : ''}>−</button></div></div>`;
+            }).join('') : '<div class="jb-empty">Order ini tidak punya item.</div>';
+            const total = items.reduce((a, it) => a + _jbQty(it), 0), got = f.counts.reduce((a, n) => a + n, 0);
+            const ready = items.length > 0 && got >= total;
+            $('jb-ff-foot').innerHTML = `<div class="jb-foot-t"><span>${JB_FF_STAGES[f.idx]}: ${got}/${total} pcs</span><button type="button" class="jb-link" onclick="jbFfResetStage()">Ulangi scan</button></div>
+                <button type="button" class="jb-pbtn" ${ready && !f.busy ? '' : 'disabled style="opacity:.45;cursor:not-allowed"'} onclick="jbFfSubmit()"><span>${f.busy ? 'Menyimpan…' : (ready ? 'Selesaikan ' + JB_FF_STAGES[f.idx] + ' ✓' : 'Scan semua item dulu')}</span></button>`;
+        }
+
+        async function jbFfSubmit() {
+            const f = _jbFf; if (!f || !f.order || f.busy || f.idx >= JB_FF_STAGES.length) return;
+            const o = f.order, stage = JB_FF_STAGES[f.idx], items = o.items || [];
+            if (!items.length || items.some((it, i) => f.counts[i] < _jbQty(it))) return;
+            f.busy = true; jbFfPaint();
+            if (!f.batch[stage]) f.batch[stage] = 'ff_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+            _jbFfDraft();
+            const body = JSON.stringify({
+                action: 'simpanJubelioFulfillment', token: sessionToken, stage, batchId: f.batch[stage],
+                order: { no: o.no, id: o.id, customer: o.customer, recipient: o.recipient, phone: o.phone, address: o.address, city: o.city, courier: o.courier, awb: o.awb, channel: o.channel },
+                items: items.map((it, i) => ({ sku: it.sku || it.barcode || '', name: it.name, qtyOrder: _jbQty(it), qtyScan: f.counts[i] }))
+            });
+            const send = () => fetchWriteWithRetry(PO_GAS_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body }, 30000);
+            try {
+                let j; try { j = await send(); } catch (e) { if (e.isGasTimeout) { j = await send(); } else throw e; }
+                if (!j.success && !j.duplicate) throw new Error(j.message || 'Server menolak permintaan');
+                const p = _jbFulf[o.no] || (_jbFulf[o.no] = { stages: {}, last: '' });
+                p.stages[stage] = j.savedAt || new Date().toISOString(); p.last = stage;
+                try { localStorage.removeItem('jbFfDraft_' + o.no); } catch (e) { }
+                f.idx++; f.counts = items.map(() => 0); f.batch = {}; f.busy = false;
+                _jbFfDraft();
+                showToastAlert('success', 'Tahap ' + stage + ' tersimpan', f.idx >= JB_FF_STAGES.length ? 'Fulfillment order selesai.' : 'Lanjut: ' + JB_FF_STAGES[f.idx]);
+                jbFfMsg('', ''); jbFfPaint();
+            } catch (e) {
+                f.busy = false; jbFfPaint();
+                showAlert('error', 'Gagal menyimpan tahap', escapeHtml(e.message || String(e)));
+            }
+        }
+
+        // =========================================================================
+        // INBOUND RETUR
+        // =========================================================================
+        function jbRtInit() {
+            const host = document.getElementById('jb-view-retur');
+            if (!host) return;
+            if (!_jbRt.inited || !document.getElementById('jb-rt-in')) {
+                if (!_jbRt.rows.length) { try { const d = JSON.parse(localStorage.getItem('jbRtDraft') || '[]'); if (Array.isArray(d)) _jbRt.rows = d.filter(r => r && (r.sku || r.code)); } catch (e) { } }
+                host.innerHTML = `
+                <div class="jb-rt-bar">
+                    <span class="jb-lbl">Remark untuk item yang di-scan</span>
+                    <div class="jb-seg" id="jb-rt-seg">${JB_RT_REMARKS.map(r => `<button type="button" data-r="${r}" onclick="jbRtSetRemark('${r}')">${r}</button>`).join('')}</div>
+                    <div class="jb-scanrow">
+                        <input id="jb-rt-in" type="text" inputmode="none" enterkeyhint="done" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Scan No. Order / No. Resi / SKU" onkeydown="if(event.key==='Enter'){event.preventDefault();jbRtScan(this.value);this.value='';}">
+                        <button type="button" class="jb-btn" onclick="jbToggleKb('jb-rt-in', this)">Ketik</button>
+                        <button type="button" class="jb-btn" onclick="jbRtCam()">${JB_ICO.cam}<span>Kamera</span></button>
+                    </div>
+                    <div id="jb-rt-msg" class="jb-msg"></div>
+                    <div class="jb-hint">Scan No. Order / Resi → semua item order masuk sekaligus (qty bisa diubah). Scan SKU → qty +1 per scan. Remark bisa diganti per baris.</div>
+                </div>
+                <div class="jb-chips" id="jb-rt-chips"></div>
+                <div class="jb-panel" style="margin-bottom:1rem"><div id="jb-rt-list"></div></div>
+                <div class="jb-rt-act">
+                    <button type="button" class="jb-pbtn" id="jb-rt-save" onclick="jbRtSave()"><span>Simpan ke Spreadsheet</span></button>
+                    <button type="button" class="jb-btn" onclick="jbRtHistory()">Riwayat</button>
+                    <button type="button" class="jb-btn" onclick="jbRtClear()">Kosongkan</button>
+                </div>
+                <div id="jb-rt-hist" class="jb-hide"></div>`;
+                _jbRt.inited = true;
+            }
+            jbRtRender();
+            setTimeout(() => { const i = document.getElementById('jb-rt-in'); if (i) i.focus(); }, 80);
+        }
+        function jbRtMsg(type, text) { const el = document.getElementById('jb-rt-msg'); if (el) { el.className = 'jb-msg ' + (type || ''); el.textContent = text || ''; } }
+        function jbRtSetRemark(r) { _jbRt.remark = r; jbRtRender(); const i = document.getElementById('jb-rt-in'); if (i) i.focus(); }
+        function jbRtCam() { jbCamOpen('Scan retur · ' + _jbRt.remark, c => jbRtScan(c)); }
+        function _jbRtDraft() { try { localStorage.setItem('jbRtDraft', JSON.stringify(_jbRt.rows.filter(r => r.status !== 'saved').slice(0, 300))); } catch (e) { } }
+
+        function jbRtScan(raw) {
+            const code = String(raw || '').trim();
+            if (!code) return;
+            const rows = _jbRt.rows;
+            const o = _jbFindOrder(code);
+            if (o) {
+                if (rows.some(r => r.orderNo === o.no && r.status !== 'saved')) { _jbBeep(false); jbRtMsg('warn', 'Order ' + o.no + ' sudah ada di daftar.'); return; }
+                const its = o.items || [];
+                if (!its.length) { _jbBeep(false); jbRtMsg('err', 'Order ' + o.no + ' tidak punya item.'); return; }
+                its.forEach(it => rows.push({ code, orderNo: o.no, awb: o.awb || '', customer: o.recipient || o.customer || '', courier: o.courier || '', sku: it.sku || it.barcode || '', name: it.name || '', qty: _jbQty(it), remark: _jbRt.remark, note: '', status: 'new', matched: true }));
+                _jbBeep(true); jbRtMsg('ok', '✓ ' + its.length + ' item dari ' + o.no + ' ditambahkan');
+            } else {
+                const s = _jbFindSku(code), sku = s ? s.sku : code;
+                const ex = rows.find(r => !r.orderNo && r.sku === sku && r.remark === _jbRt.remark && r.status !== 'saved');
+                if (ex) ex.qty++;
+                else rows.push({ code, orderNo: '', awb: '', customer: '', courier: '', sku, name: s ? s.name : '', qty: 1, remark: _jbRt.remark, note: '', status: 'new', matched: !!s });
+                _jbBeep(true); jbRtMsg(s ? 'ok' : 'warn', (s ? '✓ ' : '? ') + (s ? s.name : sku) + (s ? '' : ' — tidak ada di data Jubelio, dicatat apa adanya'));
+            }
+            _jbRtDraft(); jbRtRender();
+        }
+        function jbRtQty(i, d) { const r = _jbRt.rows[i]; if (!r || r.status === 'saved') return; r.qty = Math.max(1, Math.min(9999, (Number(r.qty) || 1) + d)); _jbRtDraft(); jbRtRender(); }
+        function jbRtQtySet(i, v) { const r = _jbRt.rows[i]; if (!r) return; r.qty = Math.max(1, Math.min(9999, parseInt(v, 10) || 1)); _jbRtDraft(); jbRtRender(); }
+        function jbRtField(i, k, v) { const r = _jbRt.rows[i]; if (!r || r.status === 'saved') return; r[k] = v; if (k === 'remark') jbRtRender(); _jbRtDraft(); }
+        function jbRtDel(i) { _jbRt.rows.splice(i, 1); _jbRtDraft(); jbRtRender(); }
+        async function jbRtClear() {
+            if (!_jbRt.rows.length) return;
+            if (!(await showConfirm('Kosongkan daftar?', 'Semua baris di layar dihapus (data yang sudah tersimpan di spreadsheet tidak terpengaruh).'))) return;
+            _jbRt.rows = []; _jbRt.batch = null; _jbRtDraft(); jbRtRender();
+        }
+
+        function jbRtRender() {
+            const rows = _jbRt.rows;
+            document.querySelectorAll('#jb-rt-seg button').forEach(b => b.classList.toggle('on', b.dataset.r === _jbRt.remark));
+            const cnt = { Damage: 0, Reture: 0, Expired: 0 }; let pend = 0;
+            rows.forEach(r => { if (r.status !== 'saved') { pend++; if (cnt[r.remark] !== undefined) cnt[r.remark] += Number(r.qty) || 0; } });
+            const ch = document.getElementById('jb-rt-chips');
+            if (ch) ch.innerHTML = `<span class="jb-chip">Baris siap simpan<b>${pend}</b></span>` + JB_RT_REMARKS.map(r => `<span class="jb-chip">${r}<b>${cnt[r]}</b></span>`).join('');
+            const list = document.getElementById('jb-rt-list');
+            if (list) {
+                list.innerHTML = rows.length ? rows.map((r, i) => {
+                    const lock = r.status === 'saved';
+                    return `<div class="jb-rt-row${lock ? ' is-saved' : (r.status === 'fail' ? ' is-fail' : '')}">
+                        <div><div class="jb-rt-name">${escapeHtml(r.name || r.sku || r.code)}</div>
+                            <div class="jb-rt-meta">${r.sku ? `<span class="jb-awb">${escapeHtml(r.sku)}</span>` : ''}${r.orderNo ? ' · ' + escapeHtml(r.orderNo) : ''}${r.customer ? ' · ' + escapeHtml(r.customer) : ''}${r.courier ? ' · ' + escapeHtml(r.courier) : ''}${r.awb ? ' · ' + escapeHtml(r.awb) : ''}${lock ? ' · <b style="color:#047857">Tersimpan ✓</b>' : ''}${r.status === 'fail' ? ' · <b style="color:#b91c1c">Gagal — coba simpan lagi</b>' : ''}</div>
+                            ${!r.matched && !lock ? '<div class="jb-rt-warn">Tidak ditemukan di data Jubelio — dicatat apa adanya</div>' : ''}</div>
+                        <div class="jb-rt-ctl">
+                            <div class="jb-stepq"><button type="button" onclick="jbRtQty(${i},-1)" ${lock ? 'disabled' : ''}>−</button><input type="number" inputmode="numeric" min="1" value="${Number(r.qty) || 1}" onchange="jbRtQtySet(${i},this.value)" ${lock ? 'disabled' : ''}><button type="button" onclick="jbRtQty(${i},1)" ${lock ? 'disabled' : ''}>+</button></div>
+                            <select class="jb-in r-${escapeHtml(r.remark)}" onchange="jbRtField(${i},'remark',this.value)" ${lock ? 'disabled' : ''}>${JB_RT_REMARKS.map(x => `<option${x === r.remark ? ' selected' : ''}>${x}</option>`).join('')}</select>
+                            <input class="jb-in" type="text" maxlength="300" placeholder="Catatan (opsional)" value="${escapeHtml(r.note || '')}" onchange="jbRtField(${i},'note',this.value)" ${lock ? 'disabled' : ''}>
+                            ${lock ? '' : `<button type="button" class="jb-rt-del" onclick="jbRtDel(${i})">Hapus</button>`}
+                        </div></div>`;
+                }).join('') : `<div class="jb-empty">${JB_ICO.inbox}<b>Belum ada barang retur</b>Scan No. Order, No. Resi atau SKU untuk mulai.</div>`;
+            }
+            const sv = document.getElementById('jb-rt-save');
+            if (sv) { sv.disabled = !pend || _jbRt.busy; sv.style.opacity = (!pend || _jbRt.busy) ? '.45' : ''; sv.querySelector('span').textContent = _jbRt.busy ? 'Menyimpan…' : 'Simpan ke Spreadsheet' + (pend ? ' (' + pend + ')' : ''); }
+        }
+
+        async function jbRtSave() {
+            const todo = _jbRt.rows.filter(r => r.status !== 'saved');
+            if (!todo.length || _jbRt.busy) return;
+            if (todo.some(r => JB_RT_REMARKS.indexOf(r.remark) === -1)) { showAlert('warning', 'Remark belum dipilih', 'Pilih Damage / Reture / Expired untuk semua baris.'); return; }
+            if (!(await showConfirm('Simpan Inbound Retur?', todo.length + ' baris akan dicatat ke sheet "Jubelio_Retur_Inbound" di spreadsheet Purchase Order nod.'))) return;
+            _jbRt.busy = true; jbRtRender(); showProgressOverlay('Menyimpan inbound retur…');
+            if (!_jbRt.batch) _jbRt.batch = 'rt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+            const body = JSON.stringify({ action: 'simpanJubelioRetur', token: sessionToken, batchId: _jbRt.batch, items: todo.map(r => ({ code: r.code, orderNo: r.orderNo, awb: r.awb, customer: r.customer, courier: r.courier, sku: r.sku, name: r.name, qty: Number(r.qty) || 1, remark: r.remark, note: r.note || '' })) });
+            const send = () => fetchWriteWithRetry(PO_GAS_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, body }, 30000);
+            try {
+                let j; try { j = await send(); } catch (e) { if (e.isGasTimeout) { showProgressOverlay('Koneksi lambat, mencoba ulang (aman, tanpa data ganda)…'); j = await send(); } else throw e; }
+                if (!j.success) throw new Error(j.message || 'Server menolak permintaan');
+                todo.forEach(r => r.status = 'saved'); _jbRt.batch = null;
+                showToastAlert('success', 'Tersimpan', (j.saved || todo.length) + ' baris retur dicatat.');
+            } catch (e) { todo.forEach(r => r.status = 'fail'); showAlert('error', 'Gagal menyimpan', escapeHtml(e.message || String(e))); }
+            finally { _jbRt.busy = false; try { hideProgressOverlay(); } catch (e) { } _jbRtDraft(); jbRtRender(); }
+        }
+
+        async function jbRtHistory() {
+            const box = document.getElementById('jb-rt-hist'); if (!box) return;
+            box.classList.remove('jb-hide');
+            box.innerHTML = '<div class="jb-panel"><div class="jb-empty">Memuat riwayat…</div></div>';
+            try {
+                const res = await fetchWithRetry(PO_GAS_URL + '?action=getJubelioReturList&limit=50&t=' + Date.now(), {}, 30000);
+                const j = await res.json();
+                if (!j.success) throw new Error(j.message || j.error || 'Gagal memuat riwayat');
+                const rows = j.rows || [];
+                box.innerHTML = `<div class="jb-panel"><div class="jb-panel-head"><span class="jb-count">Riwayat retur terakhir<small>${rows.length} dari ${j.total || 0}</small></span><button type="button" class="jb-link" onclick="document.getElementById('jb-rt-hist').classList.add('jb-hide')">Tutup</button></div>` +
+                    (rows.length ? rows.map(r => `<div class="jb-rt-row"><div><div class="jb-rt-name">${escapeHtml(r.name || r.sku || r.code)} <span class="jb-rbadge ${escapeHtml(r.remark)}">${escapeHtml(r.remark)}</span></div><div class="jb-rt-meta">${escapeHtml(r.ts)}${r.orderNo ? ' · ' + escapeHtml(r.orderNo) : ''}${r.awb ? ' · ' + escapeHtml(r.awb) : ''}${r.note ? ' · ' + escapeHtml(r.note) : ''}</div></div><div class="jb-rt-name" style="text-align:right">×${escapeHtml(r.qty)}</div></div>`).join('') : '<div class="jb-empty"><b>Belum ada riwayat</b></div>') + '</div>';
+            } catch (e) { box.innerHTML = `<div class="jb-panel"><div class="jb-error">Gagal memuat riwayat: ${escapeHtml(e.message || String(e))}</div></div>`; }
         }
 
         // =========================================================================
