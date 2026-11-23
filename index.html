@@ -8031,7 +8031,7 @@
         let _jbStageFilter = 'baru';
         let _jbChannelFilter = '';
         let _jbStatusFilter = '';
-        let _jbSort = 'auto';             // auto | old | new
+        let _jbSort = 'auto';             // auto (= terbaru ter-update dulu) | old | new
         let _jbLimit = JB_PAGE_SIZE;
         let _jbTotal = 0;
         let _jbExpanded = {};
@@ -8124,9 +8124,9 @@
                 <select id="jb-channel" class="jb-select" onchange="_jbChannelFilter=this.value;renderJubelio()" aria-label="Filter channel"></select>
                 <select id="jb-status" class="jb-select" onchange="_jbStatusFilter=this.value;renderJubelio()" aria-label="Filter status"></select>
                 <select id="jb-sort" class="jb-select" onchange="_jbSort=this.value;renderJubelio()" aria-label="Urutan">
-                    <option value="auto">Urutan otomatis</option>
+                    <option value="auto">Terbaru diupdate</option>
                     <option value="old">Terlama dulu</option>
-                    <option value="new">Terbaru dulu</option>
+                    <option value="new">Tanggal order terbaru</option>
                 </select>
             </div>
 
@@ -8296,10 +8296,13 @@
                 (!_jbChannelFilter || r.channel === _jbChannelFilter) &&
                 (!_jbStatusFilter || (r.status || '-') === _jbStatusFilter) &&
                 (!q || r._search.indexOf(q) !== -1));
-            const oldFirst = _jbSort === 'old' || (_jbSort === 'auto' && (_jbStageFilter === 'baru' || _jbStageFilter === 'proses'));
+            // Default 'auto' = terbaru / ter-update dulu (pakai last_modified dari Jubelio); 'old' = tanggal order terlama dulu.
+            const oldFirst = _jbSort === 'old';
             list.sort((a, b) => {
-                const ta = new Date(a.date).getTime() || 0, tb = new Date(b.date).getTime() || 0;
-                return oldFirst ? ta - tb : tb - ta;
+                if (oldFirst) return (new Date(a.date).getTime() || 0) - (new Date(b.date).getTime() || 0);
+                if (_jbSort === 'new') return (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0);
+                const ta = new Date(a.updated || a.date).getTime() || 0, tb = new Date(b.updated || b.date).getTime() || 0;
+                return tb - ta;
             });
 
             const label = _jbStageFilter ? JB_STAGES[_jbStageFilter].label : 'Semua tahap';
